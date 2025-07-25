@@ -58,26 +58,10 @@ export default function MirrorCard({ journalText, mirrorText, timestamp }: Mirro
         
         {/* Mirror Reflection Section */}
         <View>
-          <View className="flex-row items-center mb-4">
-            <Text className="text-2xl mr-2">🪞</Text>
-            <Text className="text-lg font-semibold text-blue-800">
-              Mirror Reflection
-            </Text>
-          </View>
-          
-          {mirrorText ? (
+          {mirrorText && (
             <Text className="text-blue-700 leading-7 text-base">
               {mirrorText}
             </Text>
-          ) : (
-            <View>
-              <Text className="text-blue-600 leading-7 text-base italic mb-2">
-                Your reflection will appear here once the mirror logic is integrated.
-              </Text>
-              <Text className="text-blue-500 text-sm">
-                ✨ This is where AI will provide insights based on your journal entry
-              </Text>
-            </View>
           )}
         </View>
       </View>
