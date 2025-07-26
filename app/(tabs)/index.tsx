@@ -13,21 +13,6 @@ export default function JournalScreen() {
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('text');
   
-  // Hooks
-  const { hasAudioPermission, checkPermissionAndRequest } = useAudioPermissions();
-  const { 
-    isRecording, 
-    isPaused, 
-    recordingDuration, 
-    handleStartRecording,
-    handleStopRecording,
-    handlePauseRecording,
-    handleResumeRecording,
-    formatDuration 
-  } = useAudioRecording();
-
-  const isSubmitDisabled = !journalText.trim();
-
   // Handle text journal submission
   const handleTextJournalSubmit = (text: string, timestamp: string) => {
     router.push({
@@ -38,6 +23,31 @@ export default function JournalScreen() {
       }
     });
   };
+
+  // Handle voice transcription completion
+  const handleVoiceTranscriptionComplete = (transcribedText: string, timestamp: string) => {
+    router.push({
+      pathname: '/(tabs)/mirror',
+      params: {
+        journalText: transcribedText,
+        timestamp: timestamp
+      }
+    });
+  };
+
+  // Hooks
+  const { hasAudioPermission, checkPermissionAndRequest } = useAudioPermissions();
+  const { 
+    isRecording, 
+    isPaused, 
+    recordingDuration,
+    isProcessing,
+    handleStartRecording,
+    handleStopRecording,
+    handlePauseRecording,
+    handleResumeRecording,
+    formatDuration 
+  } = useAudioRecording(handleVoiceTranscriptionComplete);
 
   // Combined permission check and recording start
   const handleStartRecordingWithPermission = async () => {
@@ -86,6 +96,7 @@ export default function JournalScreen() {
             isRecording={isRecording}
             isPaused={isPaused}
             recordingDuration={recordingDuration}
+            isProcessing={isProcessing}
             formatDuration={formatDuration}
             onStartRecording={handleStartRecordingWithPermission}
             onStopRecording={handleStopRecording}

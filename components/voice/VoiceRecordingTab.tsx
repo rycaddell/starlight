@@ -6,7 +6,7 @@
  * - Real-time duration display with MM:SS formatting
  * - Recording state indicators (recording/paused status)
  * - Integration with permission checking and audio recording hooks
- * - Clean UI with recording animations and feedback
+ * - Clean UI with recording feedback
  */
 
 import React from 'react';
@@ -16,6 +16,7 @@ interface VoiceRecordingTabProps {
   isRecording: boolean;
   isPaused: boolean;
   recordingDuration: number;
+  isProcessing: boolean;
   formatDuration: (seconds: number) => string;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -27,6 +28,7 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
   isRecording,
   isPaused,
   recordingDuration,
+  isProcessing,
   formatDuration,
   onStartRecording,
   onStopRecording,
@@ -47,11 +49,16 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
             {isPaused ? '⏸️ Paused' : '🔴 Recording'}
           </Text>
         )}
+        {isProcessing && (
+          <Text style={styles.processingStatus}>
+            🤖 Transcribing audio...
+          </Text>
+        )}
       </View>
 
       {/* Recording Controls */}
       <View style={styles.controlsContainer}>
-        {!isRecording ? (
+        {!isRecording && !isProcessing ? (
           // Start Recording Button
           <TouchableOpacity
             style={styles.recordButton}
@@ -60,6 +67,12 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
             <Text style={styles.recordButtonIcon}>🎤</Text>
             <Text style={styles.recordButtonText}>Start Recording</Text>
           </TouchableOpacity>
+        ) : isProcessing ? (
+          // Processing State
+          <View style={[styles.recordButton, styles.processingButton]}>
+            <Text style={styles.recordButtonIcon}>🤖</Text>
+            <Text style={styles.recordButtonText}>Processing...</Text>
+          </View>
         ) : (
           // Recording Controls (Stop, Pause/Resume)
           <View style={styles.recordingControls}>
@@ -88,9 +101,11 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
 
       {/* Recording Hint */}
       <Text style={styles.recordingHint}>
-        {!isRecording 
-          ? 'Tap to start recording your voice journal' 
-          : 'Share what\'s on your heart...'}
+        {isProcessing
+          ? 'Converting your voice to text...'
+          : !isRecording 
+            ? 'Tap to start recording your voice journal' 
+            : 'Share what\'s on your heart...'}
       </Text>
     </View>
   );
@@ -126,6 +141,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontWeight: '500',
   },
+  processingStatus: {
+    fontSize: 16,
+    color: '#2563eb',
+    marginTop: 8,
+    fontWeight: '500',
+  },
   controlsContainer: {
     alignItems: 'center',
     marginBottom: 30,
@@ -150,6 +171,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  processingButton: {
+    backgroundColor: '#2563eb',
+    shadowColor: '#2563eb',
   },
   recordingControls: {
     flexDirection: 'row',

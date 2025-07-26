@@ -10,6 +10,7 @@
  * - isPaused: Whether recording is paused
  * - recordingDuration: Current recording duration in seconds
  * - recording: The Audio.Recording object (for internal use)
+ * - isProcessing: Whether transcription is in progress
  * - handleStartRecording: Function to start recording (requires permission check)
  * - handleStopRecording: Function to stop recording and get file URI
  * - handlePauseRecording: Function to pause active recording
@@ -20,12 +21,15 @@
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import { Audio } from 'expo-av';
+import { transcribeAudio } from '../lib/whisperService';
 
-export const useAudioRecording = () => {
+export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isStoppingRecording, setIsStoppingRecording] = useState(false);
 
   const handleStartRecording = async (hasPermission: boolean) => {
     if (!hasPermission) {
@@ -49,10 +53,7 @@ export const useAudioRecording = () => {
       setIsRecording(true);
       setIsPaused(false);
       setRecordingDuration(0);
-      
-      console.log('Recording started successfully');
     } catch (error) {
-      console.log('Error starting recording:', error);
       Alert.alert('Recording Error', 'Unable to start recording. Please try again.');
     }
   };
@@ -63,12 +64,43 @@ export const useAudioRecording = () => {
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         
-        console.log('Recording stopped. File saved to:', uri);
-        Alert.alert('Recording Complete', `Audio saved successfully!\nFile: ${uri?.split('/').pop()}`);
+        if (uri && onTranscriptionComplete) {
+          setIsProcessing(true);
+          
+          // Generate timestamp
+          const timestamp = new Date().toLocaleString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          });
+          
+          // Transcribe audio using Whisper
+          const result = await transcribeAudio(uri, recordingDuration);
+          
+          setIsProcessing(false);
+          
+          if (result.success && result.text) {
+            // Auto-navigate to mirror with transcribed text
+            onTranscriptionComplete(result.text, timestamp);
+          } else {
+            Alert.alert(
+              'Transcription Failed', 
+              result.error || 'Unable to transcribe audio. Please try again.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Retry', onPress: () => handleStopRecording() }
+              ]
+            );
+            return; // Don't reset recording state if transcription failed
+          }
+        }
         
         setRecording(null);
       } catch (error) {
-        console.log('Error stopping recording:', error);
+        setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
       }
     }
@@ -83,9 +115,7 @@ export const useAudioRecording = () => {
       try {
         await recording.pauseAsync();
         setIsPaused(true);
-        console.log('Recording paused');
       } catch (error) {
-        console.log('Error pausing recording:', error);
         Alert.alert('Error', 'Failed to pause recording.');
       }
     }
@@ -96,9 +126,7 @@ export const useAudioRecording = () => {
       try {
         await recording.startAsync();
         setIsPaused(false);
-        console.log('Recording resumed');
       } catch (error) {
-        console.log('Error resuming recording:', error);
         Alert.alert('Error', 'Failed to resume recording.');
       }
     }
@@ -142,6 +170,7 @@ export const useAudioRecording = () => {
     isPaused,
     recordingDuration,
     recording,
+    isProcessing,
     handleStartRecording,
     handleStopRecording,
     handlePauseRecording,
