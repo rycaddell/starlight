@@ -2,11 +2,11 @@
  * Whisper Service
  * 
  * Handles transcription of audio files using OpenAI's Whisper API.
- * Currently includes a mock implementation for testing, with real API integration ready.
+ * Includes both mock implementation for testing and real API integration.
  * 
  * Features:
+ * - Real OpenAI Whisper API integration
  * - Mock transcription for development/testing
- * - Real OpenAI Whisper API integration (commented out)
  * - Error handling and retry logic
  * - Audio file validation
  */
@@ -16,6 +16,54 @@ export interface TranscriptionResult {
     text?: string;
     error?: string;
   }
+  
+  /**
+   * Real OpenAI Whisper API integration
+   */
+  export const realTranscribeAudio = async (audioUri: string): Promise<TranscriptionResult> => {
+    try {
+      // Create FormData for the API request
+      const formData = new FormData();
+      
+      // Add the audio file
+      formData.append('file', {
+        uri: audioUri,
+        type: 'audio/m4a',
+        name: 'recording.m4a',
+      } as any);
+      
+      // Add required parameters
+      formData.append('model', 'whisper-1');
+      formData.append('language', 'en'); // Optional: specify English
+      
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_OPENAI_API_KEY}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      
+      return {
+        success: true,
+        text: result.text?.trim() || ''
+      };
+    } catch (error) {
+      console.error('Whisper API error:', error);
+      return {
+        success: false,
+        error: 'Failed to transcribe audio. Please check your internet connection and try again.'
+      };
+    }
+  };
   
   /**
    * Mock transcription service for testing
@@ -63,49 +111,5 @@ export interface TranscriptionResult {
     };
   };
   
-  /**
-   * Real OpenAI Whisper API integration (to be implemented)
-   * Uncomment and configure when ready for production
-   */
-  /*
-  export const transcribeAudio = async (audioUri: string): Promise<TranscriptionResult> => {
-    try {
-      const formData = new FormData();
-      formData.append('file', {
-        uri: audioUri,
-        type: 'audio/m4a',
-        name: 'recording.m4a',
-      } as any);
-      formData.append('model', 'whisper-1');
-      
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'multipart/form-data',
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`);
-      }
-      
-      const result = await response.json();
-      
-      return {
-        success: true,
-        text: result.text?.trim() || ''
-      };
-    } catch (error) {
-      console.error('Whisper API error:', error);
-      return {
-        success: false,
-        error: 'Failed to transcribe audio. Please try again.'
-      };
-    }
-  };
-  */
-  
-  // Export the mock version for now
-  export const transcribeAudio = mockTranscribeAudio;
+  // Export the real version for production (change this to mockTranscribeAudio for testing)
+  export const transcribeAudio = realTranscribeAudio;
