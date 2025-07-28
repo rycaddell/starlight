@@ -1,38 +1,54 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import MirrorCard from '../../components/MirrorCard';
-import { getUserJournals, getCurrentUser, signInAnonymously } from '../../lib/supabase';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { getUserJournals, getCurrentUser, signInAnonymously, getUserJournalCount } from '../../lib/supabase';
+import { MirrorProgress } from '../../components/journal/MirrorProgress';
 
 export default function MirrorScreen() {
   const router = useRouter();
   const { journalText, timestamp, mirrorReflection } = useLocalSearchParams();
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [journalCount, setJournalCount] = useState(0);
 
   useEffect(() => {
     loadJournals();
   }, []);
 
+  // Reload journals whenever the screen comes into focus (e.g., returning from Journal tab)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadJournals();
+    }, [])
+  );
+
   const loadJournals = async () => {
     try {
-      // Use the same auth approach as Journal screen
+      // First, try to get the current user session (this should persist between tabs)
       let userResult = await getCurrentUser();
       
-      // If no current user, sign in anonymously like Journal screen does
+      // Only sign in anonymously if there's truly no session
       if (!userResult.success || !userResult.user) {
         userResult = await signInAnonymously();
       }
       
       if (userResult.success && userResult.user) {
-        const journalsResult = await getUserJournals(userResult.user.id);
+        // Load both journals and journal count
+        const [journalsResult, countResult] = await Promise.all([
+          getUserJournals(userResult.user.id),
+          getUserJournalCount(userResult.user.id)
+        ]);
         
         if (journalsResult.success) {
           setJournals(journalsResult.data);
         } else {
           console.error('Failed to load journals:', journalsResult.error);
           Alert.alert('Error', 'Failed to load journal entries. Please try again.');
+        }
+        
+        if (countResult.success) {
+          setJournalCount(countResult.count);
         }
       } else {
         console.error('Authentication failed in Mirror screen');
@@ -63,28 +79,18 @@ export default function MirrorScreen() {
     router.push('/(tabs)/');
   };
 
-  // Show current entry if navigated from journal submission
-  const showCurrentEntry = journalText && timestamp;
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <Text style={styles.title}>
-            ✨ Your Spiritual Journey
+            Mirror
           </Text>
           
-          {/* Show current entry if just submitted */}
-          {showCurrentEntry && (
-            <View style={styles.currentEntrySection}>
-              <Text style={styles.sectionTitle}>Latest Entry</Text>
-              <MirrorCard 
-                journalText={journalText as string} 
-                mirrorText={mirrorReflection as string}
-                timestamp={timestamp as string}
-              />
-            </View>
-          )}
+          {/* Progress to Next Mirror - moved to top */}
+          <View style={styles.progressSection}>
+            <MirrorProgress currentCount={journalCount} />
+          </View>
           
           {/* Journal History */}
           <View style={styles.historySection}>
@@ -159,7 +165,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 24,
   },
-  currentEntrySection: {
+  progressSection: {
     marginBottom: 32,
   },
   historySection: {

@@ -48,7 +48,7 @@ export const TextJournalTab: React.FC<TextJournalTabProps> = ({
         <TextInput
           style={styles.textInput}
           multiline={true}
-          placeholder="Share your thoughts, reflections, or prayers..."
+          placeholder="Share your feelings, dreams, insights, and unpack your thinking…"
           placeholderTextColor="#64748b"
           value={journalText}
           onChangeText={setJournalText}

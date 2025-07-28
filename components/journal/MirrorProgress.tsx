@@ -2,7 +2,7 @@
  * MirrorProgress Component
  * 
  * Shows progress toward the next Mirror generation (X/15 journal entries).
- * Displays a visual progress bar and count below journal entry mechanisms.
+ * Displays a visual progress bar and count.
  */
 
 import React from 'react';
@@ -18,7 +18,6 @@ export const MirrorProgress: React.FC<MirrorProgressProps> = ({
   targetCount = 15 
 }) => {
   const progressPercentage = Math.min((currentCount / targetCount) * 100, 100);
-  const remainingEntries = Math.max(targetCount - currentCount, 0);
 
   return (
     <View style={styles.container}>
@@ -38,13 +37,6 @@ export const MirrorProgress: React.FC<MirrorProgressProps> = ({
           {currentCount} / {targetCount}
         </Text>
       </View>
-      
-      <Text style={styles.subtitle}>
-        {remainingEntries > 0 
-          ? `${remainingEntries} more entries until your next Mirror`
-          : '🎉 Mirror ready to generate!'
-        }
-      </Text>
     </View>
   );
 };
@@ -88,11 +80,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#64748b', // slate-600
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b', // slate-600
-    textAlign: 'center',
-    fontStyle: 'italic',
   },
 });

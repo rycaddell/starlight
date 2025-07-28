@@ -7,15 +7,13 @@ import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { TextJournalTab } from '../../components/journal/TextJournalTab';
 import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
 import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
-import { MirrorProgress } from '../../components/journal/MirrorProgress';
-import { saveJournalEntry, signInAnonymously, getCurrentUser, getUserJournalCount } from '../../lib/supabase';
+import { saveJournalEntry, signInAnonymously, getCurrentUser } from '../../lib/supabase';
 
 export default function JournalScreen() {
   const router = useRouter();
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('text');
   const [currentUser, setCurrentUser] = useState(null);
-  const [journalCount, setJournalCount] = useState(0);
   
   // Initialize user on component mount
   React.useEffect(() => {
@@ -24,28 +22,23 @@ export default function JournalScreen() {
 
   const initializeUser = async () => {
     try {
-      // Try to sign in anonymously first (this creates a session)
-      const signInResult = await signInAnonymously();
+      // First try to get existing user session
+      let userResult = await getCurrentUser();
       
-      if (signInResult.success) {
-        setCurrentUser(signInResult.user);
-        // Load initial journal count
-        await loadJournalCount(signInResult.user.id);
+      // Only create new anonymous user if no session exists
+      if (!userResult.success || !userResult.user) {
+        userResult = await signInAnonymously();
+      }
+      
+      if (userResult.success) {
+        setCurrentUser(userResult.user);
       } else {
-        console.error('Failed to initialize user:', signInResult.error);
+        console.error('Failed to initialize user:', userResult.error);
         Alert.alert('Authentication Error', 'Failed to initialize user session. Please restart the app.');
       }
     } catch (error) {
       console.error('Error in initializeUser:', error);
       Alert.alert('Error', 'Failed to set up user authentication.');
-    }
-  };
-
-  // Load current journal count
-  const loadJournalCount = async (userId) => {
-    const result = await getUserJournalCount(userId);
-    if (result.success) {
-      setJournalCount(result.count);
     }
   };
 
@@ -59,8 +52,6 @@ export default function JournalScreen() {
     const result = await saveJournalEntry(content, currentUser.id);
     
     if (result.success) {
-      // Update journal count after successful save
-      await loadJournalCount(currentUser.id);
       return true;
     } else {
       Alert.alert('Save Error', result.error || 'Failed to save journal entry.');
@@ -136,7 +127,7 @@ export default function JournalScreen() {
         </Text>
         
         <Text style={styles.heading}>
-          What's on your heart today?
+          What do you want to capture?
         </Text>
         
         {/* Tab Interface */}
@@ -168,8 +159,6 @@ export default function JournalScreen() {
           />
         )}
         
-        {/* Mirror Progress Tracking */}
-        <MirrorProgress currentCount={journalCount} />
       </ScrollView>
     </SafeAreaView>
   );
