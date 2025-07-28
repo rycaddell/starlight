@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
@@ -7,32 +7,95 @@ import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { TextJournalTab } from '../../components/journal/TextJournalTab';
 import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
 import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
+import { MirrorProgress } from '../../components/journal/MirrorProgress';
+import { saveJournalEntry, signInAnonymously, getCurrentUser, getUserJournalCount } from '../../lib/supabase';
 
 export default function JournalScreen() {
   const router = useRouter();
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('text');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [journalCount, setJournalCount] = useState(0);
+  
+  // Initialize user on component mount
+  React.useEffect(() => {
+    initializeUser();
+  }, []);
+
+  const initializeUser = async () => {
+    try {
+      // Try to sign in anonymously first (this creates a session)
+      const signInResult = await signInAnonymously();
+      
+      if (signInResult.success) {
+        setCurrentUser(signInResult.user);
+        // Load initial journal count
+        await loadJournalCount(signInResult.user.id);
+      } else {
+        console.error('Failed to initialize user:', signInResult.error);
+        Alert.alert('Authentication Error', 'Failed to initialize user session. Please restart the app.');
+      }
+    } catch (error) {
+      console.error('Error in initializeUser:', error);
+      Alert.alert('Error', 'Failed to set up user authentication.');
+    }
+  };
+
+  // Load current journal count
+  const loadJournalCount = async (userId) => {
+    const result = await getUserJournalCount(userId);
+    if (result.success) {
+      setJournalCount(result.count);
+    }
+  };
+
+  // Save journal to database
+  const saveJournalToDatabase = async (content, timestamp) => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please wait for user authentication to complete.');
+      return false;
+    }
+
+    const result = await saveJournalEntry(content, currentUser.id);
+    
+    if (result.success) {
+      // Update journal count after successful save
+      await loadJournalCount(currentUser.id);
+      return true;
+    } else {
+      Alert.alert('Save Error', result.error || 'Failed to save journal entry.');
+      return false;
+    }
+  };
   
   // Handle text journal submission
-  const handleTextJournalSubmit = (text: string, timestamp: string) => {
-    router.push({
-      pathname: '/(tabs)/mirror',
-      params: {
-        journalText: text,
-        timestamp: timestamp
-      }
-    });
+  const handleTextJournalSubmit = async (text: string, timestamp: string) => {
+    const saved = await saveJournalToDatabase(text, timestamp);
+    
+    if (saved) {
+      router.push({
+        pathname: '/(tabs)/mirror',
+        params: {
+          journalText: text,
+          timestamp: timestamp
+        }
+      });
+    }
   };
 
   // Handle voice transcription completion
-  const handleVoiceTranscriptionComplete = (transcribedText: string, timestamp: string) => {
-    router.push({
-      pathname: '/(tabs)/mirror',
-      params: {
-        journalText: transcribedText,
-        timestamp: timestamp
-      }
-    });
+  const handleVoiceTranscriptionComplete = async (transcribedText: string, timestamp: string) => {
+    const saved = await saveJournalToDatabase(transcribedText, timestamp);
+    
+    if (saved) {
+      router.push({
+        pathname: '/(tabs)/mirror',
+        params: {
+          journalText: transcribedText,
+          timestamp: timestamp
+        }
+      });
+    }
   };
 
   // Hooks
@@ -104,6 +167,9 @@ export default function JournalScreen() {
             onResumeRecording={handleResumeRecording}
           />
         )}
+        
+        {/* Mirror Progress Tracking */}
+        <MirrorProgress currentCount={journalCount} />
       </ScrollView>
     </SafeAreaView>
   );
