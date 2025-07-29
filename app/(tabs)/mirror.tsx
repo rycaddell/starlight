@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { getUserJournals, getCurrentUser, signInAnonymously, getUserJournalCount } from '../../lib/supabase';
+import { getUserJournals, getCurrentUser, signInAnonymously, getUserJournalCount, insertTestJournalData, checkAndGenerateMirror } from '../../lib/supabase';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
 
 export default function MirrorScreen() {
@@ -11,6 +11,8 @@ export default function MirrorScreen() {
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [journalCount, setJournalCount] = useState(0);
+  const [testLoading, setTestLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     loadJournals();
@@ -34,6 +36,8 @@ export default function MirrorScreen() {
       }
       
       if (userResult.success && userResult.user) {
+        setCurrentUser(userResult.user); // Store current user
+        
         // Load both journals and journal count
         const [journalsResult, countResult] = await Promise.all([
           getUserJournals(userResult.user.id),
@@ -79,6 +83,56 @@ export default function MirrorScreen() {
     router.push('/(tabs)/');
   };
 
+  // TEST FUNCTIONS - Remove after testing
+  const handleInsertTestData = async () => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please wait for user authentication to complete.');
+      return;
+    }
+
+    setTestLoading(true);
+    try {
+      const result = await insertTestJournalData(currentUser.id);
+      
+      if (result.success) {
+        Alert.alert('Success', `Inserted ${result.data.length} test journal entries!`);
+        // Reload journals and count
+        await loadJournals();
+      } else {
+        Alert.alert('Error', `Failed to insert test data: ${result.error}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Unexpected error: ${error.message}`);
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const handleGenerateMirror = async () => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please wait for user authentication to complete.');
+      return;
+    }
+
+    setTestLoading(true);
+    try {
+      const result = await checkAndGenerateMirror(currentUser.id);
+      
+      if (result.success) {
+        Alert.alert('Success!', '🎉 Mirror generated successfully! Check console for details.');
+        console.log('🪩 Generated Mirror Content:', result.content);
+        // Reload to show updated data
+        await loadJournals();
+      } else {
+        Alert.alert('Mirror Generation Failed', result.error);
+      }
+    } catch (error) {
+      Alert.alert('Error', `Unexpected error: ${error.message}`);
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -90,6 +144,35 @@ export default function MirrorScreen() {
           {/* Progress to Next Mirror - moved to top */}
           <View style={styles.progressSection}>
             <MirrorProgress currentCount={journalCount} />
+          </View>
+
+          {/* TEST BUTTONS - Remove after testing */}
+          <View style={styles.testSection}>
+            <Text style={styles.testTitle}>🧪 Mirror Generation Test</Text>
+            
+            <TouchableOpacity 
+              style={styles.testButton}
+              onPress={handleInsertTestData}
+              disabled={testLoading}
+            >
+              <Text style={styles.testButtonText}>
+                {testLoading ? 'Inserting...' : '📝 Insert 15 Test Journals'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.testButton}
+              onPress={handleGenerateMirror}
+              disabled={testLoading}
+            >
+              <Text style={styles.testButtonText}>
+                {testLoading ? 'Generating...' : '✨ Generate Mirror with AI'}
+              </Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.testNote}>
+              Current count: {journalCount}/15 journals
+            </Text>
           </View>
           
           {/* Journal History */}
@@ -167,6 +250,40 @@ const styles = StyleSheet.create({
   },
   progressSection: {
     marginBottom: 32,
+  },
+  testSection: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 32,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  testTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#92400e',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  testButton: {
+    backgroundColor: '#3b82f6',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  testButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  testNote: {
+    fontSize: 12,
+    color: '#92400e',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   historySection: {
     marginBottom: 32,
