@@ -1,24 +1,38 @@
+// app/(tabs)/mirror.tsx - Complete integration
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
-import { getUserJournals, getCurrentUser, signInAnonymously, getUserJournalCount, insertTestJournalData, checkAndGenerateMirror } from '../../lib/supabase';
+import { 
+  getUserJournals, 
+  getCurrentUser, 
+  signInAnonymously, 
+  getUserJournalCount, 
+  checkAndGenerateMirror,
+  insertTestJournalData // Remove this import when done testing
+} from '../../lib/supabase';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
+import { MirrorUnlockButton } from '../../components/mirror/MirrorUnlockButton';
+import { MirrorLoadingAnimation } from '../../components/mirror/MirrorLoadingAnimation';
+import { MirrorViewer } from '../../components/mirror/MirrorViewer';
+
+type MirrorState = 'progress' | 'ready' | 'generating' | 'viewing';
 
 export default function MirrorScreen() {
   const router = useRouter();
-  const { journalText, timestamp, mirrorReflection } = useLocalSearchParams();
   const [journals, setJournals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [journalCount, setJournalCount] = useState(0);
-  const [testLoading, setTestLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [mirrorState, setMirrorState] = useState<MirrorState>('progress');
+  const [generatedMirror, setGeneratedMirror] = useState(null);
+  const [testLoading, setTestLoading] = useState(false);
 
   useEffect(() => {
     loadJournals();
   }, []);
 
-  // Reload journals whenever the screen comes into focus (e.g., returning from Journal tab)
+  // Reload journals whenever the screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       loadJournals();
@@ -27,18 +41,15 @@ export default function MirrorScreen() {
 
   const loadJournals = async () => {
     try {
-      // First, try to get the current user session (this should persist between tabs)
       let userResult = await getCurrentUser();
       
-      // Only sign in anonymously if there's truly no session
       if (!userResult.success || !userResult.user) {
         userResult = await signInAnonymously();
       }
       
       if (userResult.success && userResult.user) {
-        setCurrentUser(userResult.user); // Store current user
+        setCurrentUser(userResult.user);
         
-        // Load both journals and journal count
         const [journalsResult, countResult] = await Promise.all([
           getUserJournals(userResult.user.id),
           getUserJournalCount(userResult.user.id)
@@ -53,6 +64,12 @@ export default function MirrorScreen() {
         
         if (countResult.success) {
           setJournalCount(countResult.count);
+          // Update mirror state based on journal count
+          if (countResult.count >= 15) {
+            setMirrorState('ready');
+          } else {
+            setMirrorState('progress');
+          }
         }
       } else {
         console.error('Authentication failed in Mirror screen');
@@ -66,20 +83,55 @@ export default function MirrorScreen() {
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+  const handleGenerateMirror = async () => {
+    if (!currentUser) {
+      Alert.alert('Error', 'Please wait for user authentication to complete.');
+      return;
+    }
+
+    setMirrorState('generating');
+    
+    try {
+      console.log('🚀 Starting Mirror generation...');
+      const result = await checkAndGenerateMirror(currentUser.id);
+      
+      if (result.success) {
+        console.log('✅ Mirror generation successful!');
+        console.log('🪩 Generated Mirror Content:', result.content);
+        setGeneratedMirror(result.content);
+        // AI is done, but let loading animation finish naturally
+      } else {
+        console.error('❌ Mirror generation failed:', result.error);
+        Alert.alert('Mirror Generation Failed', result.error);
+        setMirrorState('ready'); // Go back to ready state
+      }
+    } catch (error) {
+      console.error('💥 Error during Mirror generation:', error);
+      Alert.alert('Error', `Unexpected error: ${error.message}`);
+      setMirrorState('ready'); // Go back to ready state
+    }
+  };
+
+  const handleLoadingComplete = () => {
+    console.log('🎬 Loading animation completed');
+    if (generatedMirror) {
+      console.log('✨ Transitioning to Mirror viewer');
+      setMirrorState('viewing');
+    } else {
+      console.log('⏳ AI still processing, waiting...');
+      // AI hasn't finished yet, stay in loading state
+      // We could add a timeout here or keep waiting
+    }
+  };
+
+  const handleCloseMirror = () => {
+    setMirrorState('progress');
+    setGeneratedMirror(null);
+    // Reload to show updated progress (journals now have mirror_id)
+    loadJournals();
   };
 
   const handleGoBack = () => {
-    // Navigate back to Journal tab
     router.push('/(tabs)/');
   };
 
@@ -96,7 +148,6 @@ export default function MirrorScreen() {
       
       if (result.success) {
         Alert.alert('Success', `Inserted ${result.data.length} test journal entries!`);
-        // Reload journals and count
         await loadJournals();
       } else {
         Alert.alert('Error', `Failed to insert test data: ${result.error}`);
@@ -108,47 +159,54 @@ export default function MirrorScreen() {
     }
   };
 
-  const handleGenerateMirror = async () => {
-    if (!currentUser) {
-      Alert.alert('Error', 'Please wait for user authentication to complete.');
-      return;
-    }
+  // Show Mirror Viewer as full screen modal
+  if (mirrorState === 'viewing' && generatedMirror) {
+    return (
+      <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
+        <MirrorViewer 
+          mirrorContent={generatedMirror} 
+          onClose={handleCloseMirror}
+        />
+      </Modal>
+    );
+  }
 
-    setTestLoading(true);
-    try {
-      const result = await checkAndGenerateMirror(currentUser.id);
-      
-      if (result.success) {
-        Alert.alert('Success!', '🎉 Mirror generated successfully! Check console for details.');
-        console.log('🪩 Generated Mirror Content:', result.content);
-        // Reload to show updated data
-        await loadJournals();
-      } else {
-        Alert.alert('Mirror Generation Failed', result.error);
-      }
-    } catch (error) {
-      Alert.alert('Error', `Unexpected error: ${error.message}`);
-    } finally {
-      setTestLoading(false);
-    }
-  };
+  // Show Loading Animation as full screen modal
+  if (mirrorState === 'generating') {
+    return (
+      <Modal visible={true} animationType="fade" presentationStyle="overFullScreen">
+        <MirrorLoadingAnimation 
+          isComplete={!!generatedMirror} 
+          onComplete={handleLoadingComplete} 
+        />
+      </Modal>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
-          <Text style={styles.title}>
-            Mirror
-          </Text>
+          <Text style={styles.title}>Mirror</Text>
           
-          {/* Progress to Next Mirror - moved to top */}
+          {/* Progress to Next Mirror */}
           <View style={styles.progressSection}>
             <MirrorProgress currentCount={journalCount} />
           </View>
 
-          {/* TEST BUTTONS - Remove after testing */}
+          {/* Mirror Ready State */}
+          {mirrorState === 'ready' && (
+            <View style={styles.mirrorReadySection}>
+              <MirrorUnlockButton 
+                onPress={handleGenerateMirror}
+                disabled={false}
+              />
+            </View>
+          )}
+
+          {/* TEST SECTION - Remove after testing */}
           <View style={styles.testSection}>
-            <Text style={styles.testTitle}>🧪 Mirror Generation Test</Text>
+            <Text style={styles.testTitle}>🧪 Testing (Remove Later)</Text>
             
             <TouchableOpacity 
               style={styles.testButton}
@@ -159,22 +217,12 @@ export default function MirrorScreen() {
                 {testLoading ? 'Inserting...' : '📝 Insert 15 Test Journals'}
               </Text>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.testButton}
-              onPress={handleGenerateMirror}
-              disabled={testLoading}
-            >
-              <Text style={styles.testButtonText}>
-                {testLoading ? 'Generating...' : '✨ Generate Mirror with AI'}
-              </Text>
-            </TouchableOpacity>
             
             <Text style={styles.testNote}>
               Current count: {journalCount}/15 journals
             </Text>
           </View>
-          
+
           {/* Journal History */}
           <View style={styles.historySection}>
             <Text style={styles.sectionTitle}>
@@ -199,7 +247,14 @@ export default function MirrorScreen() {
                 {journals.map((journal, index) => (
                   <View key={journal.id} style={styles.journalEntry}>
                     <Text style={styles.journalDate}>
-                      {formatDate(journal.created_at)}
+                      {new Date(journal.created_at).toLocaleDateString('en-US', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
                     </Text>
                     <Text style={styles.journalContent} numberOfLines={4}>
                       {journal.content}
@@ -233,7 +288,7 @@ export default function MirrorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc', // slate-50
+    backgroundColor: '#f8fafc',
   },
   scrollView: {
     flex: 1,
@@ -244,11 +299,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#1e293b', // slate-800
+    color: '#1e293b',
     textAlign: 'center',
     marginBottom: 24,
   },
   progressSection: {
+    marginBottom: 32,
+  },
+  mirrorReadySection: {
     marginBottom: 32,
   },
   testSection: {
@@ -291,7 +349,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#334155', // slate-700
+    color: '#334155',
     marginBottom: 16,
   },
   loadingContainer: {
@@ -300,7 +358,7 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 16,
-    color: '#64748b', // slate-500
+    color: '#64748b',
     textAlign: 'center',
     fontStyle: 'italic',
   },
@@ -310,14 +368,14 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#64748b', // slate-500
+    color: '#64748b',
     textAlign: 'center',
     marginBottom: 8,
     fontWeight: '500',
   },
   emptySubtext: {
     fontSize: 16,
-    color: '#94a3b8', // slate-400
+    color: '#94a3b8',
     textAlign: 'center',
     fontStyle: 'italic',
     lineHeight: 24,
@@ -330,7 +388,7 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0', // slate-200
+    borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
@@ -342,23 +400,23 @@ const styles = StyleSheet.create({
   },
   journalDate: {
     fontSize: 14,
-    color: '#64748b', // slash-500
+    color: '#64748b',
     marginBottom: 8,
     fontWeight: '500',
   },
   journalContent: {
     fontSize: 16,
-    color: '#334155', // slate-700
+    color: '#334155',
     lineHeight: 24,
   },
   readMoreText: {
     fontSize: 14,
-    color: '#6366f1', // indigo-500
+    color: '#6366f1',
     fontStyle: 'italic',
     marginTop: 8,
   },
   backButton: {
-    backgroundColor: '#475569', // slate-600
+    backgroundColor: '#475569',
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderRadius: 12,
