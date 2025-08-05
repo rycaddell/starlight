@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
@@ -7,7 +7,11 @@ import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { TextJournalTab } from '../../components/journal/TextJournalTab';
 import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
 import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
-import { saveJournalEntry, signInAnonymously, getCurrentUser } from '../../lib/supabase';
+import { 
+  saveJournalEntry, 
+  signInAnonymously, 
+  getCurrentUser
+} from '../../lib/supabase';
 
 export default function JournalScreen() {
   const router = useRouter();
@@ -39,6 +43,42 @@ export default function JournalScreen() {
     } catch (error) {
       console.error('Error in initializeUser:', error);
       Alert.alert('Error', 'Failed to set up user authentication.');
+    }
+  };
+
+  // 🧪 TEMPORARY: Clear test data
+  const clearTestData = async () => {
+    try {
+      await clearStoredAccessCode();
+      setCurrentUser(null); // Clear the current user state
+      Alert.alert('✅ Cleared', 'Test data cleared. Try auth test again.');
+    } catch (error) {
+      Alert.alert('❌ Error', 'Failed to clear test data');
+    }
+  };
+
+  // 🧪 TEMPORARY: Test access code authentication
+  const testAccessCodeAuth = async () => {
+    console.log('🧪 Testing access code authentication...');
+    
+    try {
+      const result = await signInWithAccessCode('test123');
+      console.log('🧪 Test result:', result);
+      
+      if (result.success) {
+        Alert.alert(
+          '✅ Auth Test Success!', 
+          `Welcome ${result.displayName}!\nUser ID: ${result.user.id.substring(0, 8)}...\nIs New User: ${result.isNewUser}`
+        );
+        
+        // Update the current user state
+        setCurrentUser(result.user);
+      } else {
+        Alert.alert('❌ Auth Test Failed', result.error);
+      }
+    } catch (error) {
+      console.error('🧪 Test error:', error);
+      Alert.alert('💥 Test Error', error.message);
     }
   };
 
@@ -125,7 +165,7 @@ export default function JournalScreen() {
         <Text style={styles.subtitle}>
           Your spiritual formation journal
         </Text>
-        
+
         <Text style={styles.heading}>
           What do you want to capture?
         </Text>
