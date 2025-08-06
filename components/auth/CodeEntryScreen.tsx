@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface CodeEntryScreenProps {
-  onCodeSubmit: (code: string) => Promise<void>;
+  onCodeSubmit: (code: string) => Promise<{ success: boolean; error?: string }>;
   loading?: boolean;
 }
 
@@ -24,6 +24,8 @@ export function CodeEntryScreen({ onCodeSubmit, loading = false }: CodeEntryScre
 
   const handleSubmit = async () => {
     const trimmedCode = code.trim().toLowerCase();
+    
+    console.log('🔑 handleSubmit called with code:', trimmedCode);
     
     if (!trimmedCode) {
       Alert.alert('Missing Code', 'Please enter your access code to continue.');
@@ -37,7 +39,13 @@ export function CodeEntryScreen({ onCodeSubmit, loading = false }: CodeEntryScre
 
     setIsSubmitting(true);
     try {
-      await onCodeSubmit(trimmedCode);
+      console.log('🚀 Calling onCodeSubmit...');
+      const result = await onCodeSubmit(trimmedCode);
+      console.log('✅ onCodeSubmit result:', result);
+      
+      if (!result.success) {
+        Alert.alert('Sign In Failed', result.error || 'Invalid access code. Please try again.');
+      }
     } catch (error) {
       console.error('Code submission error:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
@@ -46,7 +54,7 @@ export function CodeEntryScreen({ onCodeSubmit, loading = false }: CodeEntryScre
     }
   };
 
-  const isDisabled = loading || isSubmitting || !code.trim();
+  const isDisabled = loading || isSubmitting;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -66,17 +74,25 @@ export function CodeEntryScreen({ onCodeSubmit, loading = false }: CodeEntryScre
             <Text style={styles.label}>Enter your access code</Text>
             
             <TextInput
-              style={styles.input}
+              style={[styles.input, isDisabled && styles.inputDisabled]}
               value={code}
-              onChangeText={setCode}
-              placeholder="e.g. kegan47"
+              onChangeText={(text) => {
+                console.log('📝 Text input changed:', text);
+                setCode(text);
+              }}
+              placeholder="e.g. test123"
               placeholderTextColor="#94a3b8"
               autoCapitalize="none"
               autoCorrect={false}
               autoComplete="off"
+              autoFocus={true}
+              selectTextOnFocus={true}
               returnKeyType="go"
               onSubmitEditing={handleSubmit}
               editable={!isDisabled}
+              blurOnSubmit={false}
+              onFocus={() => console.log('🔍 Input focused')}
+              onBlur={() => console.log('💨 Input blurred')}
             />
 
             <TouchableOpacity
@@ -153,6 +169,11 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     backgroundColor: 'white',
     marginBottom: 20,
+    minHeight: 56,
+  },
+  inputDisabled: {
+    backgroundColor: '#f1f5f9',
+    color: '#64748b',
   },
   button: {
     backgroundColor: '#6366f1',

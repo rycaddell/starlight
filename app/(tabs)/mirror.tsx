@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   getUserJournals, 
   getCurrentUser, 
@@ -28,6 +29,9 @@ export default function MirrorScreen() {
   const [generatedMirror, setGeneratedMirror] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
 
+  // Add auth hook
+  const { signOut, user } = useAuth();
+
   useEffect(() => {
     loadJournals();
   }, []);
@@ -38,6 +42,18 @@ export default function MirrorScreen() {
       loadJournals();
     }, [])
   );
+
+  // Add temporary logout function
+  const handleTempLogout = () => {
+    Alert.alert(
+      '🚪 Test Logout',
+      'This will sign you out to test the code entry screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut }
+      ]
+    );
+  };
 
   const loadJournals = async () => {
     try {
@@ -189,6 +205,14 @@ export default function MirrorScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Mirror</Text>
           
+          {/* 🧪 TEMPORARY: Logout Button - Remove after testing */}
+          <TouchableOpacity 
+            style={styles.tempLogoutButton}
+            onPress={handleTempLogout}
+          >
+            <Text style={styles.tempLogoutButtonText}>🧪 Test Logout</Text>
+          </TouchableOpacity>
+          
           {/* Progress to Next Mirror */}
           <View style={styles.progressSection}>
             <MirrorProgress currentCount={journalCount} />
@@ -302,6 +326,21 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     textAlign: 'center',
     marginBottom: 24,
+  },
+  // 🧪 TEMPORARY: Test button styles - Remove after testing
+  tempLogoutButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  tempLogoutButtonText: {
+    color: 'white',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   progressSection: {
     marginBottom: 32,
