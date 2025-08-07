@@ -6,6 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
+import { OnboardingProvider } from '../contexts/OnboardingContext'; // ADD THIS
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 
 export default function RootLayout() {
@@ -21,15 +22,17 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <AuthNavigator>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="+not-found" />
-          </Stack>
-        </AuthNavigator>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+      <OnboardingProvider> {/* ADD THIS WRAPPER */}
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <AuthNavigator>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </AuthNavigator>
+          <StatusBar style="auto" />
+        </ThemeProvider>
+      </OnboardingProvider> {/* ADD THIS WRAPPER */}
     </AuthProvider>
   );
 }

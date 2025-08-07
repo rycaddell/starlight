@@ -2,98 +2,37 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { TextJournalTab } from '../../components/journal/TextJournalTab';
 import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
 import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
-import { 
-  saveJournalEntry, 
-  signInAnonymously, 
-  getCurrentUser
-} from '../../lib/supabase';
+import { saveJournalEntry } from '../../lib/supabase';
 
 export default function JournalScreen() {
   const router = useRouter();
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>('text');
-  const [currentUser, setCurrentUser] = useState(null);
   
-  // Initialize user on component mount
-  React.useEffect(() => {
-    initializeUser();
-  }, []);
-
-  const initializeUser = async () => {
-    try {
-      // First try to get existing user session
-      let userResult = await getCurrentUser();
-      
-      // Only create new anonymous user if no session exists
-      if (!userResult.success || !userResult.user) {
-        userResult = await signInAnonymously();
-      }
-      
-      if (userResult.success) {
-        setCurrentUser(userResult.user);
-      } else {
-        console.error('Failed to initialize user:', userResult.error);
-        Alert.alert('Authentication Error', 'Failed to initialize user session. Please restart the app.');
-      }
-    } catch (error) {
-      console.error('Error in initializeUser:', error);
-      Alert.alert('Error', 'Failed to set up user authentication.');
-    }
-  };
-
-  // 🧪 TEMPORARY: Clear test data
-  const clearTestData = async () => {
-    try {
-      await clearStoredAccessCode();
-      setCurrentUser(null); // Clear the current user state
-      Alert.alert('✅ Cleared', 'Test data cleared. Try auth test again.');
-    } catch (error) {
-      Alert.alert('❌ Error', 'Failed to clear test data');
-    }
-  };
-
-  // 🧪 TEMPORARY: Test access code authentication
-  const testAccessCodeAuth = async () => {
-    console.log('🧪 Testing access code authentication...');
-    
-    try {
-      const result = await signInWithAccessCode('test123');
-      console.log('🧪 Test result:', result);
-      
-      if (result.success) {
-        Alert.alert(
-          '✅ Auth Test Success!', 
-          `Welcome ${result.displayName}!\nUser ID: ${result.user.id.substring(0, 8)}...\nIs New User: ${result.isNewUser}`
-        );
-        
-        // Update the current user state
-        setCurrentUser(result.user);
-      } else {
-        Alert.alert('❌ Auth Test Failed', result.error);
-      }
-    } catch (error) {
-      console.error('🧪 Test error:', error);
-      Alert.alert('💥 Test Error', error.message);
-    }
-  };
+  // Use AuthContext instead of manual user management
+  const { user, isAuthenticated, isLoading } = useAuth();
 
   // Save journal to database
   const saveJournalToDatabase = async (content, timestamp) => {
-    if (!currentUser) {
-      Alert.alert('Error', 'Please wait for user authentication to complete.');
+    if (!isAuthenticated || !user) {
+      Alert.alert('Error', 'Please sign in to save journal entries.');
       return false;
     }
 
-    const result = await saveJournalEntry(content, currentUser.id);
+    console.log('💾 Saving journal for custom user:', user.id);
+    const result = await saveJournalEntry(content, user.id); // Use custom user ID
     
     if (result.success) {
+      console.log('✅ Journal saved successfully');
       return true;
     } else {
+      console.error('❌ Failed to save journal:', result.error);
       Alert.alert('Save Error', result.error || 'Failed to save journal entry.');
       return false;
     }
@@ -151,6 +90,28 @@ export default function JournalScreen() {
     }
   };
 
+  // Show loading while auth is initializing
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Setting up your journal...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Show error if not authenticated (shouldn't happen with AuthNavigator)
+  if (!isAuthenticated || !user) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>Please sign in to access your journal.</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -164,6 +125,11 @@ export default function JournalScreen() {
         </Text>
         <Text style={styles.subtitle}>
           Your spiritual formation journal
+        </Text>
+
+        {/* Welcome message with user's display name */}
+        <Text style={styles.welcomeText}>
+          Welcome, {user.display_name}! 🙏
         </Text>
 
         <Text style={styles.heading}>
@@ -228,8 +194,15 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 20, // text-xl
     color: '#64748b', // slate-600
-    marginBottom: 48,
+    marginBottom: 16,
     textAlign: 'center',
+  },
+  welcomeText: {
+    fontSize: 18,
+    color: '#059669', // emerald-600
+    marginBottom: 32,
+    textAlign: 'center',
+    fontWeight: '500',
   },
   heading: {
     fontSize: 24, // text-2xl
@@ -238,5 +211,29 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     alignSelf: 'flex-start',
     width: '100%',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    fontSize: 18,
+    color: '#64748b',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  errorText: {
+    fontSize: 18,
+    color: '#dc2626',
+    textAlign: 'center',
+    fontWeight: '500',
   },
 });

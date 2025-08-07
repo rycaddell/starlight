@@ -3,7 +3,9 @@ import React from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../contexts/AuthContext';
+import { useOnboarding } from '../../contexts/OnboardingContext';
 import { CodeEntryScreen } from '../auth/CodeEntryScreen';
+import { OnboardingNavigator } from '../onboarding/OnboardingNavigator';
 
 interface AuthNavigatorProps {
   children: React.ReactNode; // Your main app (tabs)
@@ -11,6 +13,7 @@ interface AuthNavigatorProps {
 
 export function AuthNavigator({ children }: AuthNavigatorProps) {
   const { user, isLoading, signIn } = useAuth();
+  const { isOnboardingComplete } = useOnboarding();
 
   // Show loading screen while checking for existing auth
   if (isLoading) {
@@ -50,6 +53,11 @@ export function AuthNavigator({ children }: AuthNavigatorProps) {
     );
   }
 
-  // User is authenticated, show main app
+  // User is authenticated, but check if onboarding is complete
+  if (!isOnboardingComplete) {
+    return <OnboardingNavigator />;
+  }
+
+  // User is authenticated AND onboarding is complete, show main app
   return <>{children}</>;
 }

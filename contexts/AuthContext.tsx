@@ -1,48 +1,68 @@
-// contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { autoSignInWithStoredCode, signInWithAccessCode, clearStoredAccessCode } from '../lib/supabase';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { 
+  signInWithAccessCode, 
+  getCurrentUser, 
+  autoSignInWithStoredCode, 
+  clearStoredAccessCode 
+} from '../lib/supabase';
 
-interface User {
+// Define custom user type
+interface CustomUser {
   id: string;
-  displayName?: string;
-  // Add other user properties as needed
+  access_code: string;
+  display_name: string;
+  created_at: string;
+  status: string;
+  group_name?: string;
+  invited_by?: string;
 }
 
 interface AuthContextType {
-  user: User | null;
+  user: CustomUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   signIn: (accessCode: string) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [user, setUser] = useState<CustomUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Try to auto-sign in with stored access code on app start
+  const isAuthenticated = !!user;
+
+  // Initialize auth state on app start
   useEffect(() => {
-    checkForExistingAuth();
+    initializeAuth();
   }, []);
 
-  const checkForExistingAuth = async () => {
+  const initializeAuth = async () => {
     try {
-      console.log('🔍 Checking for existing authentication...');
-      const result = await autoSignInWithStoredCode();
+      console.log('🔄 AuthContext: Initializing auth...');
       
-      if (result.success) {
-        console.log('✅ Auto sign-in successful');
-        setUser({
-          id: result.user.id,
-          displayName: result.displayName
-        });
+      // Try to get current user from storage
+      const currentUserResult = await getCurrentUser();
+      
+      if (currentUserResult.success && currentUserResult.user) {
+        console.log('✅ AuthContext: Found current user');
+        setUser(currentUserResult.user);
       } else {
-        console.log('ℹ️ No stored authentication found');
+        // Try auto sign-in with stored code
+        console.log('🔄 AuthContext: Trying auto sign-in...');
+        const autoSignInResult = await autoSignInWithStoredCode();
+        
+        if (autoSignInResult.success && autoSignInResult.user) {
+          console.log('✅ AuthContext: Auto sign-in successful');
+          setUser(autoSignInResult.user);
+        } else {
+          console.log('ℹ️ AuthContext: No stored session found');
+        }
       }
     } catch (error) {
-      console.error('❌ Auto sign-in error:', error);
+      console.error('❌ AuthContext: Error initializing auth:', error);
     } finally {
       setIsLoading(false);
     }
@@ -51,18 +71,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = async (accessCode: string) => {
     try {
       setIsLoading(true);
+      console.log('🔑 AuthContext: Signing in...');
+      
       const result = await signInWithAccessCode(accessCode);
       
-      if (result.success) {
-        setUser({
-          id: result.user.id,
-          displayName: result.displayName
-        });
+      if (result.success && result.user) {
+        console.log('✅ AuthContext: Sign-in successful');
+        setUser(result.user);
         return { success: true };
       } else {
-        return { success: false, error: result.error };
+        console.log('❌ AuthContext: Sign-in failed');
+        return { success: false, error: result.error || 'Sign-in failed' };
       }
     } catch (error) {
+      console.error('❌ AuthContext: Sign-in error:', error);
       return { success: false, error: 'An unexpected error occurred' };
     } finally {
       setIsLoading(false);
@@ -71,21 +93,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // Clear stored access code and sessions
+      setIsLoading(true);
+      console.log('🚪 AuthContext: Signing out...');
+      
       await clearStoredAccessCode();
       setUser(null);
-      console.log('🚪 Signed out successfully');
+      
+      console.log('✅ AuthContext: Sign-out successful');
     } catch (error) {
-      console.error('❌ Sign out error:', error);
+      console.error('❌ AuthContext: Sign-out error:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const value = {
+  const refreshUser = async () => {
+    try {
+      console.log('🔄 AuthContext: Refreshing user...');
+      
+      const result = await getCurrentUser();
+      
+      if (result.success && result.user) {
+        console.log('✅ AuthContext: User refreshed');
+        setUser(result.user);
+      } else {
+        console.log('⚠️ AuthContext: User refresh failed, signing out');
+        await signOut();
+      }
+    } catch (error) {
+      console.error('❌ AuthContext: Error refreshing user:', error);
+      await signOut();
+    }
+  };
+
+  const value: AuthContextType = {
     user,
     isLoading,
-    isAuthenticated: !!user,
+    isAuthenticated,
     signIn,
-    signOut
+    signOut,
+    refreshUser
   };
 
   return (
@@ -93,12 +140,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       {children}
     </AuthContext.Provider>
   );
-}
+};
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-}
+};
