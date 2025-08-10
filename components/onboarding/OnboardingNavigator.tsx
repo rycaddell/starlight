@@ -1,33 +1,32 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { WelcomeScreen } from './WelcomeScreen';
 import { HowItWorksScreen } from './HowItWorksScreen';
-import { PermissionsScreen } from './PermissionsScreen';
+import { MicrophonePermissionScreen } from './MicrophonePermissionScreen';
+import { NotificationPermissionScreen } from './NotificationPermissionScreen';
+import { PermissionsScreen } from './PermissionsScreen';  // Back to original name
 import { CurrentStateScreen } from './CurrentStateScreen';
-import { OnboardingProgress } from './OnboardingProgress';
 
 export const OnboardingNavigator: React.FC = () => {
   const { currentStep } = useOnboarding();
 
   const renderCurrentScreen = () => {
     switch (currentStep) {
-      case 'welcome':
-        return <WelcomeScreen />;
       case 'how-it-works':
         return <HowItWorksScreen />;
-      case 'permissions':
-        return <PermissionsScreen />;
+      case 'microphone-permission':
+        return <MicrophonePermissionScreen />;
+      case 'notification-permission':
+        return <NotificationPermissionScreen />;
       case 'current-state':
         return <CurrentStateScreen />;
       default:
-        return <WelcomeScreen />;
+        return <HowItWorksScreen />;
     }
   };
 
   return (
     <View style={styles.container}>
-      <OnboardingProgress />
       {renderCurrentScreen()}
     </View>
   );

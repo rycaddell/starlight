@@ -2,9 +2,9 @@ import React, { createContext, useContext, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 export type OnboardingStep = 
-  | 'welcome'
   | 'how-it-works'
-  | 'permissions'
+  | 'microphone-permission'
+  | 'notification-permission'
   | 'current-state'
   | 'complete';
 
@@ -66,9 +66,11 @@ interface OnboardingContextType {
   isOnboardingComplete: boolean;
   selectedSpiritualState: SpiritualState | null;
   hasMicrophonePermission: boolean;
+  hasNotificationPermission: boolean;
   setCurrentStep: (step: OnboardingStep) => void;
   selectSpiritualState: (state: SpiritualState) => void;
   setMicrophonePermission: (granted: boolean) => void;
+  setNotificationPermission: (granted: boolean) => void;
   completeOnboarding: () => Promise<void>;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
@@ -78,9 +80,9 @@ interface OnboardingContextType {
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
 const STEP_ORDER: OnboardingStep[] = [
-  'welcome',
   'how-it-works',
-  'permissions',
+  'microphone-permission',
+  'notification-permission',
   'current-state',
   'complete'
 ];
@@ -89,19 +91,21 @@ interface OnboardingProviderProps {
   children: React.ReactNode;
 }
 
-export function OnboardingProvider(props: OnboardingProviderProps) {
+export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('how-it-works');
   const [selectedSpiritualState, setSelectedSpiritualState] = useState<SpiritualState | null>(null);
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
+  const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
 
   const canProceed = (() => {
     switch (currentStep) {
-      case 'welcome':
       case 'how-it-works':
         return true;
-      case 'permissions':
+      case 'microphone-permission':
         return hasMicrophonePermission;
+      case 'notification-permission':
+        return hasNotificationPermission;
       case 'current-state':
         return selectedSpiritualState !== null;
       case 'complete':
@@ -136,6 +140,10 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
     setHasMicrophonePermission(granted);
   }
 
+  function setNotificationPermission(granted: boolean) {
+    setHasNotificationPermission(granted);
+  }
+
   async function completeOnboarding() {
     if (!user || !selectedSpiritualState) return;
     try {
@@ -151,19 +159,21 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
     isOnboardingComplete,
     selectedSpiritualState,
     hasMicrophonePermission,
+    hasNotificationPermission,
     setCurrentStep,
     selectSpiritualState,
     setMicrophonePermission,
+    setNotificationPermission,
     completeOnboarding,
     goToNextStep,
     goToPreviousStep,
     canProceed
   };
 
-  return React.createElement(
-    OnboardingContext.Provider,
-    { value: contextValue },
-    props.children
+  return (
+    <OnboardingContext.Provider value={contextValue}>
+      {children}
+    </OnboardingContext.Provider>
   );
 }
 

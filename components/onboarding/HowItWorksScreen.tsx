@@ -28,28 +28,28 @@ const Step: React.FC<StepProps> = ({ number, title, description, icon, color }) 
 );
 
 export const HowItWorksScreen: React.FC = () => {
-  const { goToNextStep, goToPreviousStep } = useOnboarding();
+  const { goToNextStep } = useOnboarding();
 
   const steps = [
     {
       number: 1,
-      title: 'Journal Your Thoughts',
-      description: 'Write or voice-record your spiritual reflections, struggles, and insights. No pressure - just authentic thoughts about your faith journey.',
-      icon: '✍️',
+      title: 'Quick capture',
+      description: 'Jot down a quick note or make a voice recording when you sense God speaking.',
+      icon: '🗣️',
       color: '#3b82f6'
     },
     {
       number: 2,
-      title: 'Build Your Collection',
-      description: 'After 15 journal entries, you\'ll unlock your first "Mirror" - a personalized spiritual reflection generated just for you.',
-      icon: '📚',
+      title: 'Look in the Mirror',
+      description: 'After 15 entries, we\'ll reflect back to you observations and trends from your journaling.',
+      icon: '✨',
       color: '#10b981'
     },
     {
       number: 3,
-      title: 'Discover Your Mirror',
-      description: 'Your Mirror reveals patterns in your spiritual journey, biblical connections, and gentle suggestions for continued growth.',
-      icon: '🪩',
+      title: 'Respond',
+      description: 'Observe the arc of what God has been speaking to you. Share this with someone you trust.',
+      icon: '🤔',
       color: '#8b5cf6'
     }
   ];
@@ -59,9 +59,9 @@ export const HowItWorksScreen: React.FC = () => {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>How Starlight Works</Text>
+          <Text style={styles.title}>Oxbow</Text>
           <Text style={styles.subtitle}>
-            Three simple steps to deepen your spiritual formation
+            Loops of listening and responding to God
           </Text>
         </View>
 
@@ -77,14 +77,7 @@ export const HowItWorksScreen: React.FC = () => {
           <View style={styles.infoCard}>
             <Text style={styles.infoTitle}>🔒 Private & Secure</Text>
             <Text style={styles.infoText}>
-              Your journal entries are private to you. We use AI to generate insights, but your personal reflections stay personal.
-            </Text>
-          </View>
-          
-          <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>🎯 Personalized Journey</Text>
-            <Text style={styles.infoText}>
-              Every Mirror is unique to your spiritual journey. The more you journal, the more personalized your insights become.
+              Your journal entries are private. We send them in de-identified batches to OpenAI to generate the Mirror, but we are willing to nuke your data from our systems upon request.
             </Text>
           </View>
         </View>
@@ -92,13 +85,6 @@ export const HowItWorksScreen: React.FC = () => {
 
       {/* Navigation */}
       <View style={styles.navigation}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={goToPreviousStep}
-        >
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        
         <TouchableOpacity 
           style={styles.continueButton}
           onPress={goToNextStep}
@@ -128,7 +114,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontSize: 28,
+    fontSize: 36,
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
@@ -226,25 +212,12 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   navigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     paddingHorizontal: 24,
     paddingVertical: 16,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-  },
-  backButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
+    alignItems: 'center',
   },
   continueButton: {
     backgroundColor: '#059669',

@@ -129,13 +129,6 @@ export default function MirrorScreen() {
             Welcome back, {user.display_name}! ✨
           </Text>
           
-          <TouchableOpacity 
-            style={styles.tempLogoutButton}
-            onPress={handleTempLogout}
-          >
-            <Text style={styles.tempLogoutButtonText}>🧪 Test Logout</Text>
-          </TouchableOpacity>
-          
           <View style={styles.progressSection}>
             <MirrorProgress currentCount={journalCount} />
           </View>

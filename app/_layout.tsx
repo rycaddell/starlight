@@ -8,6 +8,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { OnboardingProvider } from '../contexts/OnboardingContext'; // This will use the placeholder
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
+import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -22,7 +23,7 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <OnboardingProvider>
-        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <GlobalSettingsProvider>
           <AuthNavigator>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -30,7 +31,7 @@ export default function RootLayout() {
             </Stack>
           </AuthNavigator>
           <StatusBar style="auto" />
-        </ThemeProvider>
+        </GlobalSettingsProvider>
       </OnboardingProvider>
     </AuthProvider>
   );

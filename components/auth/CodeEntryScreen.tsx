@@ -1,5 +1,4 @@
-// components/auth/CodeEntryScreen.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -7,206 +6,241 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   Alert,
-  ActivityIndicator,
+  Dimensions,
+  Keyboard,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Video, ResizeMode } from 'expo-av';
+
+const { width, height } = Dimensions.get('window');
 
 interface CodeEntryScreenProps {
   onCodeSubmit: (code: string) => Promise<{ success: boolean; error?: string }>;
   loading?: boolean;
 }
 
-export function CodeEntryScreen({ onCodeSubmit, loading = false }: CodeEntryScreenProps) {
+export const CodeEntryScreen: React.FC<CodeEntryScreenProps> = ({ 
+  onCodeSubmit, 
+  loading = false 
+}) => {
   const [code, setCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const videoRef = useRef(null);
 
   const handleSubmit = async () => {
-    const trimmedCode = code.trim().toLowerCase();
-    
-    console.log('🔑 handleSubmit called with code:', trimmedCode);
-    
-    if (!trimmedCode) {
-      Alert.alert('Missing Code', 'Please enter your access code to continue.');
-      return;
-    }
-
-    if (trimmedCode.length < 3) {
-      Alert.alert('Invalid Code', 'Access codes must be at least 3 characters long.');
+    if (!code.trim()) {
+      Alert.alert('Invalid Code', 'Please enter an access code.');
       return;
     }
 
     setIsSubmitting(true);
+    console.log('🔑 handleSubmit called with code:', code);
+
     try {
       console.log('🚀 Calling onCodeSubmit...');
-      const result = await onCodeSubmit(trimmedCode);
+      const result = await onCodeSubmit(code.trim());
       console.log('✅ onCodeSubmit result:', result);
-      
+
       if (!result.success) {
-        Alert.alert('Sign In Failed', result.error || 'Invalid access code. Please try again.');
+        Alert.alert('Access Denied', result.error || 'Invalid access code. Please try again.');
       }
     } catch (error) {
-      console.error('Code submission error:', error);
+      console.error('💥 Error in handleSubmit:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const isDisabled = loading || isSubmitting;
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Text style={styles.title}>✨ Starlight</Text>
-            <Text style={styles.subtitle}>Your spiritual formation companion</Text>
-          </View>
-
-          {/* Code Entry Form */}
-          <View style={styles.form}>
-            <Text style={styles.label}>Enter your access code</Text>
-            
-            <TextInput
-              style={[styles.input, isDisabled && styles.inputDisabled]}
-              value={code}
-              onChangeText={(text) => {
-                console.log('📝 Text input changed:', text);
-                setCode(text);
-              }}
-              placeholder="e.g. test123"
-              placeholderTextColor="#94a3b8"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              autoFocus={true}
-              selectTextOnFocus={true}
-              returnKeyType="go"
-              onSubmitEditing={handleSubmit}
-              editable={!isDisabled}
-              blurOnSubmit={false}
-              onFocus={() => console.log('🔍 Input focused')}
-              onBlur={() => console.log('💨 Input blurred')}
-            />
-
-            <TouchableOpacity
-              style={[styles.button, isDisabled && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={isDisabled}
-            >
-              {isSubmitting ? (
-                <ActivityIndicator color="white" size="small" />
-              ) : (
-                <Text style={styles.buttonText}>Continue</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Help Text */}
-          <View style={styles.help}>
-            <Text style={styles.helpText}>
-              Don't have a code? Contact your group leader.
-            </Text>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <View style={styles.container}>
+        {/* Background Video */}
+        <Video
+          ref={videoRef}
+          source={require('../../assets/background-video.mp4')} // Update this path to your video
+          style={styles.backgroundVideo}
+          resizeMode={ResizeMode.COVER}
+          isLooping
+          isMuted
+          shouldPlay
+        />
+        
+        {/* Overlay */}
+        <View style={styles.overlay} />
+        
+        {/* Content with Keyboard Avoiding */}
+        <KeyboardAvoidingView 
+          style={styles.keyboardAvoidingView}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <SafeAreaView style={styles.contentContainer}>
+            <View style={styles.content}>
+              {/* Title at top */}
+              <View style={styles.headerSection}>
+                <Text style={styles.title}>Oxbow</Text>
+                <Text style={styles.subtitle}>observe the leading of God</Text>
+              </View>
+              
+              {/* Input and button at bottom */}
+              <View style={styles.bottomSection}>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>Enter your access code</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={code}
+                    onChangeText={setCode}
+                    placeholder="e.g. test123"
+                    placeholderTextColor="#9ca3af"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    autoComplete="off"
+                    returnKeyType="go"
+                    onSubmitEditing={handleSubmit}
+                    editable={!isSubmitting && !loading}
+                  />
+                </View>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.submitButton,
+                    (isSubmitting || loading || !code.trim()) && styles.submitButtonDisabled
+                  ]}
+                  onPress={handleSubmit}
+                  disabled={isSubmitting || loading || !code.trim()}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {isSubmitting || loading ? 'Loading...' : 'Get Started'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </SafeAreaView>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
   },
-  keyboardView: {
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+    width: width,
+    height: height,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for better text readability
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  contentContainer: {
     flex: 1,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 32,
+    paddingBottom: 32,
   },
-  header: {
+  headerSection: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginTop: 60,
   },
   title: {
-    fontSize: 36,
+    fontSize: 48,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: '#ffffff',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 18,
-    color: '#64748b',
+    fontWeight: '400',
+    color: '#ffffff',
     textAlign: 'center',
-    lineHeight: 26,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    opacity: 0.9,
+    fontStyle: 'italic',
   },
-  form: {
-    marginBottom: 32,
+  bottomSection: {
+    justifyContent: 'flex-end',
   },
-  label: {
-    fontSize: 16,
+  inputContainer: {
+    marginBottom: 24,
+  },
+  inputLabel: {
+    fontSize: 18,
     fontWeight: '600',
-    color: '#334155',
+    color: '#ffffff',
     marginBottom: 12,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   input: {
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingVertical: 16,
     fontSize: 18,
-    color: '#1e293b',
-    backgroundColor: 'white',
-    marginBottom: 20,
-    minHeight: 56,
+    color: '#1f2937',
+    textAlign: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  inputDisabled: {
-    backgroundColor: '#f1f5f9',
-    color: '#64748b',
-  },
-  button: {
+  submitButton: {
     backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
     borderRadius: 12,
-    alignItems: 'center',
-    shadowColor: '#6366f1',
+    paddingVertical: 18,
+    paddingHorizontal: 32,
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 5,
   },
-  buttonDisabled: {
-    backgroundColor: '#94a3b8',
-    shadowOpacity: 0,
-    elevation: 0,
+  submitButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
-  buttonText: {
-    color: 'white',
+  submitButtonText: {
+    color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
-  },
-  help: {
-    alignItems: 'center',
-  },
-  helpText: {
-    fontSize: 14,
-    color: '#64748b',
     textAlign: 'center',
-    lineHeight: 20,
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
