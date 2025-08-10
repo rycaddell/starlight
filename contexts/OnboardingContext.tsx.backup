@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 export type OnboardingStep = 
+  | 'splash'
   | 'welcome'
   | 'how-it-works'
   | 'permissions'
@@ -26,7 +27,7 @@ export const SPIRITUAL_STATES: SpiritualState[] = [
   },
   {
     id: 'growing',
-    title: 'Growing',
+    title: 'Growing', 
     description: 'Actively developing spiritual practices',
     image: '🌱',
     color: '#10b981'
@@ -77,19 +78,9 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
-const STEP_ORDER: OnboardingStep[] = [
-  'welcome',
-  'how-it-works',
-  'permissions',
-  'current-state',
-  'complete'
-];
+const STEP_ORDER: OnboardingStep[] = ['splash', 'welcome', 'how-it-works', 'permissions', 'current-state', 'complete'];
 
-interface OnboardingProviderProps {
-  children: React.ReactNode;
-}
-
-export function OnboardingProvider(props: OnboardingProviderProps) {
+export function OnboardingProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('welcome');
   const [selectedSpiritualState, setSelectedSpiritualState] = useState<SpiritualState | null>(null);
@@ -97,6 +88,7 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
 
   const canProceed = (() => {
     switch (currentStep) {
+      case 'splash':
       case 'welcome':
       case 'how-it-works':
         return true;
@@ -123,7 +115,7 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
 
   function goToPreviousStep() {
     const currentIndex = STEP_ORDER.indexOf(currentStep);
-    if (currentIndex > 0) {
+    if (currentIndex > 1) {
       setCurrentStep(STEP_ORDER[currentIndex - 1]);
     }
   }
@@ -146,7 +138,7 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
     }
   }
 
-  const contextValue: OnboardingContextType = {
+  const value: OnboardingContextType = {
     currentStep,
     isOnboardingComplete,
     selectedSpiritualState,
@@ -160,11 +152,7 @@ export function OnboardingProvider(props: OnboardingProviderProps) {
     canProceed
   };
 
-  return React.createElement(
-    OnboardingContext.Provider,
-    { value: contextValue },
-    props.children
-  );
+  return React.createElement(OnboardingContext.Provider, { value }, children);
 }
 
 export function useOnboarding() {

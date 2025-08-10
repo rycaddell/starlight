@@ -6,7 +6,7 @@ import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
-import { OnboardingProvider } from '../contexts/OnboardingContext'; // ADD THIS
+import { OnboardingProvider } from '../contexts/OnboardingContext'; // This will use the placeholder
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 
 export default function RootLayout() {
@@ -16,13 +16,12 @@ export default function RootLayout() {
   });
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
   return (
     <AuthProvider>
-      <OnboardingProvider> {/* ADD THIS WRAPPER */}
+      <OnboardingProvider>
         <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
           <AuthNavigator>
             <Stack>
@@ -32,7 +31,7 @@ export default function RootLayout() {
           </AuthNavigator>
           <StatusBar style="auto" />
         </ThemeProvider>
-      </OnboardingProvider> {/* ADD THIS WRAPPER */}
+      </OnboardingProvider>
     </AuthProvider>
   );
 }
