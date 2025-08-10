@@ -1,24 +1,30 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  SafeAreaView,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Video, ResizeMode } from 'expo-av';
 import { Audio } from 'expo-av';
 import { useOnboarding } from '../../contexts/OnboardingContext';
+
+const { width, height } = Dimensions.get('window');
 
 export const MicrophonePermissionScreen: React.FC = () => {
   const {
     hasMicrophonePermission,
     setMicrophonePermission,
     goToNextStep,
-    goToPreviousStep,
   } = useOnboarding();
 
   const [isRequesting, setIsRequesting] = useState(false);
+  const videoRef = useRef(null);
 
   // Check permission on mount
   useEffect(() => {
@@ -69,129 +75,178 @@ export const MicrophonePermissionScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        {/* Back Button */}
-        <TouchableOpacity style={styles.backButton} onPress={goToPreviousStep}>
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-
-        {/* Illustration */}
-        <View style={styles.illustrationContainer}>
-          <Text style={styles.illustration}>🚶‍♂️🎤</Text>
-        </View>
-
-        {/* Content */}
-        <View style={styles.textContainer}>
-          <Text style={styles.title}>Go for a walk & talk with Oxbow</Text>
-          <Text style={styles.subtitle}>
-            Voice journaling lets you capture thoughts naturally while you're on the move, 
-            making it easier to process your spiritual journey.
-          </Text>
-        </View>
-
-        {/* Action */}
-        <View style={styles.actionContainer}>
-          {hasMicrophonePermission ? (
-            <View style={styles.successContainer}>
-              <Text style={styles.successIcon}>✅</Text>
-              <Text style={styles.successText}>Microphone enabled!</Text>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.enableButton}
-              onPress={requestMicrophonePermission}
-              disabled={isRequesting}
-            >
-              <Text style={styles.enableButtonText}>
-                {isRequesting ? 'Requesting...' : 'Enable microphone'}
+    <View style={styles.container}>
+      {/* Background Video */}
+      <Video
+        ref={videoRef}
+        source={require('../../assets/microphonePermissions.mp4')}
+        style={styles.backgroundVideo}
+        resizeMode={ResizeMode.COVER}
+        isLooping
+        isMuted
+        shouldPlay
+      />
+      
+      {/* Overlay */}
+      <View style={styles.overlay} />
+      
+      {/* Content with Keyboard Avoiding */}
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoidingView}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <SafeAreaView style={styles.contentContainer}>
+          <View style={styles.content}>
+            {/* Title at top */}
+            <View style={styles.headerSection}>
+              <Text style={styles.title}>Walk & Talk</Text>
+              <Text style={styles.subtitle}>
+                Spoken journals unlock different and unstructured thinking.
               </Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    </SafeAreaView>
+            </View>
+            
+            {/* Permission action at bottom */}
+            <View style={styles.bottomSection}>
+              {hasMicrophonePermission ? (
+                <View style={styles.successContainer}>
+                  <Text style={styles.successText}>Microphone enabled!</Text>
+                  <Text style={styles.successSubtext}>
+                    You're ready for voice journaling
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.enableButton,
+                    isRequesting && styles.enableButtonDisabled
+                  ]}
+                  onPress={requestMicrophonePermission}
+                  disabled={isRequesting}
+                >
+                  <Text style={styles.enableButtonText}>
+                    {isRequesting ? 'Requesting access...' : 'Enable microphone'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+  },
+  backgroundVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+    width: width,
+    height: height,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for better text readability
+  },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  contentContainer: {
+    flex: 1,
   },
   content: {
     flex: 1,
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 20,
+    paddingTop: 32,
+    paddingBottom: 32,
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0, 0, 0, 0.1)',
-    justifyContent: 'center',
+  headerSection: {
     alignItems: 'center',
-    alignSelf: 'flex-start',
-  },
-  backButtonText: {
-    fontSize: 20,
-    color: '#64748b',
-  },
-  illustrationContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: -50,
-  },
-  illustration: {
-    fontSize: 120,
-    textAlign: 'center',
-  },
-  textContainer: {
-    paddingBottom: 40,
+    marginTop: 60,
   },
   title: {
-    fontSize: 28,
+    fontSize: 48,
     fontWeight: 'bold',
-    color: '#1e293b',
+    color: '#ffffff',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
     marginBottom: 16,
-    lineHeight: 34,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#64748b',
+    fontSize: 18,
+    fontWeight: '400',
+    color: '#ffffff',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    opacity: 0.9,
     lineHeight: 24,
     paddingHorizontal: 20,
   },
-  actionContainer: {
-    paddingBottom: 40,
+  bottomSection: {
+    justifyContent: 'flex-end',
   },
   enableButton: {
     backgroundColor: '#059669',
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 18,
     paddingHorizontal: 32,
-    marginHorizontal: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  enableButtonDisabled: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   enableButtonText: {
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   successContainer: {
     alignItems: 'center',
-    padding: 20,
-  },
-  successIcon: {
-    fontSize: 48,
-    marginBottom: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderRadius: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 32,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
   successText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#059669',
+    color: '#ffffff',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    marginBottom: 8,
+  },
+  successSubtext: {
+    fontSize: 16,
+    color: '#ffffff',
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+    opacity: 0.9,
   },
 });
