@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
+import { completeUserOnboarding, hasUserCompletedOnboarding } from '../lib/supabase/auth';
 
 export type OnboardingStep = 
   | 'how-it-works'
@@ -97,6 +98,34 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const [selectedSpiritualState, setSelectedSpiritualState] = useState<SpiritualState | null>(null);
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
   const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
+  const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
+
+  // Check onboarding completion status when user changes
+  useEffect(() => {
+    if (user) {
+      const completed = hasUserCompletedOnboarding(user);
+      setIsOnboardingComplete(completed);
+      
+      if (completed) {
+        setCurrentStep('complete');
+        console.log('🎯 User has already completed onboarding');
+      } else {
+        setCurrentStep('how-it-works');
+        // Reset all permission states for new users
+        setMicrophonePermission(false);
+        setNotificationPermission(false);
+        setSelectedSpiritualState(null);
+        console.log('🚀 New user - starting fresh onboarding flow');
+      }
+    } else {
+      // Reset everything when no user
+      setIsOnboardingComplete(false);
+      setCurrentStep('how-it-works');
+      setMicrophonePermission(false);
+      setNotificationPermission(false);
+      setSelectedSpiritualState(null);
+    }
+  }, [user]);
 
   const canProceed = (() => {
     switch (currentStep) {
@@ -114,8 +143,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         return false;
     }
   })();
-
-  const isOnboardingComplete = currentStep === 'complete';
 
   function goToNextStep() {
     if (!canProceed) return;
@@ -145,10 +172,24 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   }
 
   async function completeOnboarding() {
-    if (!user || !selectedSpiritualState) return;
+    if (!user || !selectedSpiritualState) {
+      console.error('❌ Cannot complete onboarding: missing user or spiritual state');
+      return;
+    }
+    
     try {
-      setCurrentStep('complete');
-      console.log('✅ Onboarding completed for user:', user.display_name);
+      console.log('🎯 Completing onboarding for user:', user.display_name);
+      
+      // Update database to mark onboarding as complete
+      const result = await completeUserOnboarding(user.id, selectedSpiritualState.id);
+      
+      if (result.success) {
+        setCurrentStep('complete');
+        setIsOnboardingComplete(true);
+        console.log('✅ Onboarding completed successfully');
+      } else {
+        console.error('❌ Failed to complete onboarding:', result.error);
+      }
     } catch (error) {
       console.error('❌ Error completing onboarding:', error);
     }

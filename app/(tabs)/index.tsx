@@ -121,19 +121,7 @@ export default function JournalScreen() {
         scrollEnabled={true}
       >
         <Text style={styles.title}>
-          ✨ Starlight
-        </Text>
-        <Text style={styles.subtitle}>
-          Your spiritual formation journal
-        </Text>
-
-        {/* Welcome message with user's display name */}
-        <Text style={styles.welcomeText}>
-          Welcome, {user.display_name}! 🙏
-        </Text>
-
-        <Text style={styles.heading}>
-          What do you want to capture?
+          Snap Journal
         </Text>
         
         {/* Tab Interface */}
@@ -188,29 +176,8 @@ const styles = StyleSheet.create({
     fontSize: 36, // text-4xl
     fontWeight: 'bold',
     color: '#1e293b', // slate-800
-    marginBottom: 8,
-    textTransform: 'capitalize',
-  },
-  subtitle: {
-    fontSize: 20, // text-xl
-    color: '#64748b', // slate-600
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  welcomeText: {
-    fontSize: 18,
-    color: '#059669', // emerald-600
     marginBottom: 32,
     textAlign: 'center',
-    fontWeight: '500',
-  },
-  heading: {
-    fontSize: 24, // text-2xl
-    fontWeight: '600',
-    color: '#334155', // slate-700
-    marginBottom: 24,
-    alignSelf: 'flex-start',
-    width: '100%',
   },
   loadingContainer: {
     flex: 1,

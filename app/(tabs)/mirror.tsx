@@ -47,17 +47,6 @@ export default function MirrorScreen() {
     }, [isAuthenticated, user])
   );
 
-  const handleTempLogout = () => {
-    Alert.alert(
-      '🚪 Test Logout',
-      'This will sign you out to test the code entry screen.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Sign Out', style: 'destructive', onPress: signOut }
-      ]
-    );
-  };
-
   const handleLoadingComplete = () => {
     if (generatedMirror) {
       setMirrorState('viewing');
@@ -70,9 +59,20 @@ export default function MirrorScreen() {
     loadJournals();
   };
 
-  const handleGoBack = () => {
-    router.push('/(tabs)/');
-  };
+  // Separate journals into recent (no mirror) and completed mirrors
+  const recentJournals = journals.filter(journal => !journal.mirror_id);
+  
+  // Group journals by mirror_id for completed mirrors
+  const mirrorGroups = journals
+    .filter(journal => journal.mirror_id)
+    .reduce((groups, journal) => {
+      const mirrorId = journal.mirror_id!;
+      if (!groups[mirrorId]) {
+        groups[mirrorId] = [];
+      }
+      groups[mirrorId].push(journal);
+      return groups;
+    }, {} as Record<string, typeof journals>);
 
   // Loading states
   if (authLoading) {
@@ -125,14 +125,6 @@ export default function MirrorScreen() {
         <View style={styles.content}>
           <Text style={styles.title}>Mirror</Text>
           
-          <Text style={styles.greeting}>
-            Welcome back, {user.display_name}! ✨
-          </Text>
-          
-          <View style={styles.progressSection}>
-            <MirrorProgress currentCount={journalCount} />
-          </View>
-
           {isReady && (
             <View style={styles.mirrorReadySection}>
               <MirrorUnlockButton 
@@ -148,32 +140,114 @@ export default function MirrorScreen() {
             onInsertTestData={insertTestData}
           />
 
-          <View style={styles.historySection}>
-            <Text style={styles.sectionTitle}>
-              Journal History ({journals.length} {journals.length === 1 ? 'entry' : 'entries'})
-            </Text>
-            
-            <JournalHistory 
-              journals={journals}
-              loading={loading}
-            />
-          </View>
+          {/* Recent Journals Section */}
+          {recentJournals.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.h2Title}>
+                Recent Journals
+              </Text>
+              <View style={styles.tightProgressSection}>
+                <MirrorProgress currentCount={journalCount} />
+              </View>
+              <JournalHistory 
+                journals={recentJournals}
+                loading={loading}
+              />
+            </View>
+          )}
 
-          <TouchableOpacity 
-            onPress={handleGoBack}
-            style={styles.backButton}
-          >
-            <Text style={styles.backButtonText}>
-              ← Back to Journal
-            </Text>
-          </TouchableOpacity>
+          {/* Past Mirrors Section */}
+          {Object.keys(mirrorGroups).length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.h2Title}>
+                Past Mirrors
+              </Text>
+              {Object.entries(mirrorGroups).map(([mirrorId, mirrorJournals]) => {
+                // Use the most recent journal's created_at as the mirror date
+                const mirrorDate = Math.max(...mirrorJournals.map(j => new Date(j.created_at).getTime()));
+                
+                return (
+                  <MirrorCard
+                    key={mirrorId}
+                    mirrorId={mirrorId}
+                    mirrorDate={new Date(mirrorDate)}
+                    journals={mirrorJournals}
+                    onViewMirror={() => {
+                      // TODO: Load and view this specific mirror
+                      Alert.alert('Mirror View', `Would open Mirror ${mirrorId}`);
+                    }}
+                  />
+                );
+              })}
+            </View>
+          )}
+
+          {/* Empty State */}
+          {journals.length === 0 && !loading && (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyText}>No journal entries yet.</Text>
+              <Text style={styles.emptySubtext}>
+                Start writing to see your spiritual journey unfold!
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// Add this at the very end of your mirror.tsx file
+// Mirror Card Component
+interface MirrorCardProps {
+  mirrorId: string;
+  mirrorDate: Date;
+  journals: any[];
+  onViewMirror: () => void;
+}
+
+const MirrorCard: React.FC<MirrorCardProps> = ({ mirrorId, mirrorDate, journals, onViewMirror }) => {
+  const [showJournals, setShowJournals] = React.useState(false);
+
+  return (
+    <View style={styles.mirrorCard}>
+      <View style={styles.mirrorCardHeader}>
+        <Text style={styles.mirrorCardTitle}>
+          Mirror - {mirrorDate.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          })}
+        </Text>
+        <TouchableOpacity 
+          style={styles.viewMirrorButton}
+          onPress={onViewMirror}
+        >
+          <Text style={styles.viewMirrorButtonText}>Open Mirror ✨</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.mirrorCardActions}>
+        <TouchableOpacity 
+          style={styles.viewJournalsButton}
+          onPress={() => setShowJournals(!showJournals)}
+        >
+          <Text style={styles.viewJournalsButtonText}>
+            {showJournals ? 'Hide' : 'View'} Journals ({journals.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {showJournals && (
+        <View style={styles.mirrorJournalsContainer}>
+          <JournalHistory 
+            journals={journals}
+            loading={false}
+          />
+        </View>
+      )}
+    </View>
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -191,36 +265,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
-    marginBottom: 8,
-  },
-  greeting: {
-    fontSize: 18,
-    color: '#059669',
-    textAlign: 'center',
-    marginBottom: 24,
-    fontWeight: '500',
-  },
-  tempLogoutButton: {
-    backgroundColor: '#ef4444',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginBottom: 16,
-    alignSelf: 'center',
-  },
-  tempLogoutButtonText: {
-    color: 'white',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
+    marginBottom: 20, // Reduced from 32px (about 1/3 less)
   },
   progressSection: {
     marginBottom: 32,
   },
+  tightProgressSection: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
   mirrorReadySection: {
     marginBottom: 32,
   },
-  historySection: {
+  section: {
     marginBottom: 32,
   },
   sectionTitle: {
@@ -228,6 +285,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#334155',
     marginBottom: 16,
+  },
+  h2Title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 16,
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 18,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  emptySubtext: {
+    fontSize: 16,
+    color: '#94a3b8',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 24,
   },
   loadingContainer: {
     padding: 32,
@@ -239,25 +320,67 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  backButton: {
-    backgroundColor: '#475569',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginTop: 16,
+  // Mirror Card Styles
+  mirrorCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
     shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  backButtonText: {
-    color: 'white',
-    fontWeight: '600',
-    textAlign: 'center',
+  mirrorCardHeader: {
+    marginBottom: 16,
+  },
+  mirrorCardTitle: {
     fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  viewMirrorButton: {
+    backgroundColor: '#fbbf24',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  viewMirrorButtonText: {
+    color: '#1e293b',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  mirrorCardActions: {
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
+    paddingTop: 16,
+  },
+  viewJournalsButton: {
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignSelf: 'flex-start',
+  },
+  viewJournalsButtonText: {
+    color: '#64748b',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  mirrorJournalsContainer: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
   },
 });

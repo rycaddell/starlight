@@ -26,9 +26,11 @@ export const MicrophonePermissionScreen: React.FC = () => {
   const [isRequesting, setIsRequesting] = useState(false);
   const videoRef = useRef(null);
 
-  // Check permission on mount
+  // Don't auto-check existing permissions during onboarding
+  // We want new users to explicitly grant permissions through the UI
   useEffect(() => {
-    checkExistingPermission();
+    console.log('🎤 MicrophonePermissionScreen mounted for onboarding flow');
+    console.log('🎤 Current permission state:', hasMicrophonePermission);
   }, []);
 
   // Auto-advance when permission is granted
@@ -79,7 +81,7 @@ export const MicrophonePermissionScreen: React.FC = () => {
       {/* Background Video */}
       <Video
         ref={videoRef}
-        source={require('../../assets/microphonePermissions.mp4')}
+        source={require('../../assets/microphonePermissions.mp4')} // Update this path to your video
         style={styles.backgroundVideo}
         resizeMode={ResizeMode.COVER}
         isLooping

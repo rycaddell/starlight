@@ -21,8 +21,6 @@ export const MirrorProgress: React.FC<MirrorProgressProps> = ({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Progress to Next Mirror</Text>
-      
       <View style={styles.progressContainer}>
         <View style={styles.progressBarBackground}>
           <View 
@@ -44,23 +42,15 @@ export const MirrorProgress: React.FC<MirrorProgressProps> = ({
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 20,
     backgroundColor: '#f8fafc', // slate-50
     borderRadius: 12,
-    marginTop: 24,
     alignItems: 'center',
-  },
-  title: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#334155', // slate-700
-    marginBottom: 12,
   },
   progressContainer: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 8,
   },
   progressBarBackground: {
     width: '100%',

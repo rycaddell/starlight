@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 interface Journal {
   id: string;
@@ -17,6 +17,20 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
   journals,
   loading
 }) => {
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (journalId: string) => {
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(journalId)) {
+        newSet.delete(journalId);
+      } else {
+        newSet.add(journalId);
+      }
+      return newSet;
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -38,31 +52,56 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
 
   return (
     <View style={styles.journalList}>
-      {journals.map((journal) => (
-        <View key={journal.id} style={styles.journalEntry}>
-          <Text style={styles.journalDate}>
-            {new Date(journal.created_at).toLocaleDateString('en-US', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            })}
-            {journal.mirror_id && (
-              <Text style={styles.mirrorBadge}> 🪩 In Mirror</Text>
-            )}
-          </Text>
-          <Text style={styles.journalContent} numberOfLines={4}>
-            {journal.content}
-          </Text>
-          {journal.content.length > 200 && (
-            <Text style={styles.readMoreText}>
-              Tap to read full entry...
+      {journals.map((journal) => {
+        const isExpanded = expandedEntries.has(journal.id);
+        const shouldShowReadMore = journal.content.length > 200;
+        
+        return (
+          <TouchableOpacity 
+            key={journal.id} 
+            style={styles.journalEntry}
+            onPress={() => {
+              console.log('📖 Journal card tapped:', journal.id, 'shouldShowReadMore:', shouldShowReadMore);
+              if (shouldShowReadMore) {
+                toggleExpanded(journal.id);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.journalDate}>
+              {new Date(journal.created_at).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+              })}
             </Text>
-          )}
-        </View>
-      ))}
+            
+            <Text 
+              style={styles.journalContent} 
+              numberOfLines={isExpanded ? undefined : 4}
+            >
+              {journal.content}
+            </Text>
+            
+            {shouldShowReadMore && (
+              <TouchableOpacity 
+                style={styles.readMoreContainer}
+                onPress={() => {
+                  console.log('📖 Read more tapped:', journal.id);
+                  toggleExpanded(journal.id);
+                }}
+              >
+                <Text style={styles.readMoreText}>
+                  {isExpanded ? 'Tap to collapse...' : 'Tap to read full entry...'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 };
@@ -120,20 +159,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '500',
   },
-  mirrorBadge: {
-    fontSize: 12,
-    color: '#7c3aed',
-    fontWeight: '600',
-  },
   journalContent: {
     fontSize: 16,
     color: '#334155',
     lineHeight: 24,
   },
+  readMoreContainer: {
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
   readMoreText: {
     fontSize: 14,
     color: '#6366f1',
     fontStyle: 'italic',
-    marginTop: 8,
+    textAlign: 'center',
+    paddingVertical: 4,
   },
 });
