@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 import { useOnboarding } from '../../contexts/OnboardingContext';
+import * as Notifications from 'expo-notifications';
 
 const { width, height } = Dimensions.get('window');
 
@@ -28,27 +29,57 @@ export const NotificationPermissionScreen: React.FC = () => {
   const requestNotificationPermission = async () => {
     setIsRequesting(true);
     
-    // Simulate permission request in Expo Go
-    Alert.alert(
-      'Enable Notifications?',
-      'Gentle reminders help you maintain a consistent journaling practice.',
-      [
-        {
-          text: 'Not Now',
-          onPress: () => {
-            setNotificationPermission(false);
-            setIsRequesting(false);
-          }
+    try {
+      console.log('🔔 Starting notification permission request...');
+      
+      // Get current permission status
+      const currentStatus = await Notifications.getPermissionsAsync();
+      console.log('Current notification status:', currentStatus);
+      
+      if (currentStatus.granted) {
+        console.log('✅ Notification permission already granted');
+        setNotificationPermission(true);
+        setIsRequesting(false);
+        return;
+      }
+      
+      // Request permission
+      console.log('🔔 Requesting notification permission...');
+      const permission = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: false,
+          allowCriticalAlerts: false,
+          provideAppNotificationSettings: false,
+          allowProvisional: false,
         },
-        {
-          text: 'Enable',
-          onPress: () => {
-            setNotificationPermission(true);
-            setIsRequesting(false);
-          }
-        }
-      ]
-    );
+      });
+      
+      console.log('Notification permission result:', permission);
+      
+      const granted = permission.granted;
+      setNotificationPermission(granted);
+      
+      if (!granted) {
+        Alert.alert(
+          'Notifications',
+          'You can enable notifications later in Settings if you change your mind.',
+          [{ text: 'OK' }]
+        );
+      }
+      
+    } catch (error) {
+      console.error('❌ Notification permission error:', error);
+      const errorMessage = error instanceof Error 
+        ? `Failed to request notification permission. Details: ${error.message}`
+        : 'Failed to request notification permission.';
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsRequesting(false);
+    }
   };
 
   // Auto-advance when permission is granted

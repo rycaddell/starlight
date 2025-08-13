@@ -102,7 +102,7 @@ export default function MirrorScreen() {
   
   // Group journals by mirror_id for completed mirrors
   const mirrorGroups = journals
-    .filter(journal => journal.mirror_id)
+    .filter(journal => journal.mirror_id != null)
     .reduce((groups, journal) => {
       const mirrorId = journal.mirror_id;
       if (mirrorId && !groups[mirrorId]) {
@@ -180,11 +180,12 @@ export default function MirrorScreen() {
             </View>
           )}
 
-          <MirrorTestPanel 
+          {/* TODO: Uncomment for testing - provides button to insert 15 test journals */}
+          {/* <MirrorTestPanel 
             journalCount={journalCount}
             totalJournals={journals.length}
             onInsertTestData={insertTestData}
-          />
+          /> */}
 
           {/* Recent Journals Section */}
           {recentJournals.length > 0 && (
@@ -232,9 +233,6 @@ export default function MirrorScreen() {
           {journals.length === 0 && !loading && (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No journal entries yet.</Text>
-              <Text style={styles.emptySubtext}>
-                Start writing to see your spiritual journey unfold!
-              </Text>
             </View>
           )}
         </View>
@@ -243,7 +241,7 @@ export default function MirrorScreen() {
   );
 }
 
-// Mirror Card Component (unchanged)
+// Mirror Card Component
 interface MirrorCardProps {
   mirrorId: string;
   mirrorDate: Date;

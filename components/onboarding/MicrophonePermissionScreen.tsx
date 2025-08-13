@@ -45,8 +45,16 @@ export const MicrophonePermissionScreen: React.FC = () => {
 
   const checkExistingPermission = async () => {
     try {
+      // Initialize audio mode first
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      
       const audioStatus = await Audio.getPermissionsAsync();
-      if (audioStatus.status === 'granted') {
+      const granted = audioStatus.granted === true || audioStatus.status === 'granted';
+      
+      if (granted) {
         setMicrophonePermission(true);
       }
     } catch (error) {
@@ -55,22 +63,36 @@ export const MicrophonePermissionScreen: React.FC = () => {
   };
 
   const requestMicrophonePermission = async () => {
+    console.log('🎤 Button pressed - starting permission request');
     setIsRequesting(true);
+    
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      const granted = permission.status === 'granted';
-      setMicrophonePermission(granted);
+      console.log('🎤 About to set audio mode...');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      console.log('✅ Audio mode set successfully');
       
-      if (!granted) {
-        Alert.alert(
-          'Microphone Access Needed',
-          'Voice journaling requires microphone access. You can enable this later in Settings if you change your mind.',
-          [{ text: 'OK' }]
-        );
+      console.log('🎤 Getting current permissions...');
+      const currentStatus = await Audio.getPermissionsAsync();
+      console.log('Current status:', currentStatus);
+      
+      if (currentStatus.granted) {
+        console.log('✅ Permission already granted');
+        setMicrophonePermission(true);
+        return;
       }
+      
+      console.log('🎤 About to request permission...');
+      const permission = await Audio.requestPermissionsAsync();
+      console.log('✅ Permission request completed:', permission);
+      
+      // Rest of your logic...
+      
     } catch (error) {
-      console.error('Error requesting microphone permission:', error);
-      Alert.alert('Error', 'Failed to request microphone permission.');
+      console.error('❌ Error in permission flow:', error);
+      // Your error handling...
     } finally {
       setIsRequesting(false);
     }
