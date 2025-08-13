@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
@@ -82,13 +83,76 @@ export default function JournalScreen() {
     formatDuration 
   } = useAudioRecording(handleVoiceTranscriptionComplete);
 
-  // Combined permission check and recording start
-  const handleStartRecordingWithPermission = async () => {
-    const permissionGranted = await checkPermissionAndRequest();
-    if (permissionGranted) {
-      await handleStartRecording(permissionGranted);
+// Combined permission check and recording start
+const handleStartRecordingWithPermission = async () => {
+  try {
+    console.log('🎤 Checking current microphone permission...');
+    
+    // Always check current device permission first
+    const currentStatus = await Audio.getPermissionsAsync();
+    console.log('Current microphone status:', currentStatus);
+    
+    if (currentStatus.granted) {
+      console.log('✅ Permission already granted, starting recording...');
+      await handleStartRecording(true);
+      return;
     }
-  };
+    
+    // Only show prompt if permission not actually granted
+    console.log('🎤 No permission found, showing user prompt...');
+    Alert.alert(
+      'Enable Voice Journaling?',
+      'Voice journaling lets you speak your thoughts while walking or when typing isn\'t convenient. Would you like to enable it?',
+      [
+        { text: 'Not Now', style: 'cancel' },
+        { 
+          text: 'Enable Microphone', 
+          onPress: async () => {
+            try {
+              console.log('🎤 User chose to enable microphone...');
+              
+              // Set audio mode first
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+              });
+              
+              // Request permission
+              const permission = await Audio.requestPermissionsAsync();
+              const granted = permission.granted === true || permission.status === 'granted';
+              
+              if (granted) {
+                console.log('✅ Permission granted, starting recording...');
+                await handleStartRecording(true);
+              } else {
+                console.log('❌ Permission denied');
+                Alert.alert(
+                  'Microphone Access Needed',
+                  'To use voice journaling, please enable microphone access in Settings > Oxbow > Microphone.',
+                  [{ text: 'OK' }]
+                );
+              }
+            } catch (error) {
+              console.error('❌ Error in permission flow:', error);
+              Alert.alert(
+                'Permission Error', 
+                `Unable to enable microphone: ${error.message || 'Unknown error'}. You can enable it manually in Settings.`,
+                [{ text: 'OK' }]
+              );
+            }
+          }
+        }
+      ]
+    );
+  } catch (error) {
+    console.error('❌ Error checking microphone permission:', error);
+    Alert.alert(
+      'Permission Error',
+      'Unable to check microphone permission. Please try again.',
+      [{ text: 'OK' }]
+    );
+  }
+};
 
   // Show loading while auth is initializing
   if (isLoading) {

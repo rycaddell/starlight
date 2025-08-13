@@ -54,6 +54,7 @@ export const NotificationPermissionScreen: React.FC = () => {
           allowCriticalAlerts: false,
           provideAppNotificationSettings: false,
           allowProvisional: false,
+          // allowAnnouncements: false, // Removed deprecated property
         },
       });
       
@@ -63,20 +64,37 @@ export const NotificationPermissionScreen: React.FC = () => {
       setNotificationPermission(granted);
       
       if (!granted) {
+        // Show user-friendly message for denied permission
         Alert.alert(
           'Notifications',
-          'You can enable notifications later in Settings if you change your mind.',
-          [{ text: 'OK' }]
+          'No problem! You can enable notifications anytime when you want to receive updates and reminders.',
+          [{ 
+            text: 'Continue', 
+            onPress: () => {
+              setNotificationPermission(false);
+              // Don't block progression - let them continue
+            }
+          }]
         );
       }
       
     } catch (error) {
       console.error('❌ Notification permission error:', error);
-      const errorMessage = error instanceof Error 
-        ? `Failed to request notification permission. Details: ${error.message}`
-        : 'Failed to request notification permission.';
       
-      Alert.alert('Error', errorMessage);
+      // Show user-visible error with specific details
+      Alert.alert(
+        'Notification Setup Failed', 
+        `Notification setup encountered an issue: ${error.message || 'Unknown error'}. You can continue and enable notifications later in Settings.`,
+        [
+          { 
+            text: 'Continue Anyway', 
+            onPress: () => {
+              setNotificationPermission(false);
+              // Continue to next step even on error
+            }
+          }
+        ]
+      );
     } finally {
       setIsRequesting(false);
     }

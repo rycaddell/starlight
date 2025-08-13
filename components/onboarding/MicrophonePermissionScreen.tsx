@@ -88,11 +88,42 @@ export const MicrophonePermissionScreen: React.FC = () => {
       const permission = await Audio.requestPermissionsAsync();
       console.log('✅ Permission request completed:', permission);
       
-      // Rest of your logic...
+      // Check the result properly
+      const granted = permission.granted === true || permission.status === 'granted';
+      setMicrophonePermission(granted);
+      
+      if (!granted) {
+        // Show user-friendly message for denied permission
+        Alert.alert(
+          'Microphone Access',
+          'No problem! You can use text journaling for now. We\'ll ask again if you want to try voice journaling later.',
+          [{ 
+            text: 'Continue', 
+            onPress: () => {
+              setMicrophonePermission(false);
+              // Don't block progression - let them continue
+            }
+          }]
+        );
+      }
       
     } catch (error) {
       console.error('❌ Error in permission flow:', error);
-      // Your error handling...
+      
+      // Show user-visible error with specific details
+      Alert.alert(
+        'Permission Setup Failed', 
+        `Microphone setup encountered an issue: ${error.message || 'Unknown error'}. You can continue with text-only journaling.`,
+        [
+          { 
+            text: 'Continue Anyway', 
+            onPress: () => {
+              setMicrophonePermission(false);
+              // Continue to next step even on error
+            }
+          }
+        ]
+      );
     } finally {
       setIsRequesting(false);
     }
