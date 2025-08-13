@@ -1,75 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
-import { completeUserOnboarding, hasUserCompletedOnboarding } from '../lib/supabase/auth';
+import { completeUserOnboarding } from '../lib/supabase/auth';
 
 export type OnboardingStep = 
   | 'how-it-works'
   | 'microphone-permission'
   | 'notification-permission'
-  | 'current-state'
   | 'complete';
-
-export interface SpiritualState {
-  id: string;
-  title: string;
-  description: string;
-  image: string;
-  color: string;
-}
-
-export const SPIRITUAL_STATES: SpiritualState[] = [
-  {
-    id: 'seeking',
-    title: 'Seeking',
-    description: 'Exploring faith and asking questions',
-    image: '🔍',
-    color: '#3b82f6'
-  },
-  {
-    id: 'growing',
-    title: 'Growing',
-    description: 'Actively developing spiritual practices',
-    image: '🌱',
-    color: '#10b981'
-  },
-  {
-    id: 'struggling',
-    title: 'Struggling',
-    description: 'Going through a difficult season',
-    image: '⛈️',
-    color: '#f59e0b'
-  },
-  {
-    id: 'thriving',
-    title: 'Thriving',
-    description: 'Feeling connected and purposeful',
-    image: '🌟',
-    color: '#8b5cf6'
-  },
-  {
-    id: 'dry-season',
-    title: 'Dry Season',
-    description: 'Feeling distant or disconnected',
-    image: '🏜️',
-    color: '#6b7280'
-  },
-  {
-    id: 'transition',
-    title: 'In Transition',
-    description: 'Major life changes happening',
-    image: '🚪',
-    color: '#ef4444'
-  }
-];
 
 interface OnboardingContextType {
   currentStep: OnboardingStep;
   isOnboardingComplete: boolean;
-  selectedSpiritualState: SpiritualState | null;
   hasMicrophonePermission: boolean;
   hasNotificationPermission: boolean;
   setCurrentStep: (step: OnboardingStep) => void;
-  selectSpiritualState: (state: SpiritualState) => void;
   setMicrophonePermission: (granted: boolean) => void;
   setNotificationPermission: (granted: boolean) => void;
   completeOnboarding: () => Promise<void>;
@@ -84,7 +28,6 @@ const STEP_ORDER: OnboardingStep[] = [
   'how-it-works',
   'microphone-permission',
   'notification-permission',
-  'current-state',
   'complete'
 ];
 
@@ -92,10 +35,14 @@ interface OnboardingProviderProps {
   children: React.ReactNode;
 }
 
+// Helper function to check if user completed onboarding
+const hasUserCompletedOnboarding = (user: any) => {
+  return user && user.onboarding_completed_at !== null;
+};
+
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState<OnboardingStep>('how-it-works');
-  const [selectedSpiritualState, setSelectedSpiritualState] = useState<SpiritualState | null>(null);
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
   const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
@@ -114,7 +61,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         // Reset all permission states for new users
         setMicrophonePermission(false);
         setNotificationPermission(false);
-        setSelectedSpiritualState(null);
         console.log('🚀 New user - starting fresh onboarding flow');
       }
     } else {
@@ -123,7 +69,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       setCurrentStep('how-it-works');
       setMicrophonePermission(false);
       setNotificationPermission(false);
-      setSelectedSpiritualState(null);
     }
   }, [user]);
 
@@ -135,8 +80,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         return hasMicrophonePermission;
       case 'notification-permission':
         return hasNotificationPermission;
-      case 'current-state':
-        return selectedSpiritualState !== null;
       case 'complete':
         return true;
       default:
@@ -148,7 +91,13 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     if (!canProceed) return;
     const currentIndex = STEP_ORDER.indexOf(currentStep);
     if (currentIndex < STEP_ORDER.length - 1) {
-      setCurrentStep(STEP_ORDER[currentIndex + 1]);
+      const nextStep = STEP_ORDER[currentIndex + 1];
+      if (nextStep === 'complete') {
+        // If the next step is complete, trigger the completion process
+        completeOnboarding();
+      } else {
+        setCurrentStep(nextStep);
+      }
     }
   }
 
@@ -157,10 +106,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     if (currentIndex > 0) {
       setCurrentStep(STEP_ORDER[currentIndex - 1]);
     }
-  }
-
-  function selectSpiritualState(state: SpiritualState) {
-    setSelectedSpiritualState(state);
   }
 
   function setMicrophonePermission(granted: boolean) {
@@ -172,21 +117,26 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   }
 
   async function completeOnboarding() {
-    if (!user || !selectedSpiritualState) {
-      console.error('❌ Cannot complete onboarding: missing user or spiritual state');
+    if (!user) {
+      console.error('❌ Cannot complete onboarding: missing user');
       return;
     }
     
     try {
       console.log('🎯 Completing onboarding for user:', user.display_name);
       
-      // Update database to mark onboarding as complete
-      const result = await completeUserOnboarding(user.id, selectedSpiritualState.id);
+      // Update database to mark onboarding as complete (no spiritual state needed)
+      const result = await completeUserOnboarding(user.id, null);
       
       if (result.success) {
         setCurrentStep('complete');
         setIsOnboardingComplete(true);
         console.log('✅ Onboarding completed successfully');
+        
+        // Force a small delay to ensure state updates
+        setTimeout(() => {
+          console.log('✅ Onboarding completion finalized');
+        }, 100);
       } else {
         console.error('❌ Failed to complete onboarding:', result.error);
       }
@@ -198,11 +148,9 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const contextValue: OnboardingContextType = {
     currentStep,
     isOnboardingComplete,
-    selectedSpiritualState,
     hasMicrophonePermission,
     hasNotificationPermission,
     setCurrentStep,
-    selectSpiritualState,
     setMicrophonePermission,
     setNotificationPermission,
     completeOnboarding,

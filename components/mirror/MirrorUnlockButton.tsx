@@ -10,10 +10,10 @@ interface MirrorUnlockButtonProps {
 export const MirrorUnlockButton: React.FC<MirrorUnlockButtonProps> = ({ onPress, disabled = false }) => (
   <View style={styles.container}>
     <View style={styles.celebrationContainer}>
-      <Text style={styles.celebrationEmoji}>🎉</Text>
+      <Text style={styles.celebrationEmoji}>🪞</Text>
       <Text style={styles.celebrationTitle}>Mirror Ready!</Text>
       <Text style={styles.celebrationSubtitle}>
-        You've completed 15 journal entries. Your spiritual insights await.
+        You've completed 15 journal entries.
       </Text>
     </View>
     
@@ -24,7 +24,7 @@ export const MirrorUnlockButton: React.FC<MirrorUnlockButtonProps> = ({ onPress,
     >
       <View style={styles.buttonContent}>
         <Text style={styles.unlockEmoji}>✨</Text>
-        <Text style={styles.unlockText}>Generate Your Mirror</Text>
+        <Text style={styles.unlockText}>Generate Mirror</Text>
         <Text style={styles.unlockEmoji}>✨</Text>
       </View>
     </TouchableOpacity>

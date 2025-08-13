@@ -8,29 +8,40 @@ interface MirrorScreen3Props {
 
 export const MirrorScreen3: React.FC<MirrorScreen3Props> = ({ data }) => (
   <View style={styles.screenContent}>
-    <Text style={styles.screenTitle}>{data.title}</Text>
-    <Text style={styles.screenSubtitle}>{data.subtitle}</Text>
+    <Text style={styles.screenTitle}>Observations</Text>
+    <Text style={styles.screenSubtitle}>Patterns in your framing</Text>
     
-    {/* Self Perception */}
-    <View style={styles.observationCard}>
-      <Text style={styles.observationTitle}>How You See Yourself</Text>
-      <Text style={styles.observationText}>{data.self_perception.observation}</Text>
-      <Text style={styles.growthEdge}>{data.self_perception.growth_edge}</Text>
-    </View>
+    {/* How You See Yourself */}
+    {data.self_perception && (
+      <View style={styles.observationCard}>
+        <Text style={styles.observationTitle}>How You See Yourself</Text>
+        <Text style={styles.observationText}>{data.self_perception.observation}</Text>
+      </View>
+    )}
     
-    {/* God Perception */}
-    <View style={styles.observationCard}>
-      <Text style={styles.observationTitle}>Your Relationship with God</Text>
-      <Text style={styles.observationText}>{data.god_perception.observation}</Text>
-      <Text style={styles.invitationText}>{data.god_perception.invitation}</Text>
-    </View>
+    {/* Your Relationship with God */}
+    {data.god_perception && (
+      <View style={styles.observationCard}>
+        <Text style={styles.observationTitle}>Your Relationship with God</Text>
+        <Text style={styles.observationText}>{data.god_perception.observation}</Text>
+      </View>
+    )}
     
-    {/* Growth Pattern */}
-    <View style={styles.observationCard}>
-      <Text style={styles.observationTitle}>Your Growth Journey</Text>
-      <Text style={styles.observationText}>{data.growth_pattern.observation}</Text>
-      <Text style={styles.encouragementText}>{data.growth_pattern.encouragement}</Text>
-    </View>
+    {/* How You View Others */}
+    {data.others_perception && (
+      <View style={styles.observationCard}>
+        <Text style={styles.observationTitle}>How You View Others</Text>
+        <Text style={styles.observationText}>{data.others_perception.observation}</Text>
+      </View>
+    )}
+    
+    {/* Growth Opportunities / Blind Spots */}
+    {data.blind_spots && (
+      <View style={styles.observationCard}>
+        <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
+        <Text style={styles.observationText}>{data.blind_spots.observation}</Text>
+      </View>
+    )}
   </View>
 );
 
@@ -82,7 +93,13 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     lineHeight: 22,
   },
-  encouragementText: {
+  challengeText: {
+    fontSize: 16,
+    color: '#f59e0b',
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  growthOpportunityText: {
     fontSize: 16,
     color: '#10b981',
     fontWeight: '500',

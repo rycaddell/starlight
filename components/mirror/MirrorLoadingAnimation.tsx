@@ -101,8 +101,8 @@ export const MirrorLoadingAnimation: React.FC<MirrorLoadingAnimationProps> = ({
         <Text style={styles.loadingTitle}>Creating Your Mirror</Text>
         <Text style={styles.loadingSubtitle}>
           {animationComplete && !isComplete 
-            ? 'Finalizing your spiritual insights...' 
-            : 'Processing your journals with AI'
+            ? 'Extracting insights...' 
+            : 'Processing your journals'
           }
         </Text>
 

@@ -10,10 +10,15 @@ import { MirrorLoadingAnimation } from '../../components/mirror/MirrorLoadingAni
 import { MirrorViewer } from '../../components/mirror/MirrorViewer';
 import { MirrorTestPanel } from '../../components/mirror/MirrorTestPanel';
 import { JournalHistory } from '../../components/mirror/JournalHistory';
+import { useGlobalSettings } from '../../components/GlobalSettingsContext';
+import { getMirrorById } from '../../lib/supabase/mirrors';
 
 export default function MirrorScreen() {
   const router = useRouter();
   const { user, signOut, isAuthenticated, isLoading: authLoading } = useAuth();
+  
+  // Use GlobalSettings instead of local feedback modal state
+  const { showSettings } = useGlobalSettings();
   
   const {
     journals,
@@ -59,6 +64,39 @@ export default function MirrorScreen() {
     loadJournals();
   };
 
+  // Handle feedback request from Mirror Screen 4
+  const handleMirrorClosedForFeedback = () => {
+    console.log('🔄 handleMirrorClosedForFeedback called');
+    handleCloseMirror();
+    // Small delay to ensure Mirror closes smoothly before opening feedback
+    setTimeout(() => {
+      console.log('⚙️ Attempting to open settings modal');
+      showSettings(); // Use GlobalSettings instead of local state
+      console.log('✅ showSettings() called');
+    }, 200);
+  };
+
+  // Handle opening an existing Mirror
+  const handleOpenExistingMirror = async (mirrorId: string) => {
+    console.log('🔍 Opening existing Mirror:', mirrorId);
+    
+    try {
+      const result = await getMirrorById(mirrorId);
+      
+      if (result.success && result.content) {
+        console.log('✅ Mirror loaded, opening viewer');
+        setGeneratedMirror(result.content);
+        setMirrorState('viewing');
+      } else {
+        console.error('❌ Failed to load Mirror:', result.error);
+        Alert.alert('Mirror Not Found', result.error || 'Could not load this Mirror. It may have been deleted.');
+      }
+    } catch (error) {
+      console.error('❌ Error opening Mirror:', error);
+      Alert.alert('Error', 'Something went wrong loading the Mirror. Please try again.');
+    }
+  };
+
   // Separate journals into recent (no mirror) and completed mirrors
   const recentJournals = journals.filter(journal => !journal.mirror_id);
   
@@ -66,11 +104,13 @@ export default function MirrorScreen() {
   const mirrorGroups = journals
     .filter(journal => journal.mirror_id)
     .reduce((groups, journal) => {
-      const mirrorId = journal.mirror_id!;
-      if (!groups[mirrorId]) {
+      const mirrorId = journal.mirror_id;
+      if (mirrorId && !groups[mirrorId]) {
         groups[mirrorId] = [];
       }
-      groups[mirrorId].push(journal);
+      if (mirrorId) {
+        groups[mirrorId].push(journal);
+      }
       return groups;
     }, {} as Record<string, typeof journals>);
 
@@ -97,11 +137,17 @@ export default function MirrorScreen() {
 
   // Modal states
   if (isViewing) {
+    console.log('🔍 About to render MirrorViewer with props:', {
+      hasOnClose: !!handleCloseMirror,
+      hasOnClosedForFeedback: !!handleMirrorClosedForFeedback
+    });
+    
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
         <MirrorViewer 
           mirrorContent={generatedMirror} 
           onClose={handleCloseMirror}
+          onClosedForFeedback={handleMirrorClosedForFeedback}
         />
       </Modal>
     );
@@ -164,7 +210,10 @@ export default function MirrorScreen() {
               </Text>
               {Object.entries(mirrorGroups).map(([mirrorId, mirrorJournals]) => {
                 // Use the most recent journal's created_at as the mirror date
-                const mirrorDate = Math.max(...mirrorJournals.map(j => new Date(j.created_at).getTime()));
+                const dates = mirrorJournals
+                  .map(j => j.created_at ? new Date(j.created_at).getTime() : 0)
+                  .filter(time => time > 0);
+                const mirrorDate = dates.length > 0 ? Math.max(...dates) : Date.now();
                 
                 return (
                   <MirrorCard
@@ -172,10 +221,7 @@ export default function MirrorScreen() {
                     mirrorId={mirrorId}
                     mirrorDate={new Date(mirrorDate)}
                     journals={mirrorJournals}
-                    onViewMirror={() => {
-                      // TODO: Load and view this specific mirror
-                      Alert.alert('Mirror View', `Would open Mirror ${mirrorId}`);
-                    }}
+                    onViewMirror={() => handleOpenExistingMirror(mirrorId)}
                   />
                 );
               })}
@@ -197,7 +243,7 @@ export default function MirrorScreen() {
   );
 }
 
-// Mirror Card Component
+// Mirror Card Component (unchanged)
 interface MirrorCardProps {
   mirrorId: string;
   mirrorDate: Date;
@@ -265,7 +311,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
-    marginBottom: 20, // Reduced from 32px (about 1/3 less)
+    marginBottom: 20,
   },
   progressSection: {
     marginBottom: 32,

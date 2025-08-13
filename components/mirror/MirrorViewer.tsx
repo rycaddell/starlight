@@ -10,11 +10,22 @@ import { MirrorScreen4 } from './MirrorScreen4';
 interface MirrorViewerProps {
   mirrorContent: any;
   onClose: () => void;
+  onClosedForFeedback?: () => void; // ADD THIS LINE
 }
 
-export const MirrorViewer: React.FC<MirrorViewerProps> = ({ mirrorContent, onClose }) => {
+export const MirrorViewer: React.FC<MirrorViewerProps> = ({ 
+  mirrorContent, 
+  onClose, 
+  onClosedForFeedback  // ADD THIS PROP
+}) => {
   const [currentScreen, setCurrentScreen] = useState(0);
   const totalScreens = 4;
+
+  // Debug logging
+  console.log('🔍 MirrorViewer loaded with props:', {
+    hasOnClose: !!onClose,
+    hasOnClosedForFeedback: !!onClosedForFeedback
+  });
 
   const handleNext = () => {
     if (currentScreen < totalScreens - 1) {
@@ -37,7 +48,17 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({ mirrorContent, onClo
       case 2:
         return <MirrorScreen3 data={mirrorContent.screen3_observations} />;
       case 3:
-        return <MirrorScreen4 data={mirrorContent.screen4_suggestions} />;
+        console.log('🔍 Rendering MirrorScreen4 with props:', {
+          hasOnClose: !!onClose,
+          hasOnClosedForFeedback: !!onClosedForFeedback
+        });
+        return (
+          <MirrorScreen4 
+            data={mirrorContent.screen4_suggestions} 
+            onClose={onClose}
+            onClosedForFeedback={onClosedForFeedback}  // ADD THIS LINE
+          />
+        );
       default:
         return <MirrorScreen1 data={mirrorContent.screen1_themes} />;
     }

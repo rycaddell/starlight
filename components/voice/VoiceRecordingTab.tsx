@@ -37,8 +37,6 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
 }) => {
   return (
     <View style={styles.voiceContainer}>
-      <Text style={styles.voiceTitle}>Voice Journal</Text>
-      
       {/* Recording Duration Display */}
       <View style={styles.durationContainer}>
         <Text style={styles.durationText}>
@@ -116,12 +114,6 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     paddingVertical: 20,
-  },
-  voiceTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 30,
   },
   durationContainer: {
     alignItems: 'center',

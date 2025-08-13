@@ -120,9 +120,15 @@ export default function JournalScreen() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
       >
-        <Text style={styles.title}>
-          Snap Journal
-        </Text>
+        {/* Fixed Header Section */}
+        <View style={styles.headerSection}>
+          <Text style={styles.title}>
+            Snap Journal
+          </Text>
+          <Text style={styles.subtitle}>
+            Quickly capture important moments
+          </Text>
+        </View>
         
         {/* Tab Interface */}
         <JournalTabs 
@@ -168,16 +174,28 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    paddingTop: 24,
+  },
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+    width: '100%',
   },
   title: {
     fontSize: 36, // text-4xl
     fontWeight: 'bold',
     color: '#1e293b', // slate-800
-    marginBottom: 32,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#64748b', // slate-600
+    textAlign: 'center',
+    fontStyle: 'italic',
+    lineHeight: 22,
   },
   loadingContainer: {
     flex: 1,

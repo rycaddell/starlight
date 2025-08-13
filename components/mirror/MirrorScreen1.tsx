@@ -6,26 +6,34 @@ interface MirrorScreen1Props {
   data: any;
 }
 
-export const MirrorScreen1: React.FC<MirrorScreen1Props> = ({ data }) => (
-  <View style={styles.screenContent}>
-    <Text style={styles.screenTitle}>{data.title}</Text>
-    <Text style={styles.screenSubtitle}>{data.subtitle}</Text>
-    
-    <View style={styles.themesContainer}>
-      {data.themes && data.themes.map((theme: any, index: number) => (
-        <View key={index} style={styles.themeCard}>
-          <Text style={styles.themeName}>{theme.name}</Text>
-          <Text style={styles.themeDescription}>{theme.description}</Text>
-          <Text style={styles.themeFrequency}>{theme.frequency}</Text>
+export const MirrorScreen1: React.FC<MirrorScreen1Props> = ({ data }) => {
+  // Limit to 4 themes
+  const limitedThemes = data.themes ? data.themes.slice(0, 4) : [];
+
+  return (
+    <View style={styles.screenContent}>
+      <Text style={styles.screenTitle}>Themes</Text>
+      <Text style={styles.screenSubtitle}>Patterns across your journals</Text>
+      
+      <View style={styles.themesContainer}>
+        {limitedThemes.map((theme: any, index: number) => (
+          <View key={index} style={styles.themeCard}>
+            <Text style={styles.themeName}>{theme.name}</Text>
+            <Text style={styles.themeDescription}>{theme.description}</Text>
+            <Text style={styles.themeFrequency}>{theme.frequency}</Text>
+          </View>
+        ))}
+      </View>
+      
+      {/* Only render insight container if it exists and has content */}
+      {data.insight && data.insight.trim().length > 0 && (
+        <View style={styles.insightContainer}>
+          <Text style={styles.insightText}>{data.insight}</Text>
         </View>
-      ))}
+      )}
     </View>
-    
-    <View style={styles.insightContainer}>
-      <Text style={styles.insightText}>{data.insight}</Text>
-    </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
   screenContent: {
