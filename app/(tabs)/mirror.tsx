@@ -12,6 +12,7 @@ import { MirrorTestPanel } from '../../components/mirror/MirrorTestPanel';
 import { JournalHistory } from '../../components/mirror/JournalHistory';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { getMirrorById } from '../../lib/supabase/mirrors';
+import { deleteJournalEntry } from '../../lib/supabase/journals';
 
 export default function MirrorScreen() {
   const router = useRouter();
@@ -74,6 +75,36 @@ export default function MirrorScreen() {
       showSettings(); // Use GlobalSettings instead of local state
       console.log('✅ showSettings() called');
     }, 200);
+  };
+  // Add this new function after your existing handlers
+  const handleDeleteJournal = async (journalId: string) => {
+    Alert.alert(
+      'Delete Journal',
+      'Are you sure that you want to delete this journal?',
+      [
+        {
+          text: 'No',
+          style: 'cancel',
+        },
+        {
+          text: 'Yes',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await deleteJournalEntry(journalId);
+              
+              if (result.success) {
+                loadJournals();
+              } else {
+                Alert.alert('Error', 'Failed to delete journal entry. Please try again.');
+              }
+            } catch (error) {
+              Alert.alert('Error', 'Something went wrong. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Handle opening an existing Mirror
@@ -199,6 +230,7 @@ export default function MirrorScreen() {
               <JournalHistory 
                 journals={recentJournals}
                 loading={loading}
+                onDeleteJournal={handleDeleteJournal}
               />
             </View>
           )}
@@ -286,6 +318,7 @@ const MirrorCard: React.FC<MirrorCardProps> = ({ mirrorId, mirrorDate, journals,
           <JournalHistory 
             journals={journals}
             loading={false}
+            onDeleteJournal={handleDeleteJournal}
           />
         </View>
       )}

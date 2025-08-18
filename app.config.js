@@ -2,19 +2,21 @@
 
 export default {
     expo: {
-      name: "starlight",
-      slug: "starlight",
+      name: "Oxbow",
+      slug: "oxbow",
       version: "1.0.0",
       orientation: "portrait",
-      icon: "./assets/images/icon.png",
-      scheme: "starlight",
+      icon: "./assets/images/oxbow_app_icon.png",
+      scheme: "oxbow",
       userInterfaceStyle: "automatic",
       newArchEnabled: true,
       ios: {
         supportsTablet: true,
-        bundleIdentifier: "com.caddell.starlight",
+        bundleIdentifier: "com.caddell.oxbow",
         infoPlist: {
-          ITSAppUsesNonExemptEncryption: false
+          ITSAppUsesNonExemptEncryption: false,
+          NSMicrophoneUsageDescription: "Oxbow uses microphone access for voice journaling to enhance your spiritual reflection experience.",
+          NSUserNotificationUsageDescription: "Oxbow sends gentle reminders to help maintain your consistent journaling practice."
         }
       },
       android: {

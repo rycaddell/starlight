@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -10,12 +10,66 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 
 const { width, height } = Dimensions.get('window');
+
+// Add this preloading function with better caching strategy
+const preloadOnboardingImages = async () => {
+  try {
+    console.log('🖼️ Starting image preload from CodeEntryScreen...');
+    
+    const images = [
+      require('../../assets/reflection.png'),
+      require('../../assets/share.png'),
+    ];
+    
+    const startTime = Date.now();
+    
+    const preloadPromises = images.map(async (imageSource, index) => {
+      try {
+        const uri = Image.resolveAssetSource(imageSource).uri;
+        console.log(`📥 Preloading image ${index + 1}: ${uri}`);
+        
+        const imageStartTime = Date.now();
+        
+        // Try multiple caching strategies
+        await Promise.all([
+          Image.prefetch(uri),
+          // Also resolve the asset to ensure it's in the bundle cache
+          Image.resolveAssetSource(imageSource),
+          // Get size to trigger another cache layer
+          new Promise((resolve, reject) => {
+            Image.getSize(uri, 
+              (width, height) => {
+                console.log(`📐 Image ${index + 1} size: ${width}x${height}`);
+                resolve({ width, height });
+              },
+              reject
+            );
+          })
+        ]);
+        
+        const imageEndTime = Date.now();
+        console.log(`✅ Image ${index + 1} fully cached in ${imageEndTime - imageStartTime}ms`);
+        return true;
+      } catch (error) {
+        console.error(`❌ Failed to preload image ${index + 1}:`, error);
+        return false;
+      }
+    });
+    
+    await Promise.all(preloadPromises);
+    const totalTime = Date.now() - startTime;
+    console.log(`✅ All images aggressively cached in ${totalTime}ms`);
+  } catch (error) {
+    console.error('❌ Error preloading images:', error);
+  }
+};
 
 interface CodeEntryScreenProps {
   onCodeSubmit: (code: string) => Promise<{ success: boolean; error?: string }>;
@@ -29,6 +83,12 @@ export const CodeEntryScreen: React.FC<CodeEntryScreenProps> = ({
   const [code, setCode] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const videoRef = useRef(null);
+
+  // Add this useEffect to preload images when component mounts
+  useEffect(() => {
+    // Start preloading images immediately when code entry screen shows
+    preloadOnboardingImages();
+  }, []);
 
   const handleSubmit = async () => {
     if (!code.trim()) {

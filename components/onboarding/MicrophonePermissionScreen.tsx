@@ -110,7 +110,7 @@ export const MicrophonePermissionScreen: React.FC = () => {
     } catch (error) {
       console.error('❌ Error in permission flow:', error);
       
-      // Show user-visible error with specific details
+      // Show user-visible error
       Alert.alert(
         'Permission Setup Failed', 
         `Microphone setup encountered an issue: ${error.message || 'Unknown error'}. You can continue with text-only journaling.`,
@@ -119,7 +119,8 @@ export const MicrophonePermissionScreen: React.FC = () => {
             text: 'Continue Anyway', 
             onPress: () => {
               setMicrophonePermission(false);
-              // Continue to next step even on error
+              // Force progression even on error
+              goToNextStep();
             }
           }
         ]
@@ -154,9 +155,9 @@ export const MicrophonePermissionScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Title at top */}
             <View style={styles.headerSection}>
-              <Text style={styles.title}>Walk & Talk</Text>
+              <Text style={styles.title}>Spoken Journaling</Text>
               <Text style={styles.subtitle}>
-                Spoken journals unlock different and unstructured thinking.
+                Capture what you're hearing by voice or text
               </Text>
             </View>
             
@@ -226,7 +227,7 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   title: {
-    fontSize: 48,
+    fontSize: 36,  // Reduced from 48px to make it smaller than "Oxbow" (H2 size)
     fontWeight: 'bold',
     color: '#ffffff',
     textAlign: 'center',

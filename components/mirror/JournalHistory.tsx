@@ -11,11 +11,13 @@ interface Journal {
 interface JournalHistoryProps {
   journals: Journal[];
   loading: boolean;
+  onDeleteJournal?: (journalId: string) => void; // Add delete handler prop
 }
 
 export const JournalHistory: React.FC<JournalHistoryProps> = ({
   journals,
-  loading
+  loading,
+  onDeleteJournal // Add to props
 }) => {
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
@@ -29,6 +31,15 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
       }
       return newSet;
     });
+  };
+
+  const handleDeletePress = (journalId: string, event: any) => {
+    // Stop event from bubbling up to the card tap
+    event.stopPropagation();
+    
+    if (onDeleteJournal) {
+      onDeleteJournal(journalId);
+    }
   };
 
   if (loading) {
@@ -68,16 +79,30 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.journalDate}>
-              {new Date(journal.created_at).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              })}
-            </Text>
+            {/* Header with date and delete button */}
+            <View style={styles.journalHeader}>
+              <Text style={styles.journalDate}>
+                {new Date(journal.created_at).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  hour12: true
+                })}
+              </Text>
+              
+              {/* Delete button - only show if delete handler is provided */}
+              {onDeleteJournal && (
+                <TouchableOpacity 
+                  style={styles.deleteButton}
+                  onPress={(event) => handleDeletePress(journal.id, event)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Text style={styles.deleteButtonText}>×</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             
             <Text 
               style={styles.journalContent} 
@@ -153,11 +178,17 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 1,
   },
+  journalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   journalDate: {
     fontSize: 14,
     color: '#64748b',
-    marginBottom: 8,
     fontWeight: '500',
+    flex: 1,
   },
   journalContent: {
     fontSize: 16,
@@ -174,5 +205,23 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
     paddingVertical: 4,
+  },
+  deleteButton: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc', // very light gray background
+    borderWidth: 1,
+    borderColor: '#e2e8f0', // light gray border
+    marginLeft: 8,
+    minWidth: 24,
+    minHeight: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 18,
+    color: '#64748b', // muted gray color
+    fontWeight: '300', // lighter weight for subtlety
+    lineHeight: 18,
   },
 });

@@ -1,3 +1,4 @@
+// components/navigation/AuthNavigator.tsx
 import React from 'react';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,7 +30,7 @@ export function AuthNavigator({ children }: AuthNavigatorProps) {
             color: '#64748b',
             textAlign: 'center' 
           }}>
-            ✨ Loading Starlight...
+            ✨ Loading Oxbow...
           </Text>
         </View>
       </SafeAreaView>
@@ -37,14 +38,15 @@ export function AuthNavigator({ children }: AuthNavigatorProps) {
   }
 
   if (!user) {
+    // Create a safe wrapper function
+    const handleCodeSubmit = async (code: string) => {
+      const result = await signIn(code);
+      return result;
+    };
+
     return (
       <CodeEntryScreen 
-        onCodeSubmit={async (code) => {
-          console.log('🔑 Code submitted:', code);
-          const result = await signIn(code);
-          console.log('🔍 Sign in result:', result);
-          return result;
-        }}
+        onCodeSubmit={handleCodeSubmit}
         loading={isLoading}
       />
     );

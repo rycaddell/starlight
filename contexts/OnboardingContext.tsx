@@ -1,11 +1,13 @@
+// contexts/OnboardingContext.tsx - Updated version
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Image } from 'react-native';
 import { useAuth } from './AuthContext';
 import { completeUserOnboarding } from '../lib/supabase/auth';
 
 export type OnboardingStep = 
-  | 'how-it-works'
   | 'microphone-permission'
   | 'notification-permission'
+  | 'share'
   | 'complete';
 
 interface OnboardingContextType {
@@ -24,10 +26,11 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
+// Updated step order - removed 'how-it-works', added 'share'
 const STEP_ORDER: OnboardingStep[] = [
-  'how-it-works',
   'microphone-permission',
-  'notification-permission',
+  'notification-permission', 
+  'share',
   'complete'
 ];
 
@@ -35,14 +38,39 @@ interface OnboardingProviderProps {
   children: React.ReactNode;
 }
 
+// Helper function to preload images more aggressively
+const preloadOnboardingImages = async () => {
+  try {
+    const images = [
+      require('../assets/reflection.png'),
+      require('../assets/share.png'),
+    ];
+    
+    const preloadPromises = images.map(async (imageSource) => {
+      try {
+        const uri = Image.resolveAssetSource(imageSource).uri;
+        await Image.prefetch(uri);
+        Image.getSize(uri, () => {}, (error) => {});
+        return true;
+      } catch (error) {
+        return false;
+      }
+    });
+    
+    await Promise.all(preloadPromises);
+  } catch (error) {
+    console.error('Error preloading images:', error);
+  }
+};
+
 // Helper function to check if user completed onboarding
 const hasUserCompletedOnboarding = (user: any) => {
   return user && user.onboarding_completed_at !== null;
 };
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
-  const { user } = useAuth();
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('how-it-works');
+  const { user, refreshUser } = useAuth();
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('microphone-permission');
   const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
   const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
@@ -55,18 +83,15 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       
       if (completed) {
         setCurrentStep('complete');
-        console.log('🎯 User has already completed onboarding');
       } else {
-        setCurrentStep('how-it-works');
-        // Reset all permission states for new users
+        setCurrentStep('microphone-permission');
         setMicrophonePermission(false);
         setNotificationPermission(false);
-        console.log('🚀 New user - starting fresh onboarding flow');
+        // Images will already be preloaded from CodeEntryScreen
       }
     } else {
-      // Reset everything when no user
       setIsOnboardingComplete(false);
-      setCurrentStep('how-it-works');
+      setCurrentStep('microphone-permission');
       setMicrophonePermission(false);
       setNotificationPermission(false);
     }
@@ -74,12 +99,15 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
   const canProceed = (() => {
     switch (currentStep) {
-      case 'how-it-works':
-        return true;
       case 'microphone-permission':
-        return hasMicrophonePermission;
+        // Allow proceeding regardless of permission granted - user can skip
+        return true;
       case 'notification-permission':
-        return hasNotificationPermission;
+        // Allow proceeding regardless of permission granted - user can skip
+        return true;
+      case 'share':
+        // Share screen should always allow proceeding
+        return true;
       case 'complete':
         return true;
       default:
@@ -89,6 +117,7 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
   function goToNextStep() {
     if (!canProceed) return;
+    
     const currentIndex = STEP_ORDER.indexOf(currentStep);
     if (currentIndex < STEP_ORDER.length - 1) {
       const nextStep = STEP_ORDER[currentIndex + 1];
@@ -118,30 +147,21 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
 
   async function completeOnboarding() {
     if (!user) {
-      console.error('❌ Cannot complete onboarding: missing user');
+      console.error('Cannot complete onboarding: missing user');
       return;
     }
     
     try {
-      console.log('🎯 Completing onboarding for user:', user.display_name);
-      
-      // Update database to mark onboarding as complete (no spiritual state needed)
       const result = await completeUserOnboarding(user.id, null);
       
       if (result.success) {
         setCurrentStep('complete');
         setIsOnboardingComplete(true);
-        console.log('✅ Onboarding completed successfully');
-        
-        // Force a small delay to ensure state updates
-        setTimeout(() => {
-          console.log('✅ Onboarding completion finalized');
-        }, 100);
       } else {
-        console.error('❌ Failed to complete onboarding:', result.error);
+        console.error('Failed to complete onboarding:', result.error);
       }
     } catch (error) {
-      console.error('❌ Error completing onboarding:', error);
+      console.error('Error completing onboarding:', error);
     }
   }
 

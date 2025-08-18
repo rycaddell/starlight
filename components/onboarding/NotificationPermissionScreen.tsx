@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,9 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Video, ResizeMode } from 'expo-av';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import * as Notifications from 'expo-notifications';
 
@@ -24,7 +24,7 @@ export const NotificationPermissionScreen: React.FC = () => {
   } = useOnboarding();
 
   const [isRequesting, setIsRequesting] = useState(false);
-  const videoRef = useRef(null);
+  const [imageLoadTime, setImageLoadTime] = useState<number | null>(null);
 
   const requestNotificationPermission = async () => {
     setIsRequesting(true);
@@ -112,15 +112,26 @@ export const NotificationPermissionScreen: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {/* Background Video */}
-      <Video
-        ref={videoRef}
-        source={require('../../assets/notifsPermissions.mp4')}
-        style={styles.backgroundVideo}
-        resizeMode={ResizeMode.COVER}
-        isLooping
-        isMuted
-        shouldPlay
+      {/* Background Image - THIS IS WHERE YOU CHANGE THE IMAGE */}
+      <Image
+        source={require('../../assets/reflection.png')}
+        style={styles.backgroundImage}
+        resizeMode="cover"
+        defaultSource={require('../../assets/reflection.png')} // Fallback while loading
+        fadeDuration={0} // Remove fade animation for faster perception
+        onLoadStart={() => {
+          console.log('🖼️ Reflection image started loading...');
+          setImageLoadTime(Date.now());
+        }}
+        onLoad={() => {
+          if (imageLoadTime) {
+            const loadTime = Date.now() - imageLoadTime;
+            console.log(`✅ Reflection image loaded in ${loadTime}ms`);
+          }
+        }}
+        onError={(error) => {
+          console.error('❌ Reflection image failed to load:', error);
+        }}
       />
       
       {/* Overlay */}
@@ -135,9 +146,9 @@ export const NotificationPermissionScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Title at top */}
             <View style={styles.headerSection}>
-              <Text style={styles.title}>Notifications</Text>
+              <Text style={styles.title}>Reflect</Text>
               <Text style={styles.subtitle}>
-                We'll give you a bump when we add cool things.
+                After 15 entries, we'll make you a Mirror to help you notice trends and insights from your journals.
               </Text>
             </View>
             
@@ -176,7 +187,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  backgroundVideo: {
+  backgroundImage: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -207,7 +218,7 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   title: {
-    fontSize: 48,
+    fontSize: 36,  // H2 size to match the microphone screen
     fontWeight: 'bold',
     color: '#ffffff',
     textAlign: 'center',
