@@ -3,7 +3,7 @@
 export default {
     expo: {
       name: "Oxbow",
-      slug: "oxbow",
+      slug: "starlight",
       version: "1.0.0",
       orientation: "portrait",
       icon: "./assets/images/oxbow_app_icon.png",
