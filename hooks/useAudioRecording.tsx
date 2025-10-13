@@ -139,30 +139,31 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Real timer based on recording status
+  // Real timer based on recording status using callback instead of polling (important-comment)
   useEffect(() => {
-    let interval: NodeJS.Timeout;
     if (recording && isRecording && !isPaused) {
-      interval = setInterval(async () => {
-        if (recording) {
-          const status = await recording.getStatusAsync();
-          if (status.isRecording) {
-            const durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
-            setRecordingDuration(durationInSeconds);
-            
-            // 8 minute limit (480 seconds)
-            if (durationInSeconds >= 480) {
-              Alert.alert(
-                'Recording Limit Reached',
-                'Maximum recording time is 8 minutes. Recording will stop now.',
-                [{ text: 'OK', onPress: () => handleStopRecording() }]
-              );
-            }
+      recording.setOnRecordingStatusUpdate((status) => {
+        if (status.isRecording) {
+          const durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
+          setRecordingDuration(durationInSeconds);
+          
+          // 8 minute limit (480 seconds)
+          if (durationInSeconds >= 480) {
+            Alert.alert(
+              'Recording Limit Reached',
+              'Maximum recording time is 8 minutes. Recording will stop now.',
+              [{ text: 'OK', onPress: () => handleStopRecording() }]
+            );
           }
         }
-      }, 1000);
+      });
     }
-    return () => clearInterval(interval);
+    
+    return () => {
+      if (recording) {
+        recording.setOnRecordingStatusUpdate(null);
+      }
+    };
   }, [recording, isRecording, isPaused]);
 
   return {
