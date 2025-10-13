@@ -157,7 +157,7 @@ export const MicrophonePermissionScreen: React.FC = () => {
             <View style={styles.headerSection}>
               <Text style={styles.title}>Spoken Journaling</Text>
               <Text style={styles.subtitle}>
-                Capture what you're hearing by voice or text
+                Capture what you&apos;re hearing by voice or text
               </Text>
             </View>
             
@@ -167,7 +167,7 @@ export const MicrophonePermissionScreen: React.FC = () => {
                 <View style={styles.successContainer}>
                   <Text style={styles.successText}>Microphone enabled!</Text>
                   <Text style={styles.successSubtext}>
-                    You're ready for voice journaling
+                    You&apos;re ready for voice journaling
                   </Text>
                 </View>
               ) : (

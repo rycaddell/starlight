@@ -148,7 +148,7 @@ export const NotificationPermissionScreen: React.FC = () => {
             <View style={styles.headerSection}>
               <Text style={styles.title}>Reflect</Text>
               <Text style={styles.subtitle}>
-                After 15 entries, we'll make you a Mirror to help you notice trends and insights from your journals.
+                After 15 entries, we&apos;ll make you a Mirror to help you notice trends and insights from your journals.
               </Text>
             </View>
             
@@ -158,7 +158,7 @@ export const NotificationPermissionScreen: React.FC = () => {
                 <View style={styles.successContainer}>
                   <Text style={styles.successText}>Notifications enabled!</Text>
                   <Text style={styles.successSubtext}>
-                    You'll be the first to know about updates
+                    You&apos;ll be the first to know about updates
                   </Text>
                 </View>
               ) : (
