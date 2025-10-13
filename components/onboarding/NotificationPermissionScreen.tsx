@@ -148,7 +148,7 @@ export const NotificationPermissionScreen: React.FC = () => {
             <View style={styles.headerSection}>
               <Text style={styles.title}>Reflect</Text>
               <Text style={styles.subtitle}>
-                After 15 entries, we&apos;ll make you a Mirror to help you notice trends and insights from your journals.
+                After 10 entries, we&apos;ll make you a Mirror to help you notice trends and insights from your journals.
               </Text>
             </View>
             

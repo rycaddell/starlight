@@ -7,6 +7,7 @@ import {
   checkAndGenerateMirror,
   insertTestJournalData 
 } from '../lib/supabase';
+import { MIRROR_THRESHOLD } from '../lib/config/constants';
 
 type MirrorState = 'progress' | 'ready' | 'generating' | 'viewing';
 
@@ -40,7 +41,7 @@ export const useMirrorData = () => {
       
       if (countResult.success) {
         setJournalCount(countResult.count);
-        setMirrorState(countResult.count >= 15 ? 'ready' : 'progress');
+        setMirrorState(countResult.count >= MIRROR_THRESHOLD ? 'ready' : 'progress');
       }
     } catch (error) {
       console.error('Error loading journals:', error);

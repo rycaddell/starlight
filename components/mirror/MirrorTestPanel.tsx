@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { MIRROR_THRESHOLD } from '../../lib/config/constants';
 
 interface MirrorTestPanelProps {
   journalCount: number;
@@ -40,12 +41,12 @@ export const MirrorTestPanel: React.FC<MirrorTestPanelProps> = ({
         disabled={testLoading}
       >
         <Text style={styles.testButtonText}>
-          {testLoading ? 'Inserting...' : '📝 Insert 15 Test Journals'}
+          {testLoading ? 'Inserting...' : '📝 Insert 10 Test Journals'}
         </Text>
       </TouchableOpacity>
       
       <Text style={styles.testNote}>
-        Current unassigned journals: {journalCount}/15
+        Current unassigned journals: {journalCount}/{MIRROR_THRESHOLD}
       </Text>
       <Text style={styles.testNote}>
         Total journals: {totalJournals}

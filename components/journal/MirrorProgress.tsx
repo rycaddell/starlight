@@ -1,12 +1,13 @@
 /**
  * MirrorProgress Component
  * 
- * Shows progress toward the next Mirror generation (X/15 journal entries).
+ * Shows progress toward the next Mirror generation (X/10 journal entries).
  * Displays a visual progress bar and count.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { MIRROR_THRESHOLD } from '../../lib/config/constants';
 
 interface MirrorProgressProps {
   currentCount: number;
@@ -15,7 +16,7 @@ interface MirrorProgressProps {
 
 export const MirrorProgress: React.FC<MirrorProgressProps> = ({ 
   currentCount, 
-  targetCount = 15 
+  targetCount = MIRROR_THRESHOLD 
 }) => {
   const progressPercentage = Math.min((currentCount / targetCount) * 100, 100);
 

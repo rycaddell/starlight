@@ -41,7 +41,7 @@ export const HowItWorksScreen: React.FC = () => {
     {
       number: 2,
       title: 'Look in the Mirror',
-      description: 'After 15 entries, we\'ll reflect back to you observations and trends from your journaling.',
+      description: 'After 10 entries, we\'ll reflect back to you observations and trends from your journaling.',
       icon: '✨',
       color: '#10b981'
     },
