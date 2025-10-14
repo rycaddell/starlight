@@ -45,7 +45,7 @@ export const ShareScreen: React.FC = () => {
             <View style={styles.headerSection}>
               <Text style={styles.title}>Share</Text>
               <Text style={styles.subtitle}>
-                Talk about what you're learning with someone you trust
+                Talk about what you&apos;re learning with someone you trust
               </Text>
             </View>
             

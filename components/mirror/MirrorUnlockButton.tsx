@@ -13,7 +13,7 @@ export const MirrorUnlockButton: React.FC<MirrorUnlockButtonProps> = ({ onPress,
       <Text style={styles.celebrationEmoji}>🪞</Text>
       <Text style={styles.celebrationTitle}>Mirror Ready!</Text>
       <Text style={styles.celebrationSubtitle}>
-        You've completed 15 journal entries.
+        You&apos;ve completed 15 journal entries.
       </Text>
     </View>
     
