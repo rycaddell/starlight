@@ -77,35 +77,28 @@ export default function MirrorScreen() {
     }, 200);
   };
   // Add this new function after your existing handlers
-  const handleDeleteJournal = async (journalId: string) => {
-    Alert.alert(
-      'Delete Journal',
-      'Are you sure that you want to delete this journal?',
-      [
-        {
-          text: 'No',
-          style: 'cancel',
-        },
-        {
-          text: 'Yes',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const result = await deleteJournalEntry(journalId);
-              
-              if (result.success) {
-                loadJournals();
-              } else {
-                Alert.alert('Error', 'Failed to delete journal entry. Please try again.');
-              }
-            } catch (error) {
-              Alert.alert('Error', 'Something went wrong. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
+// Add this function somewhere before your return statement
+// (put it with your other handlers like handleGenerateMirror, etc.)
+
+const handleDeleteJournal = async (journalId: string) => {
+  try {
+    // Use the imported deleteJournalEntry function
+    const result = await deleteJournalEntry(journalId);
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to delete journal');
+    }
+
+    // Refresh the journals list to reflect the deletion
+    await loadJournals();
+
+    console.log('✅ Journal deleted successfully');
+
+  } catch (error) {
+    console.error('❌ Error deleting journal:', error);
+    Alert.alert('Error', 'Could not delete journal. Please try again.');
+  }
+};
 
   // Handle opening an existing Mirror
   const handleOpenExistingMirror = async (mirrorId: string) => {
@@ -250,12 +243,13 @@ export default function MirrorScreen() {
                 
                 return (
                   <MirrorCard
-                    key={mirrorId}
-                    mirrorId={mirrorId}
-                    mirrorDate={new Date(mirrorDate)}
-                    journals={mirrorJournals}
-                    onViewMirror={() => handleOpenExistingMirror(mirrorId)}
-                  />
+                  key={mirrorId}
+                  mirrorId={mirrorId}
+                  mirrorDate={new Date(mirrorDate)}
+                  journals={mirrorJournals}
+                  onViewMirror={() => handleOpenExistingMirror(mirrorId)}
+                  onDeleteJournal={handleDeleteJournal} // 👈 Add this line
+                />
                 );
               })}
             </View>
@@ -273,15 +267,21 @@ export default function MirrorScreen() {
   );
 }
 
-// Mirror Card Component
 interface MirrorCardProps {
   mirrorId: string;
   mirrorDate: Date;
   journals: any[];
   onViewMirror: () => void;
+  onDeleteJournal: (journalId: string) => Promise<void>;
 }
 
-const MirrorCard: React.FC<MirrorCardProps> = ({ mirrorId, mirrorDate, journals, onViewMirror }) => {
+const MirrorCard: React.FC<MirrorCardProps> = ({ 
+  mirrorId, 
+  mirrorDate, 
+  journals, 
+  onViewMirror,
+  onDeleteJournal // 👈 Add this
+}) => {
   const [showJournals, setShowJournals] = React.useState(false);
 
   return (
@@ -318,7 +318,7 @@ const MirrorCard: React.FC<MirrorCardProps> = ({ mirrorId, mirrorDate, journals,
           <JournalHistory 
             journals={journals}
             loading={false}
-            onDeleteJournal={handleDeleteJournal}
+            onDeleteJournal={onDeleteJournal}
           />
         </View>
       )}
