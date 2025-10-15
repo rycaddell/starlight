@@ -34,10 +34,15 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   const wakeLockActiveRef = useRef(false);
   const recordingStateRef = useRef({ isRecording, isPaused });
+  const recordingRef = useRef<Audio.Recording | null>(null);
   
   useEffect(() => {
     recordingStateRef.current = { isRecording, isPaused };
   }, [isRecording, isPaused]);
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
 
   const activateWakeLock = async () => {
     if (wakeLockActiveRef.current) return;
@@ -118,7 +123,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           });
           
           // Transcribe audio using Whisper
-          const result = await transcribeAudio(uri);
+          const result = await transcribeAudio(uri, recordingDuration);
           
           setIsProcessing(false);
           
@@ -141,12 +146,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
       } finally {
+        await deactivateWakeLock();
+        
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
         setRecordingDuration(0);
-
-        await deactivateWakeLock();
       }
     }
   };
@@ -220,11 +225,18 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   }, []);
 
   useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       const { isRecording, isPaused } = recordingStateRef.current;
+      const currentRecording = recordingRef.current;
       
-      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused) {
-        handlePauseRecording();
+      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording) {
+        try {
+          await currentRecording.pauseAsync();
+          setIsPaused(true);
+          await deactivateWakeLock();
+        } catch (error) {
+          Alert.alert('Error', 'Failed to pause recording when backgrounding.');
+        }
       }
     });
 
