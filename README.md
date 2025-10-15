@@ -1,50 +1,83 @@
-# Welcome to your Expo app 👋
+# Oxbow
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A spiritual journaling mobile app that helps users capture their thoughts through text or voice, and receive AI-powered reflections after 15 journal entries.
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
+## Quick Start
 ```bash
-npm run reset-project
+# Install dependencies
+npm install
+
+# Start development server
+npx expo start
+
+# Run on specific platform
+npm run ios        # iOS simulator
+npm run android    # Android emulator
+npm run web        # Web browser
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Tech Stack
 
-## Learn more
+- **Framework:** Expo SDK ~53.0 + React Native 0.79.5
+- **Language:** TypeScript
+- **Backend:** Supabase (database, auth)
+- **AI Services:** OpenAI Whisper (voice transcription)
+- **Styling:** NativeWind (Tailwind for React Native)
+- **Routing:** Expo Router (file-based)
 
-To learn more about developing your project with Expo, look at the following resources:
+## Environment Setup
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+1. Copy `.env.example` to `.env`
+2. Add your credentials:
+```
+   EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+   EXPO_PUBLIC_OPENAI_API_KEY=your_openai_key
+```
 
-## Join the community
+## Project Structure
+```
+starlight/
+├── app/              # File-based routing (Expo Router)
+├── components/       # Reusable UI components
+├── hooks/            # Custom React hooks
+├── lib/              # Services & utilities
+├── contexts/         # React Context providers
+└── types/            # TypeScript definitions
+```
 
-Join our community of developers creating universal apps.
+## Key Features
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- **Dual Input Modes:** Text or voice journaling
+- **Voice Transcription:** Automatic transcription via OpenAI Whisper
+- **AI Reflections:** "Mirrors" generated after 15 journal entries
+- **Access Code Auth:** Simple code-based authentication system
+- **Cross-Platform:** iOS, Android, and Web support
+
+## Documentation
+
+- 📖 [Architecture Overview](docs/ARCHITECTURE.md) - Technical deep-dive
+- 🚀 [Onboarding Guide](docs/ONBOARDING.md) - New engineer onboarding
+- 🗄️ [Database Schema](docs/DATABASE.md) - Supabase table structure
+- 🔧 [Development Guide](docs/DEVELOPMENT.md) - Configuration & workflows
+
+## Development
+
+### File-Based Routing
+Routes are automatically generated from the `app/` directory:
+- `app/(tabs)/index.tsx` → Main journal screen
+- `app/(tabs)/mirror.tsx` → Mirror reflection screen
+
+### State Management
+- **Contexts:** `AuthContext`, `OnboardingContext`
+- **Custom Hooks:** `useAudioRecording`, `useMirrorData`
+- **Services:** All Supabase operations in `lib/supabase/`
+
+## Contributing
+
+1. Create a feature branch from `main`
+2. Make your changes
+3. Submit a pull request
+
+## License
+All rights reserved. This is proprietary software.
