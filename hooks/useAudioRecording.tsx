@@ -18,10 +18,11 @@
  * - formatDuration: Utility to format seconds as MM:SS
  */
 
-import { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import { transcribeAudio } from '../lib/whisperService';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -30,6 +31,43 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isStoppingRecording, setIsStoppingRecording] = useState(false);
+
+  const wakeLockActiveRef = useRef(false);
+  const recordingStateRef = useRef({ isRecording, isPaused });
+  
+  useEffect(() => {
+    recordingStateRef.current = { isRecording, isPaused };
+  }, [isRecording, isPaused]);
+
+  const activateWakeLock = async () => {
+    if (wakeLockActiveRef.current) return;
+    
+    try {
+      await activateKeepAwakeAsync('recording-session');
+      wakeLockActiveRef.current = true;
+    } catch (error) {
+      Alert.alert(
+        'Screen Lock Notice',
+        'Unable to prevent screen sleep. Recording continues but screen may lock.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
+
+  const deactivateWakeLock = async () => {
+    if (!wakeLockActiveRef.current) return;
+    
+    try {
+      await deactivateKeepAwake('recording-session');
+      wakeLockActiveRef.current = false;
+    } catch (error) {
+      Alert.alert(
+        'Screen Lock Notice',
+        'Unable to release screen lock. You may need to manually lock your device.',
+        [{ text: 'OK' }]
+      );
+    }
+  };
 
   const handleStartRecording = async (hasPermission: boolean) => {
     if (!hasPermission) {
@@ -53,6 +91,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       setIsRecording(true);
       setIsPaused(false);
       setRecordingDuration(0);
+
+      await activateWakeLock();
     } catch (error) {
       Alert.alert('Recording Error', 'Unable to start recording. Please try again.');
     }
@@ -78,7 +118,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           });
           
           // Transcribe audio using Whisper
-          const result = await transcribeAudio(uri, recordingDuration);
+          const result = await transcribeAudio(uri);
           
           setIsProcessing(false);
           
@@ -94,20 +134,21 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
                 { text: 'Retry', onPress: () => handleStopRecording() }
               ]
             );
-            return; // Don't reset recording state if transcription failed
+            return;
           }
         }
-        
-        setRecording(null);
       } catch (error) {
         setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
+      } finally {
+        setRecording(null);
+        setIsRecording(false);
+        setIsPaused(false);
+        setRecordingDuration(0);
+
+        await deactivateWakeLock();
       }
     }
-    
-    setIsRecording(false);
-    setIsPaused(false);
-    setRecordingDuration(0);
   };
 
   const handlePauseRecording = async () => {
@@ -115,6 +156,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       try {
         await recording.pauseAsync();
         setIsPaused(true);
+
+        await deactivateWakeLock();
       } catch (error) {
         Alert.alert('Error', 'Failed to pause recording.');
       }
@@ -126,6 +169,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       try {
         await recording.startAsync();
         setIsPaused(false);
+
+        await activateWakeLock();
       } catch (error) {
         Alert.alert('Error', 'Failed to resume recording.');
       }
@@ -165,6 +210,28 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       }
     };
   }, [recording, isRecording, isPaused]);
+
+  useEffect(() => {
+    return () => {
+      if (wakeLockActiveRef.current) {
+        deactivateKeepAwake('recording-session').catch(() => {});
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const { isRecording, isPaused } = recordingStateRef.current;
+      
+      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused) {
+        handlePauseRecording();
+      }
+    });
+
+    return () => {
+      subscription?.remove();
+    };
+  }, []);
 
   return {
     isRecording,
