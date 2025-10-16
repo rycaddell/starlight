@@ -12,7 +12,7 @@ export default {
       newArchEnabled: true,
       ios: {
         supportsTablet: true,
-        bundleIdentifier: "com.caddell.starlight",
+        bundleIdentifier: "com.caddell.oxbow",
         infoPlist: {
           ITSAppUsesNonExemptEncryption: false,
           NSMicrophoneUsageDescription: "Oxbow uses microphone access for voice journaling to enhance your spiritual reflection experience.",

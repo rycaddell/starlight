@@ -20,14 +20,15 @@ export default function JournalScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
 
   // Save journal to database
-  const saveJournalToDatabase = async (content, timestamp) => {
+  const saveJournalToDatabase = async (content, timestamp, entryType: 'text' | 'voice') => {
     if (!isAuthenticated || !user) {
       Alert.alert('Error', 'Please sign in to save journal entries.');
       return false;
     }
 
     console.log('💾 Saving journal for custom user:', user.id);
-    const result = await saveJournalEntry(content, user.id); // Use custom user ID
+    console.log('📝 Entry type:', entryType);
+    const result = await saveJournalEntry(content, user.id, entryType); // Pass entry type
     
     if (result.success) {
       console.log('✅ Journal saved successfully');
@@ -41,7 +42,7 @@ export default function JournalScreen() {
   
   // Handle text journal submission
   const handleTextJournalSubmit = async (text: string, timestamp: string) => {
-    const saved = await saveJournalToDatabase(text, timestamp);
+    const saved = await saveJournalToDatabase(text, timestamp, 'text'); // Specify 'text' type
     
     if (saved) {
       router.push({
@@ -56,7 +57,7 @@ export default function JournalScreen() {
 
   // Handle voice transcription completion
   const handleVoiceTranscriptionComplete = async (transcribedText: string, timestamp: string) => {
-    const saved = await saveJournalToDatabase(transcribedText, timestamp);
+    const saved = await saveJournalToDatabase(transcribedText, timestamp, 'voice'); // Specify 'voice' type
     
     if (saved) {
       router.push({
