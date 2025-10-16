@@ -106,6 +106,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handleStopRecording = async () => {
     if (recording) {
       try {
+        // Deactivate wake lock FIRST - don't make user wait through transcription
+        await deactivateWakeLock();
+        
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
         
@@ -145,9 +148,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       } catch (error) {
         setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
-      } finally {
+        // Ensure wake lock is deactivated even on error
         await deactivateWakeLock();
-        
+      } finally {
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
@@ -162,6 +165,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         await recording.pauseAsync();
         setIsPaused(true);
 
+        // Reset audio mode to allow device to sleep
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+        });
+
         await deactivateWakeLock();
       } catch (error) {
         Alert.alert('Error', 'Failed to pause recording.');
@@ -172,6 +181,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handleResumeRecording = async () => {
     if (recording) {
       try {
+        // Re-enable audio mode for recording
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+
         await recording.startAsync();
         setIsPaused(false);
 
@@ -233,6 +248,13 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         try {
           await currentRecording.pauseAsync();
           setIsPaused(true);
+          
+          // Reset audio mode when backgrounding
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: false,
+          });
+          
           await deactivateWakeLock();
         } catch (error) {
           Alert.alert('Error', 'Failed to pause recording when backgrounding.');

@@ -192,6 +192,7 @@ const handleStartRecordingWithPermission = async () => {
           <Text style={styles.subtitle}>
             Quickly capture important moments
           </Text>
+          
         </View>
         
         {/* Tab Interface */}
