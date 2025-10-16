@@ -5,6 +5,10 @@
  * Handles real-time duration tracking, 8-minute recording limits, and audio file management.
  * Works with expo-av to create high-quality audio recordings stored locally.
  * 
+ * Includes background state preservation - when app is backgrounded, recording pauses
+ * and duration is preserved. Manual duration calculation is used after backgrounding
+ * to work around iOS recording object state corruption.
+ * 
  * Returns:
  * - isRecording: Whether currently recording audio
  * - isPaused: Whether recording is paused
@@ -35,6 +39,10 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const wakeLockActiveRef = useRef(false);
   const recordingStateRef = useRef({ isRecording, isPaused });
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const pausedDurationRef = useRef(0);
+  const latestDurationRef = useRef(0);
+  const wasBackgroundedRef = useRef(false);
+  const resumeTimeRef = useRef<number>(0);
   
   useEffect(() => {
     recordingStateRef.current = { isRecording, isPaused };
@@ -96,9 +104,14 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       setIsRecording(true);
       setIsPaused(false);
       setRecordingDuration(0);
+      pausedDurationRef.current = 0;
+      latestDurationRef.current = 0;
+      wasBackgroundedRef.current = false;
+      resumeTimeRef.current = 0;
 
       await activateWakeLock();
     } catch (error) {
+      console.error('Failed to start recording:', error);
       Alert.alert('Recording Error', 'Unable to start recording. Please try again.');
     }
   };
@@ -146,15 +159,19 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           }
         }
       } catch (error) {
+        console.error('Error stopping recording:', error);
         setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
-        // Ensure wake lock is deactivated even on error
         await deactivateWakeLock();
       } finally {
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
         setRecordingDuration(0);
+        pausedDurationRef.current = 0;
+        latestDurationRef.current = 0;
+        wasBackgroundedRef.current = false;
+        resumeTimeRef.current = 0;
       }
     }
   };
@@ -162,6 +179,15 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handlePauseRecording = async () => {
     if (recording) {
       try {
+        // Use latest duration from timer callback ref for consistency
+        const currentDuration = latestDurationRef.current;
+        pausedDurationRef.current = currentDuration;
+        setRecordingDuration(currentDuration);
+        
+        // Reset background tracking on manual pause
+        wasBackgroundedRef.current = false;
+        resumeTimeRef.current = 0;
+
         await recording.pauseAsync();
         setIsPaused(true);
 
@@ -173,6 +199,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
         await deactivateWakeLock();
       } catch (error) {
+        console.error('Failed to pause recording:', error);
         Alert.alert('Error', 'Failed to pause recording.');
       }
     }
@@ -181,6 +208,11 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handleResumeRecording = async () => {
     if (recording) {
       try {
+        // Set resume time BEFORE starting recording to avoid race condition
+        if (wasBackgroundedRef.current) {
+          resumeTimeRef.current = Date.now();
+        }
+        
         // Re-enable audio mode for recording
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
@@ -190,8 +222,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         await recording.startAsync();
         setIsPaused(false);
 
+        // Restore the paused duration immediately to prevent timer reset
+        setRecordingDuration(pausedDurationRef.current);
+
         await activateWakeLock();
       } catch (error) {
+        console.error('Failed to resume recording:', error);
         Alert.alert('Error', 'Failed to resume recording.');
       }
     }
@@ -204,12 +240,25 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Real timer based on recording status using callback instead of polling (important-comment)
+  // Real timer based on recording status using callback instead of polling
   useEffect(() => {
     if (recording && isRecording && !isPaused) {
       recording.setOnRecordingStatusUpdate((status) => {
         if (status.isRecording) {
-          const durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
+          let durationInSeconds;
+          
+          // If recording was backgrounded, calculate duration manually
+          // because the recording object's internal timer is corrupted by iOS
+          if (wasBackgroundedRef.current && resumeTimeRef.current > 0) {
+            const elapsedSinceResume = Math.floor((Date.now() - resumeTimeRef.current) / 1000);
+            durationInSeconds = pausedDurationRef.current + elapsedSinceResume;
+          } else {
+            // Normal mode: use recording object's duration
+            durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
+          }
+          
+          // Always track latest duration in ref
+          latestDurationRef.current = durationInSeconds;
           setRecordingDuration(durationInSeconds);
           
           // 8 minute limit (480 seconds)
@@ -246,6 +295,15 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       
       if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording) {
         try {
+          // Use latest duration from timer callback ref instead of getStatusAsync
+          // because iOS may have already paused the recording, giving us stale data
+          const currentDuration = latestDurationRef.current;
+          pausedDurationRef.current = currentDuration;
+          setRecordingDuration(currentDuration);
+          
+          // Mark that recording was backgrounded
+          wasBackgroundedRef.current = true;
+
           await currentRecording.pauseAsync();
           setIsPaused(true);
           
@@ -257,6 +315,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           
           await deactivateWakeLock();
         } catch (error) {
+          console.error('Failed to pause recording when backgrounding:', error);
           Alert.alert('Error', 'Failed to pause recording when backgrounding.');
         }
       }
