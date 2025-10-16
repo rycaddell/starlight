@@ -111,5 +111,7 @@ export interface TranscriptionResult {
     };
   };
   
-  // Export the real version for production (change this to mockTranscribeAudio for testing)
-  export const transcribeAudio = realTranscribeAudio;
+  // Uses realTranscribeAudio (ignores duration) but can be switched to mockTranscribeAudio for testing
+  export const transcribeAudio = async (audioUri: string, durationSeconds?: number): Promise<TranscriptionResult> => {
+    return realTranscribeAudio(audioUri);
+  };
