@@ -155,11 +155,15 @@ export const MicrophonePermissionScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Title at top */}
             <View style={styles.headerSection}>
-              <Text style={styles.title}>Spoken Journaling</Text>
+              <Text style={styles.title}>Notice</Text>
               <Text style={styles.subtitle}>
-                Capture what you&apos;re hearing by voice or text
+                Create a habit of noticing when and how God speaks to you.
               </Text>
             </View>
+
+            <Text style={styles.body}>
+              In Oxbow, we capture these moments in short text journals or use voice journals to unpack bigger, messier thinking.
+            </Text>
             
             {/* Permission action at bottom */}
             <View style={styles.bottomSection}>
@@ -304,5 +308,16 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     opacity: 0.9,
+  },
+  body: {
+    fontSize: 16,
+    color: '#64748b',  // Lighter color for better visibility
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 20,
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',  // Semi-transparent background for readability
+    paddingVertical: 12,
+    borderRadius: 8,
   },
 });
