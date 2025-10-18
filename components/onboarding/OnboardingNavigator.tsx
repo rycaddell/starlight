@@ -1,3 +1,4 @@
+// components/onboarding/OnboardingNavigator.tsx - Simplified flow
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
@@ -5,9 +6,8 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { MicrophonePermissionScreen } from './MicrophonePermissionScreen';
 import { JournalEntryScreen } from './JournalEntryScreen';
 import { LoadingReflectionScreen } from './LoadingReflectionScreen';
-import { MirrorScreen } from './MirrorScreen';  // formerly AIPreviewScreen
-import { RhythmOfLifeScreen } from './RhythmOfLifeScreen';  // formerly UnderstandingInfoScreen
-import { JourneyTogetherScreen } from './JourneyTogetherScreen';  // formerly ActInfoScreen
+import { MirrorScreen } from './MirrorScreen';
+import { JourneyTogetherScreen } from './JourneyTogetherScreen';
 
 export const OnboardingNavigator: React.FC = () => {
   const { user } = useAuth();
@@ -33,8 +33,6 @@ export const OnboardingNavigator: React.FC = () => {
         return <LoadingReflectionScreen />;
       case 'mirror':
         return <MirrorScreen />;
-      case 'rhythm-of-life':
-        return <RhythmOfLifeScreen />;
       case 'journey-together':
         return <JourneyTogetherScreen />;
       default:

@@ -21,18 +21,12 @@ interface OnboardingContextType {
   journalContent: string;
   journalEntryType: 'text' | 'voice' | null;
   aiPreviewData: any;
-  rhythmData: {
-    activity: string;
-    day: string;
-    time: string;
-  };
   setCurrentStep: (step: OnboardingStep) => void;
   setMicrophonePermission: (granted: boolean) => void;
   setNotificationPermission: (granted: boolean) => void;
   setJournalContent: (content: string) => void;
   setJournalEntryType: (type: 'text' | 'voice') => void;
   setAIPreviewData: (data: any) => void;
-  setRhythmData: (data: { activity: string; day: string; time: string }) => void;
   completeOnboarding: () => Promise<void>;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
@@ -41,13 +35,12 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
-// Updated step order with new onboarding flow
+// Updated step order - simplified flow
 const STEP_ORDER: OnboardingStep[] = [
   'microphone-permission',
   'journal-entry',
   'loading-reflection',
   'mirror',
-  'rhythm-of-life',
   'journey-together',
   'complete'
 ];
@@ -95,11 +88,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const [journalContent, setJournalContent] = useState('');
   const [journalEntryType, setJournalEntryType] = useState<'text' | 'voice' | null>(null);
   const [aiPreviewData, setAIPreviewData] = useState<any>(null);
-  const [rhythmData, setRhythmData] = useState({
-    activity: '',
-    day: '',
-    time: ''
-  });
 
   // Check onboarding completion status when user changes
   useEffect(() => {
@@ -116,7 +104,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         setJournalContent('');
         setJournalEntryType(null);
         setAIPreviewData(null);
-        setRhythmData({ activity: '', day: '', time: '' });
       }
     } else {
       setIsOnboardingComplete(false);
@@ -126,7 +113,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       setJournalContent('');
       setJournalEntryType(null);
       setAIPreviewData(null);
-      setRhythmData({ activity: '', day: '', time: '' });
     }
   }, [user]);
 
@@ -140,8 +126,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         return true; // Auto-advances via timer
       case 'mirror':
         return true; // Can always proceed
-      case 'rhythm-of-life':
-        return hasNotificationPermission; // MUST grant notification permission
       case 'journey-together':
         return true; // Can always proceed
       case 'complete':
@@ -215,14 +199,12 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     journalContent,
     journalEntryType,
     aiPreviewData,
-    rhythmData,
     setCurrentStep,
     setMicrophonePermission,
     setNotificationPermission,
     setJournalContent,
     setJournalEntryType,
     setAIPreviewData,
-    setRhythmData,
     completeOnboarding,
     goToNextStep,
     goToPreviousStep,

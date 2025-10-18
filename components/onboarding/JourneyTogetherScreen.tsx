@@ -1,4 +1,4 @@
-// components/onboarding/JourneyTogetherScreen.tsx (formerly ActInfoScreen)
+// components/onboarding/JourneyTogetherScreen.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ImageBackground } from 'react-native';
 import { useOnboarding } from '../../contexts/OnboardingContext';
@@ -20,14 +20,15 @@ export const JourneyTogetherScreen: React.FC = () => {
       <View style={styles.overlay} />
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <Text style={styles.emoji}>🤝</Text>
-          <Text style={styles.title}>Journey Together</Text>
-          
-          <View style={styles.textContainer}>
-            <Text style={styles.body}>
-              Spiritual transformation doesn't happen in isolation. Share what you're learning about yourself with mentors or spiritual partners who are near or far away.
+          {/* Header at top - NO EMOJI */}
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>Create a habit of spiritual partnership</Text>
+            <Text style={styles.subtitle}>
+              Spiritual transformation doesn't happen in isolation. Share what you're learning with mentors and spiritual partners that are close to you.
             </Text>
           </View>
+
+          <View style={styles.spacer} />
 
           <TouchableOpacity 
             style={styles.button}
@@ -49,47 +50,41 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   container: {
     flex: 1,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
     paddingHorizontal: 32,
+    paddingTop: 60,
+    paddingBottom: 48,
   },
-  emoji: {
-    fontSize: 120,
-    marginBottom: 32,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+  headerSection: {
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
   },
-  textContainer: {
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    marginBottom: 48,
-    maxWidth: '90%',
-  },
-  body: {
+  subtitle: {
     fontSize: 16,
-    color: '#475569',
+    color: '#ffffff',
     textAlign: 'center',
     lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  spacer: {
+    flex: 1,
   },
   button: {
     backgroundColor: '#059669',

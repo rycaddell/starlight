@@ -1,6 +1,6 @@
 // components/onboarding/LoadingReflectionScreen.tsx
-import React, { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, SafeAreaView, ImageBackground } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ImageBackground, Animated, Easing } from 'react-native';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { generateOnboardingPreview } from '../../lib/supabase/mirrors';
@@ -10,9 +10,53 @@ export const LoadingReflectionScreen: React.FC = () => {
   const { journalContent, journalEntryType, setAIPreviewData, setCurrentStep } = useOnboarding();
   const { user } = useAuth();
   const [hasStarted, setHasStarted] = useState(false);
+  
+  // Animation values for three dots
+  const dot1Opacity = useRef(new Animated.Value(0)).current;
+  const dot2Opacity = useRef(new Animated.Value(0)).current;
+  const dot3Opacity = useRef(new Animated.Value(0)).current;
 
+  // Ellipsis animation
   useEffect(() => {
-    // Only run once
+    const animateDot = (dotOpacity: Animated.Value, delay: number) => {
+      return Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dotOpacity, {
+            toValue: 1,
+            duration: 400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.delay(300),
+          Animated.timing(dotOpacity, {
+            toValue: 0,
+            duration: 400,
+            easing: Easing.inOut(Easing.sin),
+            useNativeDriver: true,
+          }),
+          Animated.delay(1900 - delay),
+        ])
+      );
+    };
+
+    const dot1Animation = animateDot(dot1Opacity, 0);
+    const dot2Animation = animateDot(dot2Opacity, 300);
+    const dot3Animation = animateDot(dot3Opacity, 600);
+
+    dot1Animation.start();
+    dot2Animation.start();
+    dot3Animation.start();
+
+    return () => {
+      dot1Animation.stop();
+      dot2Animation.stop();
+      dot3Animation.stop();
+    };
+  }, []);
+
+  // AI generation logic
+  useEffect(() => {
     if (hasStarted) return;
     setHasStarted(true);
 
@@ -20,7 +64,6 @@ export const LoadingReflectionScreen: React.FC = () => {
       try {
         console.log('🎯 Starting onboarding preview generation...');
         
-        // Generate AI preview
         const aiResult = await generateOnboardingPreview(journalContent);
         
         if (aiResult.success) {
@@ -31,13 +74,12 @@ export const LoadingReflectionScreen: React.FC = () => {
           setAIPreviewData(aiResult.fallback);
         }
 
-        // Save journal to database (counts as 1/10)
         if (user) {
           console.log('💾 Saving onboarding journal to database...');
           const saveResult = await saveJournalEntry(
             journalContent, 
             user.id, 
-            journalEntryType || 'text' // Use tracked type, default to text
+            journalEntryType || 'text'
           );
           
           if (saveResult.success) {
@@ -47,7 +89,6 @@ export const LoadingReflectionScreen: React.FC = () => {
           }
         }
 
-        // Small delay for better UX (let them read the message)
         setTimeout(() => {
           console.log('➡️ Advancing to Mirror preview...');
           setCurrentStep('mirror');
@@ -55,7 +96,6 @@ export const LoadingReflectionScreen: React.FC = () => {
 
       } catch (error) {
         console.error('❌ Error in preview generation:', error);
-        // Still advance even on error
         setTimeout(() => {
           setCurrentStep('mirror');
         }, 2000);
@@ -63,7 +103,7 @@ export const LoadingReflectionScreen: React.FC = () => {
     };
 
     generatePreview();
-  }, [hasStarted, journalContent, user, setAIPreviewData, setCurrentStep]);
+  }, [hasStarted, journalContent, journalEntryType, user, setAIPreviewData, setCurrentStep]);
 
   return (
     <ImageBackground
@@ -74,11 +114,24 @@ export const LoadingReflectionScreen: React.FC = () => {
       <View style={styles.overlay} />
       <SafeAreaView style={styles.container}>
         <View style={styles.content}>
-          <ActivityIndicator size="large" color="#059669" style={styles.spinner} />
-          <View style={styles.textContainer}>
+          {/* Header at top */}
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>Create a habit of reflection</Text>
             <Text style={styles.subtitle}>
-              After 10 journals, we'll produce a Mirror reflection for you like this...
+              Every ten journals, Oxbow builds a Mirror—a reflection drawn from your own words and moments.
             </Text>
+          </View>
+
+          {/* Animated loading text in center */}
+          <View style={styles.animationContainer}>
+            <View style={styles.loadingTextContainer}>
+              <Text style={styles.loadingText}>Building your first Mirror</Text>
+              <View style={styles.ellipsisContainer}>
+                <Animated.Text style={[styles.dot, { opacity: dot1Opacity }]}>.</Animated.Text>
+                <Animated.Text style={[styles.dot, { opacity: dot2Opacity }]}>.</Animated.Text>
+                <Animated.Text style={[styles.dot, { opacity: dot3Opacity }]}>.</Animated.Text>
+              </View>
+            </View>
           </View>
         </View>
       </SafeAreaView>
@@ -94,31 +147,67 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   container: {
     flex: 1,
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 60,
+  },
+  headerSection: {
     alignItems: 'center',
     paddingHorizontal: 32,
   },
-  spinner: {
-    marginBottom: 32,
-  },
-  textContainer: {
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 12,
-    maxWidth: '90%',
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 16,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subtitle: {
     fontSize: 16,
-    color: '#475569',
+    color: '#ffffff',
     textAlign: 'center',
     lineHeight: 24,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  animationContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  loadingText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
+  },
+  ellipsisContainer: {
+    flexDirection: 'row',
+    marginLeft: 2,
+  },
+  dot: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginHorizontal: 1,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
 });

@@ -22,26 +22,44 @@ export const MirrorScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.emoji}>🪞</Text>
-        <Text style={styles.title}>Mirror</Text>
-        <Text style={styles.subtitle}>
-          Oxbow reflects your journaling back to you to help you see through lines and how God might be leading.
-        </Text>
+        {/* Header Section - Similar to other onboarding screens */}
+        <View style={styles.headerSection}>
+          <Text style={styles.title}>Mirror</Text>
+          <Text style={styles.subtitle}>
+            Oxbow reflects your journaling back to you, revealing patterns and insights that help you recognize how God might be leading.
+          </Text>
+        </View>
         
-        <View style={styles.card}>
-          {/* Biblical Profile Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>✨ Biblical Mirror</Text>
-            <Text style={styles.characterName}>{biblical_profile.character}</Text>
-            <Text style={styles.sectionText}>{biblical_profile.connection}</Text>
-          </View>
+        {/* Mirror Card - Physical Mirror Aesthetic */}
+        <View style={styles.mirrorCard}>
+          {/* Subtle highlight accent - like light catching surface */}
+          <View style={styles.mirrorHighlight} />
+          
+          <View style={styles.cardContent}>
+            {/* Biblical Profile Section */}
+            <View style={styles.section}>
+              <View style={styles.iconTitleRow}>
+                <View style={styles.icon}>
+                  <Text style={styles.iconText}>✨</Text>
+                </View>
+                <Text style={styles.sectionTitle}>Biblical Mirror</Text>
+              </View>
+              <Text style={styles.characterName}>{biblical_profile.character}</Text>
+              <Text style={styles.sectionText}>{biblical_profile.connection}</Text>
+            </View>
 
-          {/* Encouraging Verse Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📖 An Encouraging Word</Text>
-            <Text style={styles.verseReference}>{encouraging_verse.reference}</Text>
-            <Text style={styles.verseText}>"{encouraging_verse.text}"</Text>
-            <Text style={styles.sectionText}>{encouraging_verse.application}</Text>
+            {/* Encouraging Verse Section */}
+            <View style={styles.section}>
+              <View style={styles.iconTitleRow}>
+                <View style={styles.icon}>
+                  <Text style={styles.iconText}>📖</Text>
+                </View>
+                <Text style={styles.sectionTitle}>An Encouraging Word</Text>
+              </View>
+              <Text style={styles.verseReference}>{encouraging_verse.reference}</Text>
+              <Text style={styles.verseText}>"{encouraging_verse.text}"</Text>
+              <Text style={styles.sectionText}>{encouraging_verse.application}</Text>
+            </View>
           </View>
         </View>
 
@@ -63,9 +81,9 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    alignItems: 'center',
     paddingHorizontal: 24,
-    paddingVertical: 48,
+    paddingTop: 32,
+    paddingBottom: 48,
   },
   loadingContainer: {
     flex: 1,
@@ -77,47 +95,84 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontStyle: 'italic',
   },
-  emoji: {
-    fontSize: 80,
-    marginBottom: 24,
+  headerSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+    width: '100%',
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#1e293b',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   subtitle: {
     fontSize: 16,
     color: '#475569',
     textAlign: 'center',
-    marginBottom: 32,
     lineHeight: 24,
     paddingHorizontal: 8,
   },
-  card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+  mirrorCard: {
+    position: 'relative',
+    backgroundColor: '#FDFCFA', // Warm neutral white base
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#C6A774', // Warm wood tone
     padding: 24,
     width: '100%',
     marginBottom: 32,
+    // Soft shadows for glass effect
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+    overflow: 'hidden',
+  },
+  mirrorHighlight: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    // Subtle blue tint overlay
+    backgroundColor: 'rgba(160, 190, 220, 0.12)',
+    // Vertical gradient highlight like light catching surface
+    opacity: 0.6,
+    pointerEvents: 'none',
+  },
+  cardContent: {
+    position: 'relative',
+    zIndex: 1,
   },
   section: {
     marginBottom: 28,
   },
+  iconTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  icon: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: 'rgba(250, 204, 21, 0.15)', // Soft gold background
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  iconText: {
+    fontSize: 16,
+  },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#059669',
+    color: '#92400e', // Warm brown/gold tone
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 12,
   },
   characterName: {
     fontSize: 22,
@@ -144,7 +199,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingLeft: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#059669',
+    borderLeftColor: '#C6A774', // Warm wood tone accent
   },
   button: {
     backgroundColor: '#059669',

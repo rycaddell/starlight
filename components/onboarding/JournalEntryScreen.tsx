@@ -1,6 +1,6 @@
 // components/onboarding/JournalEntryScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, SafeAreaView, Alert } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, SafeAreaView, Alert, TouchableOpacity } from 'react-native';
 import { Audio } from 'expo-av';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
@@ -144,17 +144,47 @@ export const JournalEntryScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={styles.title}>Let's try one together</Text>
-          <Text style={styles.prompt}>
-            What's one thing that comes up consistently when you pray to God? A certain topic or feeling?
+          <Text style={styles.title}>Give it a try</Text>
+          <Text style={styles.question}>
+            What's something that comes up often when you pray—an emotion or theme?
           </Text>
         </View>
         
-        {/* Tab Interface */}
-        <JournalTabs 
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-        />
+        {/* Step Label */}
+        <Text style={styles.stepLabel}>Step 1: Choose how you want to respond</Text>
+        
+        {/* Tab Interface - Segmented Control Style */}
+        <View style={styles.segmentedControl}>
+          <TouchableOpacity
+            style={[
+              styles.segment,
+              activeTab === 'text' ? styles.segmentActive : styles.segmentInactive
+            ]}
+            onPress={() => setActiveTab('text')}
+          >
+            <Text style={[
+              styles.segmentText,
+              activeTab === 'text' ? styles.segmentTextActive : styles.segmentTextInactive
+            ]}>
+              📝 Text
+            </Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.segment,
+              activeTab === 'voice' ? styles.segmentActive : styles.segmentInactive
+            ]}
+            onPress={() => setActiveTab('voice')}
+          >
+            <Text style={[
+              styles.segmentText,
+              activeTab === 'voice' ? styles.segmentTextActive : styles.segmentTextInactive
+            ]}>
+              🎤 Voice
+            </Text>
+          </TouchableOpacity>
+        </View>
         
         {/* Tab Content */}
         {activeTab === 'text' ? (
@@ -192,27 +222,73 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     alignItems: 'center',
-    padding: 16,
-    paddingTop: 24,
+    padding: 20,
+    paddingTop: 32,
   },
   headerSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 24,
     width: '100%',
   },
   title: {
-    fontSize: 36,
+    fontSize: 24, // H2 size
     fontWeight: 'bold',
     color: '#1e293b',
-    marginBottom: 24,
+    marginBottom: 16,
     textAlign: 'center',
   },
-  prompt: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#475569',
+  question: {
+    fontSize: 20, // Larger and bold for emphasis
+    fontWeight: '700',
+    color: '#1e293b',
     textAlign: 'center',
-    lineHeight: 26,
+    lineHeight: 28,
     paddingHorizontal: 16,
+  },
+  stepLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+    paddingLeft: 4,
+  },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    width: '100%',
+    marginBottom: 24,
+  },
+  segment: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  segmentActive: {
+    backgroundColor: '#2563eb', // Blue for active
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentInactive: {
+    backgroundColor: 'transparent',
+  },
+  segmentText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  segmentTextActive: {
+    color: '#ffffff',
+  },
+  segmentTextInactive: {
+    color: '#64748b',
   },
 });
