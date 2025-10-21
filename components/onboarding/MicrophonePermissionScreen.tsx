@@ -155,9 +155,9 @@ export const MicrophonePermissionScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Title at top */}
             <View style={styles.headerSection}>
-              <Text style={styles.title}>Spoken Journaling</Text>
+              <Text style={styles.title}>The habit of noticing</Text>
               <Text style={styles.subtitle}>
-                Capture what you&apos;re hearing by voice or text
+              In Oxbow, you’ll practice noticing what God is working in you— through quick prompts or deeper voice reflections.
               </Text>
             </View>
             
@@ -227,26 +227,25 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   title: {
-    fontSize: 36,  // Reduced from 48px to make it smaller than "Oxbow" (H2 size)
+    fontSize: 28,
     fontWeight: 'bold',
-    color: '#ffffff',
+    color: '#ffffff',  // WHITE for readability
+    marginBottom: 16,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',  // Shadow for contrast
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
-    marginBottom: 16,
   },
   subtitle: {
-    fontSize: 18,
-    fontWeight: '400',
-    color: '#ffffff',
+    fontSize: 16,
+    color: '#ffffff',  // WHITE for readability
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-    opacity: 0.9,
     lineHeight: 24,
+    marginBottom: 48,
     paddingHorizontal: 20,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',  // Shadow for contrast
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   bottomSection: {
     justifyContent: 'flex-end',

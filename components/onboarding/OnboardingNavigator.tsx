@@ -1,11 +1,13 @@
-// components/onboarding/OnboardingNavigator.tsx
+// components/onboarding/OnboardingNavigator.tsx - Simplified flow
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { MicrophonePermissionScreen } from './MicrophonePermissionScreen';
-import { NotificationPermissionScreen } from './NotificationPermissionScreen';
-import { ShareScreen } from './ShareScreen';
+import { JournalEntryScreen } from './JournalEntryScreen';
+import { LoadingReflectionScreen } from './LoadingReflectionScreen';
+import { MirrorScreen } from './MirrorScreen';
+import { JourneyTogetherScreen } from './JourneyTogetherScreen';
 
 export const OnboardingNavigator: React.FC = () => {
   const { user } = useAuth();
@@ -15,19 +17,27 @@ export const OnboardingNavigator: React.FC = () => {
   const isOnboardingComplete = user?.onboarding_completed_at !== null;
   
   if (isOnboardingComplete) {
+    console.log('✅ Onboarding complete, showing main app');
     return null;
   }
+
+  console.log('📍 Current onboarding step:', currentStep);
 
   const renderCurrentScreen = () => {
     switch (currentStep) {
       case 'microphone-permission':
         return <MicrophonePermissionScreen />;
-      case 'notification-permission':
-        return <NotificationPermissionScreen />;
-      case 'share':
-        return <ShareScreen />;
+      case 'journal-entry':
+        return <JournalEntryScreen />;
+      case 'loading-reflection':
+        return <LoadingReflectionScreen />;
+      case 'mirror':
+        return <MirrorScreen />;
+      case 'journey-together':
+        return <JourneyTogetherScreen />;
       default:
         // Default to microphone permission if unknown step
+        console.warn('⚠️ Unknown onboarding step:', currentStep);
         return <MicrophonePermissionScreen />;
     }
   };

@@ -1,12 +1,10 @@
 /**
- * VoiceRecordingTab Component
+ * VoiceRecordingTab Component - UPDATED
  * 
- * Handles voice recording functionality including:
- * - Recording controls (start/stop/pause/resume)
- * - Real-time duration display with MM:SS formatting
- * - Recording state indicators (recording/paused status)
- * - Integration with permission checking and audio recording hooks
- * - Clean UI with recording feedback
+ * Improved UX with:
+ * - Timer and button grouped as one visual unit
+ * - Brand primary color instead of red
+ * - Cleaner layout with soft background
  */
 
 import React from 'react';
@@ -37,38 +35,37 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
 }) => {
   return (
     <View style={styles.voiceContainer}>
-      {/* Recording Duration Display */}
-      <View style={styles.durationContainer}>
+      {/* Recording Unit - Grouped timer and controls */}
+      <View style={styles.recordingUnit}>
+        {/* Timer Display */}
         <Text style={styles.durationText}>
           {formatDuration(recordingDuration)}
         </Text>
+        
         {isRecording && (
           <Text style={styles.recordingStatus}>
             {isPaused ? '⏸️ Paused' : '🔴 Recording'}
           </Text>
         )}
+        
         {isProcessing && (
           <Text style={styles.processingStatus}>
             🤖 Transcribing audio...
           </Text>
         )}
-      </View>
 
-      {/* Recording Controls */}
-      <View style={styles.controlsContainer}>
+        {/* Recording Controls */}
         {!isRecording && !isProcessing ? (
           // Start Recording Button
           <TouchableOpacity
             style={styles.recordButton}
             onPress={onStartRecording}
           >
-            <Text style={styles.recordButtonIcon}>🎤</Text>
-            <Text style={styles.recordButtonText}>Start Recording</Text>
+            <Text style={styles.recordButtonText}>Start Recording 🎤</Text>
           </TouchableOpacity>
         ) : isProcessing ? (
           // Processing State
           <View style={[styles.recordButton, styles.processingButton]}>
-            <Text style={styles.recordButtonIcon}>🤖</Text>
             <Text style={styles.recordButtonText}>Processing...</Text>
           </View>
         ) : (
@@ -96,15 +93,6 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           </View>
         )}
       </View>
-
-      {/* Recording Hint */}
-      <Text style={styles.recordingHint}>
-        {isProcessing
-          ? 'Converting your voice to text...'
-          : !isRecording 
-            ? 'Tap to start recording your voice journal' 
-            : 'Share what\'s on your heart...'}
-      </Text>
     </View>
   );
 };
@@ -113,56 +101,53 @@ const styles = StyleSheet.create({
   voiceContainer: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 16,
   },
-  durationContainer: {
+  recordingUnit: {
+    backgroundColor: '#f1f5f9', // Soft neutral background
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
     alignItems: 'center',
-    marginBottom: 40,
-    minHeight: 60,
+    minHeight: 180,
     justifyContent: 'center',
   },
   durationText: {
-    fontSize: 32,
+    fontSize: 48,
     fontWeight: 'bold',
     color: '#1e293b',
     fontFamily: 'monospace',
+    marginBottom: 12,
   },
   recordingStatus: {
     fontSize: 16,
     color: '#ef4444',
-    marginTop: 8,
-    fontWeight: '500',
+    marginBottom: 24,
+    fontWeight: '600',
   },
   processingStatus: {
     fontSize: 16,
     color: '#2563eb',
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  controlsContainer: {
-    alignItems: 'center',
-    marginBottom: 30,
+    marginBottom: 24,
+    fontWeight: '600',
   },
   recordButton: {
-    backgroundColor: '#ef4444',
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderRadius: 50,
+    backgroundColor: '#059669', // Brand primary green
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    minWidth: 200,
     alignItems: 'center',
-    shadowColor: '#ef4444',
+    shadowColor: '#059669',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    elevation: 8,
-  },
-  recordButtonIcon: {
-    fontSize: 24,
-    marginBottom: 5,
+    elevation: 6,
   },
   recordButtonText: {
     color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
   },
   processingButton: {
     backgroundColor: '#2563eb',
@@ -170,30 +155,29 @@ const styles = StyleSheet.create({
   },
   recordingControls: {
     flexDirection: 'row',
-    gap: 20,
+    gap: 16,
+    marginTop: 8,
   },
   controlButton: {
     backgroundColor: '#64748b',
-    paddingVertical: 15,
-    paddingHorizontal: 25,
-    borderRadius: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
     alignItems: 'center',
-    minWidth: 80,
+    minWidth: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   controlButtonIcon: {
     fontSize: 20,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   controlButtonText: {
     color: '#ffffff',
     fontSize: 14,
-    fontWeight: '500',
-  },
-  recordingHint: {
-    color: '#64748b',
-    textAlign: 'center',
-    fontSize: 14,
-    fontStyle: 'italic',
-    paddingHorizontal: 20,
+    fontWeight: '600',
   },
 });
