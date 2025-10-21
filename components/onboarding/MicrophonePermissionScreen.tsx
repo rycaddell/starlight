@@ -155,9 +155,9 @@ export const MicrophonePermissionScreen: React.FC = () => {
           <View style={styles.content}>
             {/* Title at top */}
             <View style={styles.headerSection}>
-              <Text style={styles.title}>Create a habit of noticing</Text>
+              <Text style={styles.title}>The habit of noticing</Text>
               <Text style={styles.subtitle}>
-              In Oxbow, you'll practice capturing what God is stirring in you—quick notes for passing thoughts or voice journals to unpack big topics.
+              In Oxbow, you’ll practice noticing what God is working in you— through quick prompts or deeper voice reflections.
               </Text>
             </View>
             

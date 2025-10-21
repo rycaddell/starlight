@@ -92,13 +92,13 @@ export const LoadingReflectionScreen: React.FC = () => {
         setTimeout(() => {
           console.log('➡️ Advancing to Mirror preview...');
           setCurrentStep('mirror');
-        }, 2000);
+        }, 3000); // Increased from 2000ms to 3000ms (3 seconds)
 
       } catch (error) {
         console.error('❌ Error in preview generation:', error);
         setTimeout(() => {
           setCurrentStep('mirror');
-        }, 2000);
+        }, 3000); // Increased from 2000ms to 3000ms
       }
     };
 
@@ -116,7 +116,7 @@ export const LoadingReflectionScreen: React.FC = () => {
         <View style={styles.content}>
           {/* Header at top */}
           <View style={styles.headerSection}>
-            <Text style={styles.title}>Create a habit of reflection</Text>
+            <Text style={styles.title}>The habit of reflection</Text>
             <Text style={styles.subtitle}>
               Every ten journals, Oxbow builds a Mirror—a reflection drawn from your own words and moments.
             </Text>

@@ -11,7 +11,7 @@ import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
 export const JournalEntryScreen: React.FC = () => {
   const { setJournalContent, setJournalEntryType, setCurrentStep } = useOnboarding();
   const [journalText, setJournalText] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('voice'); // Default to voice (favored)
+  const [activeTab, setActiveTab] = useState<TabType>('text'); // Default to text
 
   // Handle text journal submission
   const handleTextJournalSubmit = async (text: string, timestamp: string) => {
@@ -144,14 +144,11 @@ export const JournalEntryScreen: React.FC = () => {
       >
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={styles.title}>Give it a try</Text>
+          <Text style={styles.eyebrow}>FIRST JOURNAL</Text>
           <Text style={styles.question}>
-            What's something that comes up often when you pray—an emotion or theme?
+            What have you been talking with God about lately?
           </Text>
         </View>
-        
-        {/* Step Label */}
-        <Text style={styles.stepLabel}>Step 1: Choose how you want to respond</Text>
         
         {/* Tab Interface - Segmented Control Style */}
         <View style={styles.segmentedControl}>
@@ -186,12 +183,18 @@ export const JournalEntryScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
         
+        {/* Helper Text */}
+        <Text style={styles.helperText}>
+        Text is best for capturing quick thoughts.  Voice is better for deeper, unstructured thinking.
+        </Text>
+        
         {/* Tab Content */}
         {activeTab === 'text' ? (
           <TextJournalTab 
             journalText={journalText}
             setJournalText={setJournalText}
             onSubmit={handleTextJournalSubmit}
+            hidePlaceholder={true}
           />
         ) : (
           <VoiceRecordingTab
@@ -230,12 +233,13 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     width: '100%',
   },
-  title: {
-    fontSize: 24, // H2 size
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 16,
-    textAlign: 'center',
+  eyebrow: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
   },
   question: {
     fontSize: 20, // Larger and bold for emphasis
@@ -245,23 +249,13 @@ const styles = StyleSheet.create({
     lineHeight: 28,
     paddingHorizontal: 16,
   },
-  stepLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748b',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-    paddingLeft: 4,
-  },
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: '#e2e8f0',
     borderRadius: 10,
     padding: 3,
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 12,
   },
   segment: {
     flex: 1,
@@ -290,5 +284,13 @@ const styles = StyleSheet.create({
   },
   segmentTextInactive: {
     color: '#64748b',
+  },
+  helperText: {
+    fontSize: 14,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 16,
+    marginBottom: 24,
   },
 });

@@ -22,9 +22,9 @@ export const JourneyTogetherScreen: React.FC = () => {
         <View style={styles.content}>
           {/* Header at top - NO EMOJI */}
           <View style={styles.headerSection}>
-            <Text style={styles.title}>Create a habit of spiritual partnership</Text>
+            <Text style={styles.title}>The habit of spiritual partnership</Text>
             <Text style={styles.subtitle}>
-              Spiritual transformation doesn't happen in isolation. Share what you're learning with mentors and spiritual partners that are close to you.
+            Spiritual growth happens alongside others. Share what God is showing you with mentors and close partners.
             </Text>
           </View>
 

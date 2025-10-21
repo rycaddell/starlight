@@ -26,7 +26,7 @@ export const MirrorScreen: React.FC = () => {
         <View style={styles.headerSection}>
           <Text style={styles.title}>Mirror</Text>
           <Text style={styles.subtitle}>
-            Oxbow reflects your journaling back to you, revealing patterns and insights that help you recognize how God might be leading.
+          Use Mirrors to reveal patterns and insights across your journals.
           </Text>
         </View>
         
