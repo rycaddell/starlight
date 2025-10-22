@@ -2,12 +2,11 @@
  * MirrorProgress Component
  * 
  * Shows progress toward the next Mirror generation (X/10 journal entries).
- * Displays a visual progress bar and count.
+ * Displays a visual progress bar only (text shown separately in parent).
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { MIRROR_THRESHOLD } from '../../lib/config/constants';
+import { View, StyleSheet } from 'react-native';
 
 interface MirrorProgressProps {
   currentCount: number;
@@ -16,7 +15,7 @@ interface MirrorProgressProps {
 
 export const MirrorProgress: React.FC<MirrorProgressProps> = ({ 
   currentCount, 
-  targetCount = MIRROR_THRESHOLD 
+  targetCount = 10 
 }) => {
   const progressPercentage = Math.min((currentCount / targetCount) * 100, 100);
 
@@ -31,10 +30,6 @@ export const MirrorProgress: React.FC<MirrorProgressProps> = ({
             ]} 
           />
         </View>
-        
-        <Text style={styles.progressText}>
-          {currentCount} / {targetCount}
-        </Text>
       </View>
     </View>
   );
@@ -45,7 +40,7 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 12,
     paddingHorizontal: 20,
-    backgroundColor: '#f8fafc', // slate-50
+    backgroundColor: '#f8fafc',
     borderRadius: 12,
     alignItems: 'center',
   },
@@ -56,20 +51,13 @@ const styles = StyleSheet.create({
   progressBarBackground: {
     width: '100%',
     height: 8,
-    backgroundColor: '#e2e8f0', // slate-200
+    backgroundColor: '#e2e8f0',
     borderRadius: 4,
     overflow: 'hidden',
-    marginBottom: 8,
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: '#3b82f6', // blue-500
+    backgroundColor: '#3b82f6',
     borderRadius: 4,
-    transition: 'width 0.3s ease',
-  },
-  progressText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#64748b', // slate-600
   },
 });

@@ -7,10 +7,12 @@ interface TextJournalTabProps {
   journalText: string;
   setJournalText: (text: string) => void;
   onSubmit: (text: string, timestamp: string) => void;
+  contextPrompt?: string | null; // NEW: Optional prompt text
+  hidePlaceholder?: boolean;
 }
 
 function TextJournalTab(props: TextJournalTabProps) {
-  const { journalText, setJournalText, onSubmit } = props;
+  const { journalText, setJournalText, onSubmit, contextPrompt, hidePlaceholder } = props;
   const isSubmitDisabled = !journalText.trim();
 
   const handleSubmit = () => {
@@ -36,7 +38,7 @@ function TextJournalTab(props: TextJournalTabProps) {
         <TextInput
           style={styles.textInput}
           multiline={true}
-          placeholder="What did you learn or hear today?"
+          placeholder={hidePlaceholder || contextPrompt ? "" : "What did you learn or hear today?"}
           placeholderTextColor="#64748b"
           value={journalText}
           onChangeText={setJournalText}
