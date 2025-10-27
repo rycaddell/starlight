@@ -19,6 +19,7 @@
  * - handleStopRecording: Function to stop recording and get file URI
  * - handlePauseRecording: Function to pause active recording
  * - handleResumeRecording: Function to resume paused recording
+ * - handleDiscardRecording: Function to discard recording without saving (NEW)
  * - formatDuration: Utility to format seconds as MM:SS
  */
 
@@ -172,6 +173,47 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         latestDurationRef.current = 0;
         wasBackgroundedRef.current = false;
         resumeTimeRef.current = 0;
+      }
+    }
+  };
+
+  // NEW: Discard recording without transcribing or saving
+  const handleDiscardRecording = async () => {
+    if (recording) {
+      try {
+        console.log('🗑️ Discarding recording without saving');
+        
+        // Deactivate wake lock
+        await deactivateWakeLock();
+        
+        // Stop and unload the recording WITHOUT triggering transcription
+        await recording.stopAndUnloadAsync();
+        
+        // Clean up state
+        setRecording(null);
+        setIsRecording(false);
+        setIsPaused(false);
+        setRecordingDuration(0);
+        pausedDurationRef.current = 0;
+        latestDurationRef.current = 0;
+        wasBackgroundedRef.current = false;
+        resumeTimeRef.current = 0;
+        
+        // Reset audio mode
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+        });
+        
+        console.log('✅ Recording discarded successfully');
+      } catch (error) {
+        console.error('❌ Error discarding recording:', error);
+        // Still clean up even if there's an error
+        setRecording(null);
+        setIsRecording(false);
+        setIsPaused(false);
+        setRecordingDuration(0);
+        await deactivateWakeLock().catch(() => {});
       }
     }
   };
@@ -336,6 +378,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     handleStopRecording,
     handlePauseRecording,
     handleResumeRecording,
+    handleDiscardRecording, // NEW: Added to return
     formatDuration
   };
 };
