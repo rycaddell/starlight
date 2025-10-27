@@ -4,9 +4,11 @@ import { View, Text, ScrollView, StyleSheet, SafeAreaView, Alert, TouchableOpaci
 import { Audio } from 'expo-av';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { TextJournalTab } from '../../components/journal/TextJournalTab';
 import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
-import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
+import { TextJournalInput } from '../../components/journal/TextJournalInput';
+
+// Define TabType locally since we removed JournalTabs component
+type TabType = 'text' | 'voice';
 
 export const JournalEntryScreen: React.FC = () => {
   const { setJournalContent, setJournalEntryType, setCurrentStep } = useOnboarding();
@@ -14,9 +16,23 @@ export const JournalEntryScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('text'); // Default to text
 
   // Handle text journal submission
-  const handleTextJournalSubmit = async (text: string, timestamp: string) => {
-    console.log('📝 Text journal submitted:', text.substring(0, 50) + '...');
-    setJournalContent(text);
+  const handleTextJournalSubmit = () => {
+    if (!journalText.trim()) {
+      Alert.alert('Empty Journal', 'Please write something before submitting.');
+      return;
+    }
+
+    const timestamp = new Date().toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    console.log('📝 Text journal submitted:', journalText.substring(0, 50) + '...');
+    setJournalContent(journalText);
     setJournalEntryType('text');
     // Use setTimeout to ensure state updates before navigation
     setTimeout(() => {
@@ -135,6 +151,8 @@ export const JournalEntryScreen: React.FC = () => {
     }
   };
 
+  const isSubmitDisabled = !journalText.trim();
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView 
@@ -185,17 +203,38 @@ export const JournalEntryScreen: React.FC = () => {
         
         {/* Helper Text */}
         <Text style={styles.helperText}>
-        Text is best for capturing quick thoughts.  Voice is better for deeper, unstructured thinking.
+          Text is best for capturing quick thoughts. Voice is better for deeper, unstructured thinking.
         </Text>
         
         {/* Tab Content */}
         {activeTab === 'text' ? (
-          <TextJournalTab 
-            journalText={journalText}
-            setJournalText={setJournalText}
-            onSubmit={handleTextJournalSubmit}
-            hidePlaceholder={true}
-          />
+          <>
+            {/* Text Input - Using new TextJournalInput component */}
+            <TextJournalInput 
+              journalText={journalText}
+              setJournalText={setJournalText}
+              hidePlaceholder={true}
+            />
+
+            {/* Submit Button - Now separate since TextJournalInput doesn't have one */}
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity 
+                onPress={handleTextJournalSubmit}
+                disabled={isSubmitDisabled}
+                style={[
+                  styles.submitButton,
+                  isSubmitDisabled ? styles.submitButtonDisabled : styles.submitButtonActive
+                ]}
+              >
+                <Text style={[
+                  styles.submitButtonText,
+                  isSubmitDisabled ? styles.submitButtonTextDisabled : styles.submitButtonTextActive
+                ]}>
+                  Submit
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </>
         ) : (
           <VoiceRecordingTab
             isRecording={isRecording}
@@ -242,7 +281,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   question: {
-    fontSize: 20, // Larger and bold for emphasis
+    fontSize: 20,
     fontWeight: '700',
     color: '#1e293b',
     textAlign: 'center',
@@ -265,7 +304,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   segmentActive: {
-    backgroundColor: '#2563eb', // Blue for active
+    backgroundColor: '#2563eb',
     shadowColor: '#2563eb',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -292,5 +331,37 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     paddingHorizontal: 16,
     marginBottom: 24,
+  },
+  buttonContainer: {
+    padding: 5,
+    width: '100%',
+  },
+  submitButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 12,
+    width: '100%',
+  },
+  submitButtonActive: {
+    backgroundColor: '#2563eb',
+    shadowColor: '#1e40af',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#cbd5e1',
+  },
+  submitButtonText: {
+    fontWeight: 'bold',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  submitButtonTextActive: {
+    color: '#ffffff',
+  },
+  submitButtonTextDisabled: {
+    color: '#64748b',
   },
 });
