@@ -1,5 +1,5 @@
 // components/journal/TextJournalInput.tsx
-// NEW FILE - Just the text input without submit button
+// UPDATED - Shorter fixed height for better submit button visibility
 import React from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 
@@ -26,6 +26,8 @@ export const TextJournalInput: React.FC<TextJournalInputProps> = ({
         value={journalText}
         onChangeText={setJournalText}
         returnKeyType="default"
+        scrollEnabled={true}
+        showsVerticalScrollIndicator={true}
         textAlignVertical="top"
       />
     </View>
@@ -42,7 +44,7 @@ const styles = StyleSheet.create({
     padding: 16,
     fontSize: 16,
     color: '#1e293b',
-    minHeight: 150,
+    height: 120, // Fixed height for ~4 lines (16px font * 1.25 line height * 4 lines + 32px padding)
     textAlignVertical: 'top',
     borderWidth: 2,
     borderColor: '#94a3b8',

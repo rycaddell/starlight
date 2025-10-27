@@ -6,9 +6,6 @@ import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { TextJournalTab } from '../../components/journal/TextJournalTab';
-import { VoiceRecordingTab } from '../../components/voice/VoiceRecordingTab';
-import { JournalTabs, TabType } from '../../components/journal/JournalTabs';
 import { saveJournalEntry } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
@@ -20,32 +17,39 @@ import { useMirrorData } from '../../hooks/useMirrorData';
 
 export default function JournalScreen() {
   const router = useRouter();
-  const [journalText, setJournalText] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('text');
   
   // Use AuthContext instead of manual user management
   const { user, isAuthenticated, isLoading } = useAuth();
   const { showSettings } = useGlobalSettings();
 
-  // NEW: State for Phase 1 UI
-  const [showNewUI, setShowNewUI] = useState(true); // Toggle to test new vs old UI
-  const [carouselPrompts] = useState(() => getRandomPrompts(5
-
-  ));
+  // State for new UI
+  const [carouselPrompts] = useState(() => getRandomPrompts(5));
   
-  // NEW: Get journal count for progress bar
+  // Get journal count for progress bar
   const { journalCount, loadJournals } = useMirrorData();
 
-  // NEW: Bottom sheet state for Phase 2
+  // Bottom sheet state
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
   const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
 
-  // Handle voice transcription completion
-  const handleVoiceTranscriptionComplete = async (transcribedText: string, timestamp: string) => {
-    const saved = await saveJournalToDatabase(transcribedText, timestamp, 'voice');
+  // Handler for voice transcription from BOTTOM SHEET
+  const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string) => {
+    console.log('🎤 Voice transcription complete in bottom sheet');
+    
+    // Save the journal with 'voice' entry type and the guided prompt if applicable
+    const saved = await saveJournalToDatabase(
+      transcribedText, 
+      timestamp, 
+      'voice',
+      sheetMode === 'guided' ? sheetPrompt : null
+    );
     
     if (saved) {
+      // Close the bottom sheet
+      setBottomSheetVisible(false);
+      
+      // Navigate to mirror
       router.push({
         pathname: '/(tabs)/mirror',
         params: {
@@ -53,10 +57,15 @@ export default function JournalScreen() {
           timestamp: timestamp
         }
       });
+      
+      // Reload journals to update progress bar
+      if (isAuthenticated && user) {
+        loadJournals();
+      }
     }
   };
 
-  // Hooks
+  // Hooks - Use bottom sheet handler for voice recording
   const { hasAudioPermission, checkPermissionAndRequest } = useAudioPermissions();
   const { 
     isRecording, 
@@ -67,8 +76,9 @@ export default function JournalScreen() {
     handleStopRecording,
     handlePauseRecording,
     handleResumeRecording,
+    handleDiscardRecording,
     formatDuration 
-  } = useAudioRecording(handleVoiceTranscriptionComplete);
+  } = useAudioRecording(handleBottomSheetVoiceComplete);
 
   // Load journal count on mount
   React.useEffect(() => {
@@ -78,7 +88,12 @@ export default function JournalScreen() {
   }, [isAuthenticated, user]);
 
   // Save journal to database
-  const saveJournalToDatabase = async (content, timestamp, entryType: 'text' | 'voice') => {
+  const saveJournalToDatabase = async (
+    content: string, 
+    timestamp: string, 
+    entryType: 'text' | 'voice',
+    promptText: string | null = null
+  ) => {
     if (!isAuthenticated || !user) {
       Alert.alert('Error', 'Please sign in to save journal entries.');
       return false;
@@ -86,7 +101,14 @@ export default function JournalScreen() {
 
     console.log('💾 Saving journal for custom user:', user.id);
     console.log('📝 Entry type:', entryType);
-    const result = await saveJournalEntry(content, user.id, entryType);
+    console.log('💬 Prompt text:', promptText);
+    
+    const result = await saveJournalEntry(
+      content, 
+      user.id, 
+      entryType,
+      promptText
+    );
     
     if (result.success) {
       console.log('✅ Journal saved successfully');
@@ -95,21 +117,6 @@ export default function JournalScreen() {
       console.error('❌ Failed to save journal:', result.error);
       Alert.alert('Save Error', result.error || 'Failed to save journal entry.');
       return false;
-    }
-  };
-  
-  // Handle text journal submission
-  const handleTextJournalSubmit = async (text: string, timestamp: string) => {
-    const saved = await saveJournalToDatabase(text, timestamp, 'text');
-    
-    if (saved) {
-      router.push({
-        pathname: '/(tabs)/mirror',
-        params: {
-          journalText: text,
-          timestamp: timestamp
-        }
-      });
     }
   };
 
@@ -184,7 +191,7 @@ export default function JournalScreen() {
     }
   };
 
-  // NEW: Handlers for Phase 2 - Open bottom sheet
+  // Handlers for opening bottom sheet
   const handleFreeFormPress = () => {
     console.log('🆓 Free Form card pressed - opening sheet');
     setSheetMode('free');
@@ -207,13 +214,33 @@ export default function JournalScreen() {
     }, 300);
   };
 
-  const handleBottomSheetSubmit = async (text: string, timestamp: string) => {
-    // Use existing submission logic
-    await handleTextJournalSubmit(text, timestamp);
+  // Handle bottom sheet submission
+  const handleBottomSheetSubmit = async (
+    text: string, 
+    timestamp: string, 
+    entryType: 'text' | 'voice'
+  ) => {
+    const saved = await saveJournalToDatabase(
+      text, 
+      timestamp, 
+      entryType,
+      sheetMode === 'guided' ? sheetPrompt : null
+    );
     
-    // Reload journals to update progress bar
-    if (isAuthenticated && user) {
-      loadJournals();
+    if (saved) {
+      // Navigate to mirror
+      router.push({
+        pathname: '/(tabs)/mirror',
+        params: {
+          journalText: text,
+          timestamp: timestamp
+        }
+      });
+      
+      // Reload journals to update progress bar
+      if (isAuthenticated && user) {
+        loadJournals();
+      }
     }
   };
 
@@ -247,98 +274,52 @@ export default function JournalScreen() {
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
       >
-        {/* NEW UI - PHASE 1 */}
-        {showNewUI && (
-          <View style={styles.newUIContainer}>
-            {/* Header */}
-            <View style={styles.headerSection}>
-              <Text style={styles.title}>Journal</Text>
-            </View>
-
-            {/* Progress Bar */}
-            <View style={styles.progressSection}>
-              <MirrorProgress currentCount={journalCount} targetCount={10} />
-              <Text style={styles.progressSubtext}>
-                {journalCount} / 10 journals for the next Mirror
-              </Text>
-            </View>
-
-            {/* Quick Start Section */}
-            <View style={styles.quickStartSection}>
-              <Text style={styles.sectionTitle}>Make a new journal</Text>
-              
-              <FreeFormCard onPress={handleFreeFormPress} />
-              
-              <GuidedPromptSingle
-                prompts={carouselPrompts} 
-                onPromptSelect={handleGuidedPromptSelect}
-              />
-            </View>
-
-            {/* Phase toggle for testing */}
-            <TouchableOpacity 
-              style={styles.toggleButton}
-              onPress={() => setShowNewUI(!showNewUI)}
-            >
-              <Text style={styles.toggleButtonText}>
-                Toggle to {showNewUI ? 'Old' : 'New'} UI (Phase 1 Testing)
-              </Text>
-            </TouchableOpacity>
+        <View style={styles.newUIContainer}>
+          {/* Header */}
+          <View style={styles.headerSection}>
+            <Text style={styles.title}>Journal</Text>
           </View>
-        )}
 
-        {/* OLD UI - Keep for now */}
-        {!showNewUI && (
-          <>
-            <View style={styles.headerSection}>
-              <Text style={styles.title}>Snap Journal</Text>
-              <Text style={styles.subtitle}>Quickly capture important moments</Text>
-            </View>
+          {/* Progress Bar */}
+          <View style={styles.progressSection}>
+            <MirrorProgress currentCount={journalCount} targetCount={10} />
+            <Text style={styles.progressSubtext}>
+              {journalCount} / 10 journals for the next Mirror
+            </Text>
+          </View>
+
+          {/* Quick Start Section */}
+          <View style={styles.quickStartSection}>
+            <Text style={styles.sectionTitle}>Make a new journal</Text>
             
-            <JournalTabs 
-              activeTab={activeTab}
-              onTabChange={setActiveTab}
+            <FreeFormCard onPress={handleFreeFormPress} />
+            
+            <GuidedPromptSingle
+              prompts={carouselPrompts} 
+              onPromptSelect={handleGuidedPromptSelect}
             />
-            
-            {activeTab === 'text' ? (
-              <TextJournalTab 
-                journalText={journalText}
-                setJournalText={setJournalText}
-                onSubmit={handleTextJournalSubmit}
-              />
-            ) : (
-              <VoiceRecordingTab
-                isRecording={isRecording}
-                isPaused={isPaused}
-                recordingDuration={recordingDuration}
-                isProcessing={isProcessing}
-                formatDuration={formatDuration}
-                onStartRecording={handleStartRecordingWithPermission}
-                onStopRecording={handleStopRecording}
-                onPauseRecording={handlePauseRecording}
-                onResumeRecording={handleResumeRecording}
-              />
-            )}
-
-            <TouchableOpacity 
-              style={styles.toggleButton}
-              onPress={() => setShowNewUI(!showNewUI)}
-            >
-              <Text style={styles.toggleButtonText}>
-                Toggle to {showNewUI ? 'Old' : 'New'} UI (Phase 1 Testing)
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
+          </View>
+        </View>
       </ScrollView>
 
-      {/* Bottom Sheet - Phase 2 */}
+      {/* Bottom Sheet with Voice Support */}
       <JournalBottomSheet
         visible={bottomSheetVisible}
         onClose={handleBottomSheetClose}
         mode={sheetMode}
         promptText={sheetPrompt}
         onSubmit={handleBottomSheetSubmit}
+        
+        isRecording={isRecording}
+        isPaused={isPaused}
+        recordingDuration={recordingDuration}
+        isProcessing={isProcessing}
+        formatDuration={formatDuration}
+        onStartRecording={handleStartRecordingWithPermission}
+        onStopRecording={handleStopRecording}
+        onPauseRecording={handlePauseRecording}
+        onResumeRecording={handleResumeRecording}
+        onDiscardRecording={handleDiscardRecording}
       />
     </SafeAreaView>
   );
@@ -373,13 +354,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 22,
-  },
   progressSection: {
     marginBottom: 32,
     width: '100%',
@@ -399,18 +373,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#334155',
     marginBottom: 16,
-  },
-  toggleButton: {
-    marginTop: 32,
-    padding: 16,
-    backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    alignSelf: 'center',
-  },
-  toggleButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
   },
   loadingContainer: {
     flex: 1,

@@ -39,10 +39,8 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
         
         <Text style={styles.promptText}>{currentPrompt.text}</Text>
         
-        <View style={styles.footer}>
-          <View style={styles.actionButton}>
-            <Text style={styles.actionButtonText}>Start</Text>
-          </View>
+        <View style={styles.actionButton}>
+          <Text style={styles.actionButtonText}>Start</Text>
         </View>
       </TouchableOpacity>
 
@@ -94,20 +92,18 @@ const styles = StyleSheet.create({
   },
   promptText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: '400',
     color: '#1e293b',
     lineHeight: 26,
     flex: 1,
-  },
-  footer: {
-    marginTop: 16,
-    alignItems: 'flex-end',
   },
   actionButton: {
     backgroundColor: '#2563eb',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
+    alignSelf: 'flex-end',
+    marginTop: 16,
   },
   actionButtonText: {
     color: '#ffffff',
@@ -122,12 +118,14 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   shuffleIcon: {
-    fontSize: 16,
+    fontSize: 14,
     marginRight: 8,
+    opacity: 0.7,
   },
   shuffleText: {
     fontSize: 14,
     color: '#64748b',
-    fontWeight: '500',
+    fontWeight: '400',
+    fontStyle: 'italic',
   },
 });

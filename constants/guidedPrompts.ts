@@ -9,11 +9,11 @@ export interface GuidedPrompt {
 export const GUIDED_PROMPTS: GuidedPrompt[] = [
   {
     id: 'guided-1',
-    text: 'Who are you struggling to forgive, and why is it hard?',
+    text: 'Is there someone you are struggling to forgive?  Why?',
   },
   {
     id: 'guided-2',
-    text: 'What do you sense God asking you to let go of? How might it be holding you back from becoming more like Jesus?',
+    text: 'What do you sense God asking you to let go of?',
   },
   {
     id: 'guided-3',
@@ -21,11 +21,11 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-4',
-    text: 'If your life right now were a book chapter, what would the setting or theme be?',
+    text: 'If your life right now were a book chapter, what would the theme or title be?',
   },
   {
     id: 'guided-5',
-    text: 'When was the last time you felt deeply seen by the Lord? What made it meaningful?',
+    text: 'Describe a time you felt deeply seen by the Lord.',
   },
   {
     id: 'guided-6',
@@ -33,7 +33,7 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-7',
-    text: 'What do you ask God for most often? What do you really long for from Him?',
+    text: 'What do you ask God for most often?',
   },
   {
     id: 'guided-8',
@@ -41,15 +41,15 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-9',
-    text: 'What feels most mysterious or hard to understand about God right now?',
+    text: 'What feels most mysterious or hard to understand about God?',
   },
   {
     id: 'guided-10',
-    text: 'How do you believe God feels about you? Does your life reflect that belief?',
+    text: 'How do you believe God feels about you?',
   },
   {
     id: 'guided-11',
-    text: 'What vision or desire for your life hasn’t happened yet? What might it reveal about how God is leading you?',
+    text: 'Is there a vision or desire for your life hasn’t happened yet?  What is it?',
   },
   {
     id: 'guided-12',
@@ -65,7 +65,7 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-15',
-    text: 'How would you describe your life purpose in your own words?',
+    text: 'How would you describe your life purpose?',
   },
   {
     id: 'guided-16',
@@ -77,7 +77,7 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-18',
-    text: 'Has God ever given you a dream or word (prophecy)? What did it mean then, and does it still speak to you now?',
+    text: 'Has God ever given you a dream or word (prophecy)?  What did it mean then or now?',
   },
   {
     id: 'guided-19',
