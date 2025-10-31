@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
@@ -86,6 +86,15 @@ export default function JournalScreen() {
       loadJournals();
     }
   }, [isAuthenticated, user]);
+
+  // Reload journals when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isAuthenticated && user) {
+        loadJournals();
+      }
+    }, [isAuthenticated, user])
+  );
 
   // Save journal to database
   const saveJournalToDatabase = async (
