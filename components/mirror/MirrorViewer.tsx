@@ -6,23 +6,35 @@ import { MirrorScreen1 } from './MirrorScreen1';
 import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
 import PausePray from './PausePray';
+import { ReflectionJournal } from './ReflectionJournal';
 import { MirrorScreen4 } from './MirrorScreen4';
+import { supabase } from '../../lib/supabase/client';
 
 interface MirrorViewerProps {
   mirrorContent: any;
+  mirrorId: string;
   onClose: () => void;
   onClosedForFeedback?: () => void;
 }
 
 export const MirrorViewer: React.FC<MirrorViewerProps> = ({ 
-  mirrorContent, 
+  mirrorContent,
+  mirrorId,
   onClose, 
   onClosedForFeedback
 }) => {
   const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = 5;
+  const totalScreens = 6; // Updated from 5 to 6
 
-  console.log('🔍 MirrorViewer loaded with props:', {
+  // State for reflection data
+  const [reflectionFocus, setReflectionFocus] = useState(
+    mirrorContent.reflection_focus || ''
+  );
+  const [reflectionAction, setReflectionAction] = useState(
+    mirrorContent.reflection_action || ''
+  );
+
+  console.log('🪞 MirrorViewer loaded with props:', {
     hasOnClose: !!onClose,
     hasOnClosedForFeedback: !!onClosedForFeedback
   });
@@ -39,6 +51,33 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
     }
   };
 
+  // Handler for when user completes reflection journal
+  const handleReflectionComplete = async (focus: string, action: string) => {
+    console.log('💾 Saving reflection to Mirror ID:', mirrorId);
+    
+    // 1. Update local state (so user sees it if they go back)
+    setReflectionFocus(focus);
+    setReflectionAction(action);
+    
+    // 2. Save to database
+    const { error } = await supabase
+      .from('mirrors')
+      .update({
+        reflection_focus: focus,
+        reflection_action: action,
+        reflection_completed_at: new Date().toISOString()
+      })
+      .eq('id', mirrorId);
+
+    if (error) {
+      console.error('❌ Error saving reflection:', error);
+      // TODO: Show error toast to user (optional - add later)
+    } else {
+      console.log('✅ Reflection saved successfully');
+      handleNext(); // Move to next screen (Next Steps)
+    }
+  };
+
   const renderCurrentScreen = () => {
     switch (currentScreen) {
       case 0:
@@ -49,8 +88,16 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
         return <MirrorScreen3 data={mirrorContent.screen3_observations} />;
       case 3:
         return <PausePray />;
-      case 4:
-        console.log('🔍 Rendering MirrorScreen4 with props:', {
+      case 4: // NEW: Reflection Journal
+        return (
+          <ReflectionJournal
+            onComplete={handleReflectionComplete}
+            initialFocus={reflectionFocus}
+            initialAction={reflectionAction}
+          />
+        );
+      case 5: // Next Steps (moved from case 4)
+        console.log('🪞 Rendering MirrorScreen4 with props:', {
           hasOnClose: !!onClose,
           hasOnClosedForFeedback: !!onClosedForFeedback
         });

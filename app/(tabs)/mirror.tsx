@@ -37,6 +37,9 @@ export default function MirrorScreen() {
     isViewing
   } = useMirrorData();
 
+  // Track the current mirror ID for saving reflections
+  const [currentMirrorId, setCurrentMirrorId] = React.useState<string | null>(null);
+
   // Load journals when component mounts or user changes
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -62,6 +65,7 @@ export default function MirrorScreen() {
   const handleCloseMirror = () => {
     setMirrorState('progress');
     setGeneratedMirror(null);
+    setCurrentMirrorId(null); // Clear the mirror ID
     loadJournals();
   };
 
@@ -109,6 +113,7 @@ const handleDeleteJournal = async (journalId: string) => {
       
       if (result.success && result.content) {
         console.log('✅ Mirror loaded, opening viewer');
+        setCurrentMirrorId(mirrorId); // Store the mirror ID
         setGeneratedMirror(result.content);
         setMirrorState('viewing');
       } else {
@@ -163,13 +168,15 @@ const handleDeleteJournal = async (journalId: string) => {
   if (isViewing) {
     console.log('🔍 About to render MirrorViewer with props:', {
       hasOnClose: !!handleCloseMirror,
-      hasOnClosedForFeedback: !!handleMirrorClosedForFeedback
+      hasOnClosedForFeedback: !!handleMirrorClosedForFeedback,
+      mirrorId: currentMirrorId
     });
     
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
         <MirrorViewer 
           mirrorContent={generatedMirror} 
+          mirrorId={currentMirrorId || ''} 
           onClose={handleCloseMirror}
           onClosedForFeedback={handleMirrorClosedForFeedback}
         />
