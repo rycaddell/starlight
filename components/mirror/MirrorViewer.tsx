@@ -5,23 +5,23 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MirrorScreen1 } from './MirrorScreen1';
 import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
+import PausePray from './PausePray';
 import { MirrorScreen4 } from './MirrorScreen4';
 
 interface MirrorViewerProps {
   mirrorContent: any;
   onClose: () => void;
-  onClosedForFeedback?: () => void; // ADD THIS LINE
+  onClosedForFeedback?: () => void;
 }
 
 export const MirrorViewer: React.FC<MirrorViewerProps> = ({ 
   mirrorContent, 
   onClose, 
-  onClosedForFeedback  // ADD THIS PROP
+  onClosedForFeedback
 }) => {
   const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = 4;
+  const totalScreens = 5;
 
-  // Debug logging
   console.log('🔍 MirrorViewer loaded with props:', {
     hasOnClose: !!onClose,
     hasOnClosedForFeedback: !!onClosedForFeedback
@@ -48,6 +48,8 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       case 2:
         return <MirrorScreen3 data={mirrorContent.screen3_observations} />;
       case 3:
+        return <PausePray />;
+      case 4:
         console.log('🔍 Rendering MirrorScreen4 with props:', {
           hasOnClose: !!onClose,
           hasOnClosedForFeedback: !!onClosedForFeedback
@@ -56,7 +58,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           <MirrorScreen4 
             data={mirrorContent.screen4_suggestions} 
             onClose={onClose}
-            onClosedForFeedback={onClosedForFeedback}  // ADD THIS LINE
+            onClosedForFeedback={onClosedForFeedback}
           />
         );
       default:
@@ -79,7 +81,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
         ))}
       </View>
 
-      {/* Screen Content - ScrollView for safe content display */}
+      {/* Screen Content */}
       <ScrollView 
         style={styles.screenContainer}
         contentContainerStyle={styles.screenContentContainer}
@@ -100,7 +102,11 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           </Text>
         </TouchableOpacity>
 
-        {currentScreen === totalScreens - 1 ? (
+        {currentScreen === 3 ? (
+          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
+            <Text style={styles.navButtonText}>Ready to Continue →</Text>
+          </TouchableOpacity>
+        ) : currentScreen === totalScreens - 1 ? (
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
             <Text style={styles.closeButtonText}>✨ Complete</Text>
           </TouchableOpacity>
@@ -141,7 +147,7 @@ const styles = StyleSheet.create({
   },
   screenContentContainer: {
     paddingHorizontal: 20,
-    paddingBottom: 20, // Extra padding at bottom to ensure content doesn't get cut off
+    paddingBottom: 20,
   },
   navigationContainer: {
     flexDirection: 'row',
