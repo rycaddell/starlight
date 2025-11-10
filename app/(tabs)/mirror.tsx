@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -13,6 +13,7 @@ import { JournalHistory } from '../../components/mirror/JournalHistory';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { deleteJournalEntry } from '../../lib/supabase/journals';
+import { supabase } from '../../lib/supabase/client';
 
 export default function MirrorScreen() {
   const router = useRouter();
@@ -20,6 +21,9 @@ export default function MirrorScreen() {
   
   // Use GlobalSettings instead of local feedback modal state
   const { showSettings } = useGlobalSettings();
+  
+  // Store mirror reflections
+  const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
   
   const {
     journals,
@@ -55,6 +59,43 @@ export default function MirrorScreen() {
       }
     }, [isAuthenticated, user])
   );
+
+  // Load mirror reflections when journals change
+  useEffect(() => {
+    const loadMirrorReflections = async () => {
+      // Get unique mirror IDs from journals
+      const mirrorIds = [...new Set(journals
+        .filter(j => j.mirror_id)
+        .map(j => j.mirror_id))];
+      
+      if (mirrorIds.length === 0) return;
+
+      try {
+        const { data, error } = await supabase
+          .from('mirrors')
+          .select('id, reflection_focus, reflection_action')
+          .in('id', mirrorIds);
+
+        if (!error && data) {
+          const reflections: Record<string, {focus: string, action: string}> = {};
+          data.forEach(mirror => {
+            if (mirror.reflection_focus && mirror.reflection_action) {
+              reflections[mirror.id] = {
+                focus: mirror.reflection_focus,
+                action: mirror.reflection_action
+              };
+            }
+          });
+          setMirrorReflections(reflections);
+        }
+      } catch (error) {
+        console.error('Error loading mirror reflections:', error);
+      }
+    };
+
+    loadMirrorReflections();
+  }, [journals]);
+
 
   const handleLoadingComplete = () => {
     if (generatedMirror) {
@@ -111,10 +152,15 @@ const handleDeleteJournal = async (journalId: string) => {
     try {
       const result = await getMirrorById(mirrorId);
       
-      if (result.success && result.content) {
+      if (result.success && result.mirror) {
         console.log('✅ Mirror loaded, opening viewer');
+        console.log('🔍 Reflection data:', {
+          focus: result.mirror.reflection_focus,
+          action: result.mirror.reflection_action,
+          completed: result.mirror.reflection_completed_at
+        });
         setCurrentMirrorId(mirrorId); // Store the mirror ID
-        setGeneratedMirror(result.content);
+        setGeneratedMirror(result.mirror); // Changed from result.content to result.mirror
         setMirrorState('viewing');
       } else {
         console.error('❌ Failed to load Mirror:', result.error);
@@ -248,6 +294,8 @@ const handleDeleteJournal = async (journalId: string) => {
                   .filter(time => time > 0);
                 const mirrorDate = dates.length > 0 ? Math.max(...dates) : Date.now();
                 
+                const reflection = mirrorReflections[mirrorId];
+                
                 return (
                   <MirrorCard
                   key={mirrorId}
@@ -255,7 +303,9 @@ const handleDeleteJournal = async (journalId: string) => {
                   mirrorDate={new Date(mirrorDate)}
                   journals={mirrorJournals}
                   onViewMirror={() => handleOpenExistingMirror(mirrorId)}
-                  onDeleteJournal={handleDeleteJournal} // 👈 Add this line
+                  onDeleteJournal={handleDeleteJournal}
+                  reflectionFocus={reflection?.focus}
+                  reflectionAction={reflection?.action}
                 />
                 );
               })}
@@ -280,14 +330,70 @@ interface MirrorCardProps {
   journals: any[];
   onViewMirror: () => void;
   onDeleteJournal: (journalId: string) => Promise<void>;
+  reflectionFocus?: string;
+  reflectionAction?: string;
 }
+
+interface ReflectionDisplayProps {
+  focus: string;
+  action: string;
+}
+
+const ReflectionDisplay: React.FC<ReflectionDisplayProps> = ({ focus, action }) => {
+  const [showFullFocus, setShowFullFocus] = useState(false);
+  const [showFullAction, setShowFullAction] = useState(false);
+
+  const truncate = (text: string, maxLength: number) => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  const needsFocusTruncation = focus.length > 150;
+  const needsActionTruncation = action.length > 150;
+
+  return (
+    <View style={styles.reflectionContainer}>
+      <Text style={styles.reflectionHeader}>Your Reflection</Text>
+      
+      <View style={styles.reflectionBlock}>
+        <Text style={styles.reflectionLabel}>My Focus:</Text>
+        <Text style={styles.reflectionText}>
+          {showFullFocus || !needsFocusTruncation ? focus : truncate(focus, 150)}
+        </Text>
+        {needsFocusTruncation && (
+          <TouchableOpacity onPress={() => setShowFullFocus(!showFullFocus)}>
+            <Text style={styles.readMoreText}>
+              {showFullFocus ? 'Show less' : 'Read more'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.reflectionBlock}>
+        <Text style={styles.reflectionLabel}>My Action Step:</Text>
+        <Text style={styles.reflectionText}>
+          {showFullAction || !needsActionTruncation ? action : truncate(action, 150)}
+        </Text>
+        {needsActionTruncation && (
+          <TouchableOpacity onPress={() => setShowFullAction(!showFullAction)}>
+            <Text style={styles.readMoreText}>
+              {showFullAction ? 'Show less' : 'Read more'}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+};
 
 const MirrorCard: React.FC<MirrorCardProps> = ({ 
   mirrorId, 
   mirrorDate, 
   journals, 
   onViewMirror,
-  onDeleteJournal // 👈 Add this
+  onDeleteJournal, // 👈 Add this
+  reflectionFocus,
+  reflectionAction
 }) => {
   const [showJournals, setShowJournals] = React.useState(false);
 
@@ -308,6 +414,14 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
           <Text style={styles.viewMirrorButtonText}>Open Mirror ✨</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Reflection Display - NEW */}
+      {reflectionFocus && reflectionAction && (
+        <ReflectionDisplay
+          focus={reflectionFocus}
+          action={reflectionAction}
+        />
+      )}
 
       <View style={styles.mirrorCardActions}>
         <TouchableOpacity 
@@ -466,5 +580,43 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
+  },
+  // Reflection Display Styles
+  reflectionContainer: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  reflectionHeader: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 12,
+  },
+  reflectionBlock: {
+    marginBottom: 12,
+  },
+  reflectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748b',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reflectionText: {
+    fontSize: 15,
+    color: '#1e293b',
+    lineHeight: 22,
+  },
+  readMoreText: {
+    fontSize: 13,
+    color: '#fbbf24',
+    marginTop: 6,
+    fontWeight: '600',
   },
 });

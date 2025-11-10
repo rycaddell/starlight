@@ -1,13 +1,11 @@
 // components/mirror/MirrorViewer.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MirrorScreen1 } from './MirrorScreen1';
 import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
-import PausePray from './PausePray';
 import { ReflectionJournal } from './ReflectionJournal';
-import { MirrorScreen4 } from './MirrorScreen4';
 import { supabase } from '../../lib/supabase/client';
 
 interface MirrorViewerProps {
@@ -24,7 +22,9 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   onClosedForFeedback
 }) => {
   const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = 6; // Updated from 5 to 6
+  const totalScreens = 4; // Screens: Themes, Biblical, Observations, Reflection
+
+  const scrollViewRef = useRef<ScrollView>(null);
 
   // State for reflection data
   const [reflectionFocus, setReflectionFocus] = useState(
@@ -33,6 +33,17 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const [reflectionAction, setReflectionAction] = useState(
     mirrorContent.reflection_action || ''
   );
+
+  // Handle form changes from ReflectionJournal
+  const handleReflectionFormChange = (focus: string, action: string) => {
+    setReflectionFocus(focus);
+    setReflectionAction(action);
+  };
+
+  // Reset scroll position when screen changes
+  useEffect(() => {
+    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+  }, [currentScreen]);
 
   console.log('🪞 MirrorViewer loaded with props:', {
     hasOnClose: !!onClose,
@@ -55,7 +66,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const handleReflectionComplete = async (focus: string, action: string) => {
     console.log('💾 Saving reflection to Mirror ID:', mirrorId);
     
-    // 1. Update local state (so user sees it if they go back)
+    // 1. Update local state
     setReflectionFocus(focus);
     setReflectionAction(action);
     
@@ -71,50 +82,45 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
     if (error) {
       console.error('❌ Error saving reflection:', error);
-      // TODO: Show error toast to user (optional - add later)
+      // TODO: Show error toast to user
     } else {
       console.log('✅ Reflection saved successfully');
-      handleNext(); // Move to next screen (Next Steps)
+      onClose(); // Close the mirror - reflection is the final step
     }
   };
 
   const renderCurrentScreen = () => {
     switch (currentScreen) {
       case 0:
-        return <MirrorScreen1 data={mirrorContent.screen1_themes} />;
+        return <MirrorScreen1 data={mirrorContent.screen_1_themes || mirrorContent.screen1_themes} />;
       case 1:
-        return <MirrorScreen2 data={mirrorContent.screen2_biblical} />;
+        return <MirrorScreen2 data={mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical} />;
       case 2:
-        return <MirrorScreen3 data={mirrorContent.screen3_observations} />;
-      case 3:
-        return <PausePray />;
-      case 4: // NEW: Reflection Journal
+        return <MirrorScreen3 data={mirrorContent.screen_3_observations || mirrorContent.screen3_observations} />;
+      case 3: // Reflection Journal - FINAL SCREEN
+        const hasCompletedReflection = Boolean(mirrorContent.reflection_focus && mirrorContent.reflection_action);
         return (
           <ReflectionJournal
             onComplete={handleReflectionComplete}
             initialFocus={reflectionFocus}
             initialAction={reflectionAction}
-          />
-        );
-      case 5: // Next Steps (moved from case 4)
-        console.log('🪞 Rendering MirrorScreen4 with props:', {
-          hasOnClose: !!onClose,
-          hasOnClosedForFeedback: !!onClosedForFeedback
-        });
-        return (
-          <MirrorScreen4 
-            data={mirrorContent.screen4_suggestions} 
-            onClose={onClose}
-            onClosedForFeedback={onClosedForFeedback}
+            isReadOnly={hasCompletedReflection}
+            completedAt={mirrorContent.reflection_completed_at}
+            onFormChange={handleReflectionFormChange}
           />
         );
       default:
-        return <MirrorScreen1 data={mirrorContent.screen1_themes} />;
+        return <MirrorScreen1 data={mirrorContent.screen_1_themes || mirrorContent.screen1_themes} />;
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Close Button - Top Right */}
+      <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
+        <Text style={styles.closeIconText}>✕</Text>
+      </TouchableOpacity>
+
       {/* Progress Dots */}
       <View style={styles.progressContainer}>
         {Array.from({ length: totalScreens }).map((_, index) => (
@@ -130,6 +136,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
       {/* Screen Content */}
       <ScrollView 
+        ref={scrollViewRef}
         style={styles.screenContainer}
         contentContainerStyle={styles.screenContentContainer}
         showsVerticalScrollIndicator={false}
@@ -149,15 +156,21 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           </Text>
         </TouchableOpacity>
 
-        {currentScreen === 3 ? (
-          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
-            <Text style={styles.navButtonText}>Ready to Continue →</Text>
-          </TouchableOpacity>
-        ) : currentScreen === totalScreens - 1 ? (
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>✨ Complete</Text>
-          </TouchableOpacity>
+        {/* On final screen - show appropriate button */}
+        {currentScreen === totalScreens - 1 ? (
+          // If reflection already completed, show Close button
+          mirrorContent.reflection_focus && mirrorContent.reflection_action ? (
+            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+              <Text style={styles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          ) : (
+            // If reflection not completed, show Skip button
+            <TouchableOpacity style={styles.skipButton} onPress={onClose}>
+              <Text style={styles.skipButtonText}>Skip</Text>
+            </TouchableOpacity>
+          )
         ) : (
+          // On other screens, show Next button
           <TouchableOpacity style={styles.navButton} onPress={handleNext}>
             <Text style={styles.navButtonText}>Next →</Text>
           </TouchableOpacity>
@@ -172,10 +185,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1e293b',
   },
+  closeIconButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    zIndex: 10,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeIconText: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '300',
+  },
   progressContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 20,
+    paddingVertical: 12,
     gap: 8,
   },
   progressDot: {
@@ -194,6 +224,7 @@ const styles = StyleSheet.create({
   },
   screenContentContainer: {
     paddingHorizontal: 20,
+    paddingTop: 28,
     paddingBottom: 20,
   },
   navigationContainer: {
@@ -234,5 +265,18 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  skipButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#374151',
+    borderWidth: 1,
+    borderColor: '#6b7280',
+  },
+  skipButtonText: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '500',
   },
 });
