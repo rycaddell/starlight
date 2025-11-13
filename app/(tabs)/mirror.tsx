@@ -1,3 +1,5 @@
+// TRULY FIXED MIRROR.TSX - Simple focus handling
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -5,13 +7,13 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
-import { MirrorUnlockButton } from '../../components/mirror/MirrorUnlockButton';
-import { MirrorLoadingAnimation } from '../../components/mirror/MirrorLoadingAnimation';
+import { MirrorStatusCard } from '../../components/mirror/MirrorStatusCard';
 import { MirrorViewer } from '../../components/mirror/MirrorViewer';
 import { MirrorTestPanel } from '../../components/mirror/MirrorTestPanel';
 import { JournalHistory } from '../../components/mirror/JournalHistory';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { getMirrorById } from '../../lib/supabase/mirrors';
+import { markMirrorAsViewed } from '../../lib/supabase/mirrors';
 import { deleteJournalEntry } from '../../lib/supabase/journals';
 import { supabase } from '../../lib/supabase/client';
 
@@ -19,10 +21,8 @@ export default function MirrorScreen() {
   const router = useRouter();
   const { user, signOut, isAuthenticated, isLoading: authLoading } = useAuth();
   
-  // Use GlobalSettings instead of local feedback modal state
   const { showSettings } = useGlobalSettings();
   
-  // Store mirror reflections
   const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
   
   const {
@@ -31,39 +31,45 @@ export default function MirrorScreen() {
     journalCount,
     mirrorState,
     generatedMirror,
+    generationStartTime,
+    hasViewedCurrentMirror, // ✅ ADD
     loadJournals,
     generateMirror,
+    viewMirror,
+    closeMirrorViewer,
     insertTestData,
     setMirrorState,
     setGeneratedMirror,
+    checkGenerationStatusOnFocus,
     isReady,
     isGenerating,
+    isCompleted,
     isViewing
   } = useMirrorData();
 
-  // Track the current mirror ID for saving reflections
   const [currentMirrorId, setCurrentMirrorId] = React.useState<string | null>(null);
 
-  // Load journals when component mounts or user changes
+  // ✅ Load journals ONCE on mount
   useEffect(() => {
     if (isAuthenticated && user) {
+      console.log('📚 Initial load of journals');
       loadJournals();
     }
   }, [isAuthenticated, user]);
 
-  // Reload journals when screen comes into focus
+  // ✅ Check status AND reload journals on focus
   useFocusEffect(
     React.useCallback(() => {
       if (isAuthenticated && user) {
-        loadJournals();
+        console.log('🔍 Mirror tab focused - checking status and reloading journals');
+        checkGenerationStatusOnFocus();
+        loadJournals(false); // ✅ Allow state updates based on journal count
       }
     }, [isAuthenticated, user])
   );
 
-  // Load mirror reflections when journals change
   useEffect(() => {
     const loadMirrorReflections = async () => {
-      // Get unique mirror IDs from journals
       const mirrorIds = [...new Set(journals
         .filter(j => j.mirror_id)
         .map(j => j.mirror_id))];
@@ -96,56 +102,46 @@ export default function MirrorScreen() {
     loadMirrorReflections();
   }, [journals]);
 
-
-  const handleLoadingComplete = () => {
+  const handleViewNewMirror = () => {
     if (generatedMirror) {
-      setMirrorState('viewing');
+      setCurrentMirrorId(generatedMirror.id);
+      viewMirror();
     }
   };
 
   const handleCloseMirror = () => {
-    setMirrorState('progress');
-    setGeneratedMirror(null);
-    setCurrentMirrorId(null); // Clear the mirror ID
-    loadJournals();
+    closeMirrorViewer();
+    setCurrentMirrorId(null);
   };
 
-  // Handle feedback request from Mirror Screen 4
   const handleMirrorClosedForFeedback = () => {
     console.log('🔄 handleMirrorClosedForFeedback called');
     handleCloseMirror();
-    // Small delay to ensure Mirror closes smoothly before opening feedback
     setTimeout(() => {
       console.log('⚙️ Attempting to open settings modal');
-      showSettings(); // Use GlobalSettings instead of local state
+      showSettings();
       console.log('✅ showSettings() called');
     }, 200);
   };
-  // Add this new function after your existing handlers
-// Add this function somewhere before your return statement
-// (put it with your other handlers like handleGenerateMirror, etc.)
 
-const handleDeleteJournal = async (journalId: string) => {
-  try {
-    // Use the imported deleteJournalEntry function
-    const result = await deleteJournalEntry(journalId);
+  const handleDeleteJournal = async (journalId: string) => {
+    try {
+      const result = await deleteJournalEntry(journalId);
 
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to delete journal');
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to delete journal');
+      }
+
+      await loadJournals();
+
+      console.log('✅ Journal deleted successfully');
+
+    } catch (error) {
+      console.error('❌ Error deleting journal:', error);
+      Alert.alert('Error', 'Could not delete journal. Please try again.');
     }
+  };
 
-    // Refresh the journals list to reflect the deletion
-    await loadJournals();
-
-    console.log('✅ Journal deleted successfully');
-
-  } catch (error) {
-    console.error('❌ Error deleting journal:', error);
-    Alert.alert('Error', 'Could not delete journal. Please try again.');
-  }
-};
-
-  // Handle opening an existing Mirror
   const handleOpenExistingMirror = async (mirrorId: string) => {
     console.log('🔍 Opening existing Mirror:', mirrorId);
     
@@ -154,14 +150,19 @@ const handleDeleteJournal = async (journalId: string) => {
       
       if (result.success && result.mirror) {
         console.log('✅ Mirror loaded, opening viewer');
-        console.log('🔍 Reflection data:', {
-          focus: result.mirror.reflection_focus,
-          action: result.mirror.reflection_action,
-          completed: result.mirror.reflection_completed_at
-        });
-        setCurrentMirrorId(mirrorId); // Store the mirror ID
-        setGeneratedMirror(result.mirror); // Changed from result.content to result.mirror
+        setCurrentMirrorId(mirrorId);
+        setGeneratedMirror(result.mirror);
         setMirrorState('viewing');
+        
+        // ✅ Mark as viewed in database (if not already)
+        if (!result.mirror.has_been_viewed) {
+          console.log('👁️ Marking existing mirror as viewed in database');
+          const markResult = await markMirrorAsViewed(mirrorId);
+          if (!markResult.success) {
+            console.error('⚠️ Failed to mark mirror as viewed:', markResult.error);
+            // Don't block - user can still view the mirror
+          }
+        }
       } else {
         console.error('❌ Failed to load Mirror:', result.error);
         Alert.alert('Mirror Not Found', result.error || 'Could not load this Mirror. It may have been deleted.');
@@ -172,12 +173,26 @@ const handleDeleteJournal = async (journalId: string) => {
     }
   };
 
-  // Separate journals into recent (no mirror) and completed mirrors
   const recentJournals = journals.filter(journal => !journal.mirror_id);
   
-  // Group journals by mirror_id for completed mirrors
+  console.log('🔍 Mirror Display State:', {
+    mirrorState,
+    isReady,
+    isGenerating,
+    isCompleted,
+    isViewing,
+    hasViewedCurrentMirror,
+    generatedMirrorId: generatedMirror?.id,
+    shouldShowCard: (isReady || isGenerating || (isCompleted && !hasViewedCurrentMirror))
+  });
+  
+  // ✅ UPDATED - Show current mirror in Past Mirrors if it's been viewed
   const mirrorGroups = journals
-    .filter(journal => journal.mirror_id != null)
+    .filter(journal => 
+      journal.mirror_id != null && 
+      (hasViewedCurrentMirror || journal.mirror_id !== generatedMirror?.id)
+      // ✅ Show current mirror in Past Mirrors once viewed
+    )
     .reduce((groups, journal) => {
       const mirrorId = journal.mirror_id;
       if (mirrorId && !groups[mirrorId]) {
@@ -188,8 +203,12 @@ const handleDeleteJournal = async (journalId: string) => {
       }
       return groups;
     }, {} as Record<string, typeof journals>);
+  
+  console.log('🔍 Past Mirrors:', {
+    totalMirrorGroups: Object.keys(mirrorGroups).length,
+    mirrorIds: Object.keys(mirrorGroups)
+  });
 
-  // Loading states
   if (authLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -210,14 +229,7 @@ const handleDeleteJournal = async (journalId: string) => {
     );
   }
 
-  // Modal states
   if (isViewing) {
-    console.log('🔍 About to render MirrorViewer with props:', {
-      hasOnClose: !!handleCloseMirror,
-      hasOnClosedForFeedback: !!handleMirrorClosedForFeedback,
-      mirrorId: currentMirrorId
-    });
-    
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
         <MirrorViewer 
@@ -230,41 +242,25 @@ const handleDeleteJournal = async (journalId: string) => {
     );
   }
 
-  if (isGenerating) {
-    return (
-      <Modal visible={true} animationType="fade" presentationStyle="overFullScreen">
-        <MirrorLoadingAnimation 
-          isComplete={!!generatedMirror} 
-          onComplete={handleLoadingComplete} 
-        />
-      </Modal>
-    );
-  }
-
-  // Main UI
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
           <Text style={styles.title}>Mirror</Text>
           
-          {isReady && (
+          {/* ✅ UPDATED - Only show "Complete" card if not yet viewed */}
+          {(isReady || isGenerating || (isCompleted && !hasViewedCurrentMirror)) && (
             <View style={styles.mirrorReadySection}>
-              <MirrorUnlockButton 
-                onPress={generateMirror}
-                disabled={false}
+              <MirrorStatusCard
+                state={isGenerating ? 'generating' : isCompleted ? 'completed' : 'ready'}
+                journalCount={journalCount}
+                onGeneratePress={generateMirror}
+                onViewPress={handleViewNewMirror}
+                generationStartTime={generationStartTime}
               />
             </View>
           )}
 
-          {/* TODO: Uncomment for testing - provides button to insert 15 test journals */}
-          {/* <MirrorTestPanel 
-            journalCount={journalCount}
-            totalJournals={journals.length}
-            onInsertTestData={insertTestData}
-          /> */}
-
-          {/* Recent Journals Section */}
           {recentJournals.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.h2Title}>
@@ -281,41 +277,28 @@ const handleDeleteJournal = async (journalId: string) => {
             </View>
           )}
 
-          {/* Past Mirrors Section */}
           {Object.keys(mirrorGroups).length > 0 && (
             <View style={styles.section}>
               <Text style={styles.h2Title}>
                 Past Mirrors
               </Text>
               {Object.entries(mirrorGroups).map(([mirrorId, mirrorJournals]) => {
-                // Use the most recent journal's created_at as the mirror date
-                const dates = mirrorJournals
-                  .map(j => j.created_at ? new Date(j.created_at).getTime() : 0)
-                  .filter(time => time > 0);
-                const mirrorDate = dates.length > 0 ? Math.max(...dates) : Date.now();
-                
-                const reflection = mirrorReflections[mirrorId];
+                const firstJournal = mirrorJournals[0];
+                const mirrorDate = new Date(firstJournal.created_at);
                 
                 return (
                   <MirrorCard
-                  key={mirrorId}
-                  mirrorId={mirrorId}
-                  mirrorDate={new Date(mirrorDate)}
-                  journals={mirrorJournals}
-                  onViewMirror={() => handleOpenExistingMirror(mirrorId)}
-                  onDeleteJournal={handleDeleteJournal}
-                  reflectionFocus={reflection?.focus}
-                  reflectionAction={reflection?.action}
-                />
+                    key={mirrorId}
+                    mirrorId={mirrorId}
+                    mirrorDate={mirrorDate}
+                    journals={mirrorJournals}
+                    onViewMirror={() => handleOpenExistingMirror(mirrorId)}
+                    onDeleteJournal={handleDeleteJournal}
+                    reflectionFocus={mirrorReflections[mirrorId]?.focus}
+                    reflectionAction={mirrorReflections[mirrorId]?.action}
+                  />
                 );
               })}
-            </View>
-          )}
-
-          {/* Empty State */}
-          {journals.length === 0 && !loading && (
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No journal entries yet.</Text>
             </View>
           )}
         </View>
@@ -324,12 +307,13 @@ const handleDeleteJournal = async (journalId: string) => {
   );
 }
 
+// Rest of component (MirrorCard, ReflectionDisplay, styles) - unchanged
 interface MirrorCardProps {
   mirrorId: string;
   mirrorDate: Date;
   journals: any[];
   onViewMirror: () => void;
-  onDeleteJournal: (journalId: string) => Promise<void>;
+  onDeleteJournal: (journalId: string) => void;
   reflectionFocus?: string;
   reflectionAction?: string;
 }
@@ -391,7 +375,7 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
   mirrorDate, 
   journals, 
   onViewMirror,
-  onDeleteJournal, // 👈 Add this
+  onDeleteJournal,
   reflectionFocus,
   reflectionAction
 }) => {
@@ -415,7 +399,6 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
         </TouchableOpacity>
       </View>
 
-      {/* Reflection Display - NEW */}
       {reflectionFocus && reflectionAction && (
         <ReflectionDisplay
           focus={reflectionFocus}
@@ -518,7 +501,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
   },
-  // Mirror Card Styles
   mirrorCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
@@ -581,7 +563,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
   },
-  // Reflection Display Styles
   reflectionContainer: {
     backgroundColor: '#f8fafc',
     borderRadius: 12,

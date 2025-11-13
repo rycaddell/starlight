@@ -1,15 +1,18 @@
-import { useState, useEffect } from 'react';
-import { Alert } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { Alert, AppState, AppStateStatus } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   getUserJournals, 
-  getUserJournalCount, 
-  checkAndGenerateMirror,
-  insertTestJournalData 
+  getUserJournalCount,
+  insertTestJournalData,
+  requestMirrorGeneration,
+  checkMirrorGenerationStatus,
+  checkCanGenerateMirror,
 } from '../lib/supabase';
+import { markMirrorAsViewed } from '../lib/supabase/mirrors';
 import { MIRROR_THRESHOLD } from '../lib/config/constants';
 
-type MirrorState = 'progress' | 'ready' | 'generating' | 'viewing';
+type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing';
 
 export const useMirrorData = () => {
   const { user, isAuthenticated } = useAuth();
@@ -18,12 +21,56 @@ export const useMirrorData = () => {
   const [journalCount, setJournalCount] = useState(0);
   const [mirrorState, setMirrorState] = useState<MirrorState>('progress');
   const [generatedMirror, setGeneratedMirror] = useState(null);
+  const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
+  
+  // ✅ NEW - Track if current mirror has been viewed
+  const [hasViewedCurrentMirror, setHasViewedCurrentMirror] = useState(false);
+  
+  // Polling control
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isPollingRef = useRef(false);
+  const appState = useRef(AppState.currentState);
+  
+  // ✅ Track current mirrorState value for closures
+  const mirrorStateRef = useRef<MirrorState>(mirrorState);
+  
+  // ✅ Update ref whenever state changes
+  useEffect(() => {
+    mirrorStateRef.current = mirrorState;
+  }, [mirrorState]);
 
-  const loadJournals = async () => {
+  // ✅ Simple journal loading without state updates
+  const loadJournalsOnly = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      const [journalsResult, countResult] = await Promise.all([
+        getUserJournals(user.id),
+        getUserJournalCount(user.id)
+      ]);
+      
+      if (journalsResult.success) {
+        setJournals(journalsResult.data);
+      }
+      
+      if (countResult.success) {
+        setJournalCount(countResult.count);
+      }
+    } catch (error) {
+      console.error('Error loading journals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadJournals = async (skipStateUpdate = false) => {
     if (!user) {
       console.error('No authenticated user found');
       return;
     }
+    
+    console.log('📚 loadJournals() called, skipStateUpdate =', skipStateUpdate, 'current mirrorState =', mirrorState);
     
     setLoading(true);
     try {
@@ -41,7 +88,29 @@ export const useMirrorData = () => {
       
       if (countResult.success) {
         setJournalCount(countResult.count);
-        setMirrorState(countResult.count >= MIRROR_THRESHOLD ? 'ready' : 'progress');
+        
+        console.log('📚 Journal count:', countResult.count, 'Threshold:', MIRROR_THRESHOLD);
+        console.log('📚 State check conditions:', {
+          skipStateUpdate,
+          isNotGenerating: mirrorStateRef.current !== 'generating',
+          isNotCompleted: mirrorStateRef.current !== 'completed',
+          isNotViewing: mirrorStateRef.current !== 'viewing',
+          willUpdate: !skipStateUpdate && 
+            mirrorStateRef.current !== 'generating' && 
+            mirrorStateRef.current !== 'completed' && 
+            mirrorStateRef.current !== 'viewing'
+        });
+        
+        if (!skipStateUpdate && 
+            mirrorStateRef.current !== 'generating' && 
+            mirrorStateRef.current !== 'completed' && 
+            mirrorStateRef.current !== 'viewing') {
+          const newState = countResult.count >= MIRROR_THRESHOLD ? 'ready' : 'progress';
+          console.log('📚 Setting mirrorState to:', newState);
+          setMirrorState(newState);
+        } else {
+          console.log('📚 Skipping state update');
+        }
       }
     } catch (error) {
       console.error('Error loading journals:', error);
@@ -51,28 +120,380 @@ export const useMirrorData = () => {
     }
   };
 
+  // Stop polling
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    isPollingRef.current = false;
+    console.log('🛑 Polling stopped');
+  };
+
+  // Poll for Mirror generation status
+  const pollMirrorStatus = async () => {
+    if (!user || isPollingRef.current) {
+      return;
+    }
+
+    isPollingRef.current = true;
+    console.log('🔄 Starting to poll for Mirror generation status...');
+
+    let attempts = 0;
+    const maxAttempts = 80;
+
+    pollingIntervalRef.current = setInterval(async () => {
+      attempts++;
+      console.log(`📊 Polling attempt ${attempts}/${maxAttempts}`);
+
+      try {
+        const statusResult = await checkMirrorGenerationStatus(user.id);
+
+        if (!statusResult.success) {
+          console.error('❌ Status check failed:', statusResult.error);
+          return;
+        }
+
+        const { status, mirror } = statusResult;
+
+        switch (status) {
+          case 'completed':
+            console.log('✅ Mirror generation completed!');
+            stopPolling();
+            
+            // ✅ Get has_been_viewed from database (should be false for new mirror)
+            const dbHasBeenViewed = mirror.has_been_viewed || false;
+            console.log('✅ New mirror has_been_viewed from DB:', dbHasBeenViewed);
+            
+            setGeneratedMirror(mirror);
+            setMirrorState('completed');
+            setGenerationStartTime(null);
+            setHasViewedCurrentMirror(dbHasBeenViewed);
+            await loadJournalsOnly();
+            break;
+
+          case 'failed':
+            console.error('❌ Mirror generation failed');
+            stopPolling();
+            setMirrorState('ready');
+            setGenerationStartTime(null);
+            Alert.alert(
+              'Generation Failed',
+              'Mirror generation encountered an error. Please try again.',
+              [{ text: 'OK' }]
+            );
+            break;
+
+          case 'processing':
+          case 'pending':
+            if (mirrorState !== 'generating') {
+              console.log('⚠️ State drift detected, correcting to generating');
+              setMirrorState('generating');
+            }
+            console.log(`⏳ Still generating... (${attempts * 3}s elapsed)`);
+            break;
+
+          case 'none':
+            console.log('ℹ️ No generation in progress');
+            stopPolling();
+            setMirrorState('ready');
+            setGenerationStartTime(null);
+            break;
+        }
+
+        if (attempts >= maxAttempts) {
+          console.error('❌ Polling timeout');
+          stopPolling();
+          setMirrorState('ready');
+          setGenerationStartTime(null);
+          Alert.alert(
+            'Generation Taking Longer Than Expected',
+            'Your Mirror is still being generated. Please check back in a few minutes.',
+            [{ text: 'OK' }]
+          );
+        }
+
+      } catch (error) {
+        console.error('❌ Error polling status:', error);
+      }
+    }, 3000);
+  };
+
+  // ✅ FIXED - Focused check that respects state
+  const checkGenerationStatusOnFocus = async () => {
+    if (!user) return;
+
+    const currentState = mirrorStateRef.current; // ✅ Use ref for current value
+    console.log(`🔍 Checking status (current: ${currentState})...`);
+    
+    // ✅ Don't interfere if user is viewing or if we're in a stable ready/progress state
+    if (currentState === 'viewing') {
+      console.log('👁️ User is viewing - skipping status check');
+      return;
+    }
+    
+    try {
+      const statusResult = await checkMirrorGenerationStatus(user.id);
+      
+      if (statusResult.success) {
+        const { status, mirror } = statusResult;
+        
+        console.log(`📊 Database: ${status}, Local: ${currentState}`);
+        
+        if (status === 'completed') {
+          const dbHasBeenViewed = mirror.has_been_viewed || false;
+          console.log('📊 Mirror completed, has_been_viewed:', dbHasBeenViewed);
+          
+          // ✅ If mirror has been viewed, don't touch anything - let normal flow handle it
+          if (dbHasBeenViewed) {
+            console.log('✅ Mirror already viewed, ignoring');
+            return;
+          }
+          
+          // ✅ Unviewed completed mirror - only show if we're not in a stable state
+          if (currentState === 'progress' || currentState === 'ready') {
+            console.log('✅ Unviewed completed mirror found, updating state');
+            setGeneratedMirror(mirror);
+            setMirrorState('completed');
+            setGenerationStartTime(null);
+            setHasViewedCurrentMirror(false);
+            stopPolling();
+            await loadJournalsOnly();
+          } else if (currentState === 'completed') {
+            console.log('✅ Already in completed state');
+          }
+        } else if (status === 'processing' || status === 'pending') {
+          if (currentState !== 'generating') {
+            console.log('⏳ Updating to generating');
+            setMirrorState('generating');
+            
+            if (!generationStartTime && statusResult.requestedAt) {
+              const requestTime = new Date(statusResult.requestedAt).getTime();
+              setGenerationStartTime(requestTime);
+            }
+            
+            if (!isPollingRef.current) {
+              pollMirrorStatus();
+            }
+          } else {
+            console.log('⏳ Already generating, ensuring polling active');
+            if (!isPollingRef.current) {
+              pollMirrorStatus();
+            }
+          }
+        } else if (status === 'failed') {
+          if (currentState === 'generating') {
+            console.log('❌ Failed');
+            setMirrorState('ready');
+            setGenerationStartTime(null);
+            stopPolling();
+          }
+        } else {
+          // status === 'none'
+          if (currentState === 'generating') {
+            console.log('ℹ️ DB shows none, but local is generating – likely a race. Keeping generating state.');
+            if (!isPollingRef.current) {
+              pollMirrorStatus();
+            }
+          } else {
+            console.log('ℹ️ No generation in progress');
+          }
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ Error checking status:', error);
+    
+      const msg = String(error?.message || '');
+      if (msg.includes('Network') || msg.includes('fetch') || msg.includes('Failed to fetch')) {
+        console.log('🌐 Network issue detected, retrying status check in 5s...');
+        setTimeout(() => {
+          checkGenerationStatusOnFocus();
+        }, 5000);
+      }
+    }
+  };
+
+  // ✅ FIXED - Handle backgrounding properly
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      console.log('📱 App state:', appState.current, '→', nextAppState);
+      
+      // Going to background
+      if (nextAppState.match(/inactive|background/)) {
+        console.log('📱 Going to background, pausing polling');
+        stopPolling(); // ✅ Stop polling when backgrounded
+      }
+      
+      // Coming to foreground
+      if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log('📱 Returned to foreground');
+        
+        if (user) {
+          checkGenerationStatusOnFocus(); // Check DB once
+        
+          // 👇 ensure polling restarts if needed
+          if (!isPollingRef.current) {
+            console.log('🔄 Ensuring polling is active after foreground');
+            pollMirrorStatus();
+          }
+        }
+      }
+      
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [user]); // ✅ Only user dependency
+
   const generateMirror = async () => {
     if (!user) {
       Alert.alert('Error', 'Please sign in to generate a Mirror.');
       return;
     }
+
+    console.log('🔍 Checking for existing generation...');
+    const statusCheck = await checkMirrorGenerationStatus(user.id);
     
+    if (statusCheck.success && (statusCheck.status === 'processing' || statusCheck.status === 'pending')) {
+      console.log('⚠️ Generation already in progress!');
+      setMirrorState('generating');
+      setGenerationStartTime(Date.now());
+      pollMirrorStatus();
+      return;
+    }
+
+    console.log('🔍 Checking eligibility...');
+    const eligibilityCheck = await checkCanGenerateMirror(user.id);
+
+    if (!eligibilityCheck.canGenerate) {
+      Alert.alert('Cannot Generate Mirror', eligibilityCheck.reason, [{ text: 'OK' }]);
+      return;
+    }
+
     setMirrorState('generating');
+    setGenerationStartTime(Date.now());
+    pollMirrorStatus();
+    
     try {
-      const result = await checkAndGenerateMirror(user.id);
+      console.log('🚀 Requesting Mirror generation...');
+      const result = await requestMirrorGeneration(user.id);
       
       if (result.success) {
-        console.log('✅ Mirror generation successful!');
-        setGeneratedMirror(result.content);
+        console.log('✅ Request submitted!');
+        
+        if (result.mirror) {
+          // ✅ Get has_been_viewed from database (should be false for new mirror)
+          const dbHasBeenViewed = result.mirror.has_been_viewed || false;
+          console.log('✅ Immediate completion - has_been_viewed from DB:', dbHasBeenViewed);
+          
+          setGeneratedMirror(result.mirror);
+          setMirrorState('completed');
+          setGenerationStartTime(null);
+          setHasViewedCurrentMirror(dbHasBeenViewed);
+          await loadJournalsOnly();
+        }
       } else {
-        console.error('❌ Mirror generation failed:', result.error);
-        Alert.alert('Mirror Generation Failed', result.error);
+        console.error('❌ Request failed:', result.error);
+    
+        const msg = result.error || '';
+    
+        // 🌐 Network errors: don't reset UI, let polling decide
+        if (msg.includes('Network request failed') || msg.includes('Network request')) {
+          console.log('🌐 Network issue while requesting Mirror. Keeping generating state and relying on polling.');
+    
+          // Make sure polling is running, since the job may still be alive server-side
+          if (!isPollingRef.current) {
+            pollMirrorStatus();
+          }
+    
+          // 🔒 Do NOT set mirrorState back to ready, do NOT show an alert
+          return;
+        }
+    
+        // All other errors = real failures, keep existing behavior
+        if (msg.includes('24 hours')) {
+          Alert.alert('Rate Limit', msg, [{ text: 'OK' }]);
+        } else if (msg.includes('journals')) {
+          Alert.alert('Not Enough Journals', msg, [{ text: 'OK' }]);
+        } else {
+          Alert.alert('Mirror Generation Failed', msg || 'Please try again.', [{ text: 'OK' }]);
+        }
+    
         setMirrorState('ready');
+        setGenerationStartTime(null);
+      }    
+    } catch (error: any) {
+      console.error('💥 Error:', error);
+      const msg = error?.message || '';
+    
+      // 🌐 Same idea: a network abort while the app backgrounds
+      // should NOT reset the UI if we've already kicked off polling.
+      if (msg.includes('Network request failed') || msg.includes('Network request')) {
+        console.log('🌐 Network error in generateMirror try/catch. Keeping generating state and relying on polling.');
+        
+        if (!isPollingRef.current) {
+          pollMirrorStatus();
+        }
+    
+        // Don't show an alert, don't flip back to ready
+        return;
       }
-    } catch (error) {
-      console.error('💥 Error during Mirror generation:', error);
-      Alert.alert('Error', `Unexpected error: ${error.message}`);
+    
+      // Real unexpected errors still surface
+      Alert.alert('Error', `Unexpected error: ${msg}`);
       setMirrorState('ready');
+      setGenerationStartTime(null);
+    }    
+  };
+
+  const viewMirror = async () => {
+    if (generatedMirror) {
+      console.log('👁️ viewMirror() called - marking as viewed');
+      setMirrorState('viewing');
+      setHasViewedCurrentMirror(true); // ✅ Mark as viewed locally
+      console.log('👁️ hasViewedCurrentMirror set to TRUE');
+      
+      // ✅ Mark as viewed in database
+      const result = await markMirrorAsViewed(generatedMirror.id);
+      if (!result.success) {
+        console.error('⚠️ Failed to mark mirror as viewed in database:', result.error);
+        // Don't block the UI - user can still view the mirror
+      }
+    }
+  };
+
+  const closeMirrorViewer = async () => {
+    console.log('🚪 closeMirrorViewer() called');
+    console.log('🚪 Clearing mirror state and reloading journals');
+    
+    if (!user) return;
+    
+    // Clear the viewed mirror
+    setGeneratedMirror(null);
+    setHasViewedCurrentMirror(false);
+    
+    setLoading(true);
+    try {
+      // Get journal count to determine correct state
+      const countResult = await getUserJournalCount(user.id);
+      const count = countResult.success ? countResult.count : 0;
+      
+      // Set correct state based on count
+      const newState = count >= MIRROR_THRESHOLD ? 'ready' : 'progress';
+      console.log(`🚪 Setting state to ${newState} (count: ${count}/${MIRROR_THRESHOLD})`);
+      setMirrorState(newState);
+      
+      // Now load journals without state update (we already set it)
+      await loadJournals(true); // skipStateUpdate = true
+    } catch (error) {
+      console.error('🚪 Error in closeMirrorViewer:', error);
+      // Fallback to progress state
+      setMirrorState('progress');
+      loadJournals();
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -94,24 +515,32 @@ export const useMirrorData = () => {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, []);
+
   return {
-    // State
     journals,
     loading,
     journalCount,
     mirrorState,
     generatedMirror,
-    
-    // Actions
+    generationStartTime,
+    hasViewedCurrentMirror, // ✅ EXPOSE
     loadJournals,
     generateMirror,
+    viewMirror,
+    closeMirrorViewer,
     insertTestData,
     setMirrorState,
     setGeneratedMirror,
-    
-    // Computed
+    stopPolling,
+    checkGenerationStatusOnFocus,
     isReady: mirrorState === 'ready',
     isGenerating: mirrorState === 'generating',
+    isCompleted: mirrorState === 'completed',
     isViewing: mirrorState === 'viewing' && generatedMirror
   };
 };

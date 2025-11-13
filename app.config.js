@@ -51,7 +51,6 @@ export default {
         // These will be available as Constants.expoConfig.extra.*
         supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
         supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-        openaiApiKey: process.env.EXPO_PUBLIC_OPENAI_API_KEY,
         
         router: {},
         eas: {
