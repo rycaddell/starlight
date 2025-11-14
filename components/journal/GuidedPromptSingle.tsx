@@ -1,36 +1,105 @@
 // components/journal/GuidedPromptSingle.tsx
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { GuidedPrompt } from '../../lib/constants/guidedPrompts';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GuidedPrompt, getShuffledPromptsForUser } from '../../constants/guidedPrompts';
+
+const PROMPT_INDEX_KEY = '@oxbow_guided_prompt_index';
 
 interface GuidedPromptSingleProps {
-  prompts: GuidedPrompt[];
+  userId: string;
+  todayAnsweredPrompts: string[]; // Array of prompt texts answered today
   onPromptSelect: (prompt: GuidedPrompt) => void;
 }
 
 export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
-  prompts,
+  userId,
+  todayAnsweredPrompts,
   onPromptSelect,
 }) => {
-  const [currentPrompt, setCurrentPrompt] = useState(prompts[0]);
+  const [allPrompts, setAllPrompts] = useState<GuidedPrompt[]>([]);
+  const [availablePrompts, setAvailablePrompts] = useState<GuidedPrompt[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleShuffle = () => {
-    // Get a random prompt that's different from current
-    const otherPrompts = prompts.filter(p => p.id !== currentPrompt.id);
-    const randomPrompt = otherPrompts[Math.floor(Math.random() * otherPrompts.length)];
-    setCurrentPrompt(randomPrompt);
+  // Initialize prompts on mount
+  useEffect(() => {
+    initializePrompts();
+  }, [userId, todayAnsweredPrompts]);
+
+  const initializePrompts = async () => {
+    try {
+      // Get deterministically shuffled prompts for this user
+      const shuffled = getShuffledPromptsForUser(userId);
+      setAllPrompts(shuffled);
+      
+      // Filter out prompts answered today
+      const available = shuffled.filter(
+        prompt => !todayAnsweredPrompts.includes(prompt.text)
+      );
+      
+      // If all prompts have been answered today, allow all prompts
+      // (edge case: user answered all 19 in one day)
+      const finalAvailable = available.length > 0 ? available : shuffled;
+      setAvailablePrompts(finalAvailable);
+      
+      // Load saved index or start at 0
+      const savedIndex = await AsyncStorage.getItem(PROMPT_INDEX_KEY);
+      const startIndex = savedIndex ? parseInt(savedIndex, 10) : 0;
+      
+      // Make sure index is within bounds of available prompts
+      setCurrentIndex(startIndex % finalAvailable.length);
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error initializing prompts:', error);
+      setIsLoading(false);
+    }
   };
 
-  if (prompts.length === 0) {
+  const handleNext = async () => {
+    try {
+      // Move to next prompt in the sequence
+      const nextIndex = (currentIndex + 1) % availablePrompts.length;
+      setCurrentIndex(nextIndex);
+      
+      // Save the new index
+      await AsyncStorage.setItem(PROMPT_INDEX_KEY, nextIndex.toString());
+    } catch (error) {
+      console.error('Error saving prompt index:', error);
+    }
+  };
+
+  const handlePromptSelect = async () => {
+    // When user selects a prompt, advance to the next one for their next visit
+    await handleNext();
+    
+    // Then trigger the selection callback
+    onPromptSelect(availablePrompts[currentIndex]);
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <ActivityIndicator size="small" color="#2563eb" />
+        </View>
+      </View>
+    );
+  }
+
+  if (availablePrompts.length === 0) {
     return null;
   }
+
+  const currentPrompt = availablePrompts[currentIndex];
 
   return (
     <View style={styles.container}>
       {/* Guided Prompt Card */}
       <TouchableOpacity 
         style={styles.card}
-        onPress={() => onPromptSelect(currentPrompt)}
+        onPress={handlePromptSelect}
         activeOpacity={0.7}
       >
         <View style={styles.header}>
@@ -44,15 +113,15 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
         </View>
       </TouchableOpacity>
 
-      {/* Shuffle Button */}
-      {prompts.length > 1 && (
+      {/* Next Button - Only show if there are multiple available prompts */}
+      {availablePrompts.length > 1 && (
         <TouchableOpacity 
-          style={styles.shuffleButton}
-          onPress={handleShuffle}
+          style={styles.nextButton}
+          onPress={handleNext}
           activeOpacity={0.7}
         >
-          <Text style={styles.shuffleIcon}>🔄</Text>
-          <Text style={styles.shuffleText}>Refresh</Text>
+          <Text style={styles.nextIcon}>🔄</Text>
+          <Text style={styles.nextText}>Next question</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -110,19 +179,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  shuffleButton: {
+  nextButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 12,
     paddingVertical: 12,
   },
-  shuffleIcon: {
+  nextIcon: {
     fontSize: 14,
     marginRight: 8,
     opacity: 0.7,
   },
-  shuffleText: {
+  nextText: {
     fontSize: 14,
     color: '#64748b',
     fontWeight: '400',

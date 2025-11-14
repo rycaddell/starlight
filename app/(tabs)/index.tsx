@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { saveJournalEntry } from '../../lib/supabase';
+import { saveJournalEntry, getUserJournals } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
 import { FreeFormCard } from '../../components/journal/FreeFormCard';
 import { GuidedPromptSingle } from '../../components/journal/GuidedPromptSingle';
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
-import { GUIDED_PROMPTS, getRandomPrompts, GuidedPrompt } from '../../constants/guidedPrompts';
+import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { useMirrorData } from '../../hooks/useMirrorData';
 
 export default function JournalScreen() {
@@ -22,8 +22,8 @@ export default function JournalScreen() {
   const { user, isAuthenticated, isLoading } = useAuth();
   const { showSettings } = useGlobalSettings();
 
-  // State for new UI
-  const [carouselPrompts] = useState(() => getRandomPrompts(5));
+  // State for today's answered prompts
+  const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
   
   // Get journal count for progress bar
   const { journalCount, loadJournals } = useMirrorData();
@@ -58,9 +58,10 @@ export default function JournalScreen() {
         }
       });
       
-      // Reload journals to update progress bar
+      // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
-        loadJournals();
+        await loadJournals();
+        await loadTodayAnsweredPrompts();
       }
     }
   };
@@ -80,12 +81,56 @@ export default function JournalScreen() {
     formatDuration 
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
-  // Load journal count on mount
+  // Load today's answered prompts
+  const loadTodayAnsweredPrompts = async () => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayISO = today.toISOString();
+
+      const result = await getUserJournals(user.id);
+      
+      if (result.success && result.data) {
+        // Filter journals from today that have a prompt_text
+        const todayJournals = result.data.filter(journal => {
+          const journalDate = new Date(journal.created_at);
+          journalDate.setHours(0, 0, 0, 0);
+          return journalDate.toISOString() === todayISO && journal.prompt_text;
+        });
+
+        // Extract the prompt texts
+        const promptTexts = todayJournals
+          .map(journal => journal.prompt_text)
+          .filter(text => text); // Remove any null/undefined
+
+        console.log('📝 Today answered prompts:', promptTexts.length);
+        setTodayAnsweredPrompts(promptTexts);
+      }
+    } catch (error) {
+      console.error('Error loading today answered prompts:', error);
+    }
+  };
+
+  // Load journal count and answered prompts on mount
   React.useEffect(() => {
     if (isAuthenticated && user) {
       loadJournals();
+      loadTodayAnsweredPrompts();
     }
   }, [isAuthenticated, user]);
+
+  // Reload journals when screen comes into focus (e.g., when returning from mirror tab)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (isAuthenticated && user) {
+        console.log('📊 Journal screen focused - reloading journals');
+        loadJournals();
+        loadTodayAnsweredPrompts();
+      }
+    }, [isAuthenticated, user])
+  );
 
   // Save journal to database
   const saveJournalToDatabase = async (
@@ -237,9 +282,10 @@ export default function JournalScreen() {
         }
       });
       
-      // Reload journals to update progress bar
+      // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
-        loadJournals();
+        await loadJournals();
+        await loadTodayAnsweredPrompts();
       }
     }
   };
@@ -295,7 +341,8 @@ export default function JournalScreen() {
             <FreeFormCard onPress={handleFreeFormPress} />
             
             <GuidedPromptSingle
-              prompts={carouselPrompts} 
+              userId={user.id}
+              todayAnsweredPrompts={todayAnsweredPrompts}
               onPromptSelect={handleGuidedPromptSelect}
             />
           </View>

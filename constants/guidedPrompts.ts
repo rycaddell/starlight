@@ -49,7 +49,7 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-11',
-    text: 'Is there a vision or desire for your life hasn’t happened yet?  What is it?',
+    text: "Is there a vision or desire for your life hasn't happened yet?  What is it?",
   },
   {
     id: 'guided-12',
@@ -69,7 +69,7 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
   },
   {
     id: 'guided-16',
-    text: 'Where do you feel peace — or resistance — about the direction your life is heading?',
+    text: 'Where do you feel peace - or resistance - about the direction your life is heading?',
   },
   {
     id: 'guided-17',
@@ -86,32 +86,46 @@ export const GUIDED_PROMPTS: GuidedPrompt[] = [
 ];
 
 /**
- * Shuffles an array using the Fisher-Yates algorithm
- * Returns a new array without modifying the original
+ * Simple hash function to convert a string to a number
+ * Used for deterministic shuffling based on user ID
  */
-export function shuffleArray<T>(array: T[]): T[] {
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+/**
+ * Deterministic shuffle using a seed (user ID)
+ * Same seed always produces the same shuffle order
+ */
+export function deterministicShuffle<T>(array: T[], seed: string): T[] {
   const shuffled = [...array];
+  let currentSeed = hashString(seed);
+  
+  // Seeded random number generator
+  const seededRandom = () => {
+    currentSeed = (currentSeed * 9301 + 49297) % 233280;
+    return currentSeed / 233280;
+  };
+  
+  // Fisher-Yates shuffle with seeded random
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = Math.floor(seededRandom() * (i + 1));
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
+  
   return shuffled;
 }
 
 /**
- * Get a randomized list of guided prompts
- * Call this each time you want to display the carousel with a fresh order
+ * Get deterministically shuffled prompts for a user
+ * Same user ID always gets the same order
  */
-export function getRandomizedPrompts(): GuidedPrompt[] {
-  return shuffleArray(GUIDED_PROMPTS);
-}
-
-/**
- * Get a specific number of random prompts
- * @param count - Number of prompts to return (default: 3)
- * @returns Array of random prompts
- */
-export function getRandomPrompts(count: number = 5): GuidedPrompt[] {
-  const shuffled = shuffleArray(GUIDED_PROMPTS);
-  return shuffled.slice(0, count);
+export function getShuffledPromptsForUser(userId: string): GuidedPrompt[] {
+  return deterministicShuffle(GUIDED_PROMPTS, userId);
 }
