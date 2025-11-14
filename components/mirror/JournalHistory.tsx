@@ -6,6 +6,7 @@ interface Journal {
   content: string;
   created_at: string;
   mirror_id?: string;
+  prompt_text?: string;
 }
 
 interface JournalHistoryProps {
@@ -104,6 +105,13 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
               )}
             </View>
             
+            {/* Prompt text for guided journals */}
+            {journal.prompt_text && (
+              <Text style={styles.promptText}>
+                <Text style={styles.promptTextBold}>"{journal.prompt_text}"</Text>
+              </Text>
+            )}
+            
             <Text 
               style={styles.journalContent} 
               numberOfLines={isExpanded ? undefined : 4}
@@ -189,6 +197,16 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '500',
     flex: 1,
+  },
+  promptText: {
+    fontSize: 15,
+    color: '#475569',
+    lineHeight: 22,
+    marginBottom: 8,
+    fontStyle: 'italic',
+  },
+  promptTextBold: {
+    fontWeight: '600',
   },
   journalContent: {
     fontSize: 16,

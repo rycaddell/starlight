@@ -16,13 +16,20 @@ interface JournalEntry {
   content: string;
   created_at: string;
   custom_user_id: string;
+  prompt_text?: string;
 }
 
 // Generate Mirror prompt (updated to 3 screens)
 function generateMirrorPrompt(journalEntries: JournalEntry[]): string {
-  const journalText = journalEntries.map((entry, index) => 
-    `Entry ${index + 1} (${new Date(entry.created_at).toLocaleDateString()}): ${entry.content}`
-  ).join('\n\n');
+  const journalText = journalEntries.map((entry, index) => {
+    const date = new Date(entry.created_at).toLocaleDateString();
+    if (entry.prompt_text) {
+      // Format guided journal entries with prompt context
+      return `Entry ${index + 1} (${date}): In response to '${entry.prompt_text}', the user wrote: ${entry.content}`;
+    }
+    // Format free-form journal entries
+    return `Entry ${index + 1} (${date}): ${entry.content}`;
+  }).join('\n\n');
 
   return `You are a wise, compassionate spiritual director analyzing someone's journal entries to provide encouraging spiritual formation insights. 
 

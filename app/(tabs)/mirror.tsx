@@ -266,9 +266,6 @@ export default function MirrorScreen() {
               <Text style={styles.h2Title}>
                 Recent Journals
               </Text>
-              <View style={styles.tightProgressSection}>
-                <MirrorProgress currentCount={journalCount} />
-              </View>
               <JournalHistory 
                 journals={recentJournals}
                 loading={loading}
