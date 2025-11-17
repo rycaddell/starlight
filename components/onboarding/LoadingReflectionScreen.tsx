@@ -60,18 +60,36 @@ export const LoadingReflectionScreen: React.FC = () => {
     if (hasStarted) return;
     setHasStarted(true);
 
+    // Safety timeout - ensure we ALWAYS advance after 30 seconds max
+    const safetyTimeout = setTimeout(() => {
+      console.warn('⚠️ Safety timeout triggered - forcing advance to next screen');
+      setCurrentStep('mirror');
+    }, 30000);
+
     const generatePreview = async () => {
       try {
         console.log('🎯 Starting onboarding preview generation...');
         
         const aiResult = await generateOnboardingPreview(journalContent);
         
-        if (aiResult.success) {
-          console.log('✅ AI preview generated successfully');
+        // generateOnboardingPreview always returns content (AI or fallback)
+        if (aiResult.content) {
+          console.log(aiResult.usedFallback ? '⚠️ Using fallback preview' : '✅ AI preview generated successfully');
           setAIPreviewData(aiResult.content);
         } else {
-          console.log('⚠️ Using fallback preview');
-          setAIPreviewData(aiResult.fallback);
+          // Defensive fallback - should never happen with updated code
+          console.error('❌ No content returned, using hardcoded fallback');
+          setAIPreviewData({
+            biblical_profile: {
+              character: "David",
+              connection: "Like David in the Psalms, you're bringing your honest thoughts and feelings to God. David didn't hide his struggles or doubts - he brought them into the light through writing and prayer. Your willingness to reflect like this is already a step toward spiritual growth."
+            },
+            encouraging_verse: {
+              reference: "Psalm 139:23-24",
+              text: "Search me, God, and know my heart; test me and know my anxious thoughts. See if there is any offensive way in me, and lead me in the way everlasting.",
+              application: "This verse reminds us that honest self-reflection before God is not just acceptable - it's invited. As you continue journaling, you're creating space for God to reveal patterns, growth areas, and His leading in your life."
+            }
+          });
         }
 
         if (user) {
@@ -91,11 +109,13 @@ export const LoadingReflectionScreen: React.FC = () => {
 
         setTimeout(() => {
           console.log('➡️ Advancing to Mirror preview...');
+          clearTimeout(safetyTimeout);
           setCurrentStep('mirror');
         }, 3000); // Increased from 2000ms to 3000ms (3 seconds)
 
       } catch (error) {
         console.error('❌ Error in preview generation:', error);
+        clearTimeout(safetyTimeout);
         setTimeout(() => {
           setCurrentStep('mirror');
         }, 3000); // Increased from 2000ms to 3000ms

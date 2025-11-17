@@ -26,7 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
-import { transcribeAudio } from '../lib/whisperService';
+import { transcribeAudio } from '../lib/supabase/transcription';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
@@ -139,8 +139,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             hour12: true
           });
           
-          // Transcribe audio using Whisper
-          const result = await transcribeAudio(uri, recordingDuration);
+          // Transcribe audio using Whisper Edge Function (server-side)
+          const result = await transcribeAudio(uri);
           
           setIsProcessing(false);
           
