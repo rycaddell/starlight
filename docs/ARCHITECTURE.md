@@ -42,7 +42,7 @@ starlight/
 │
 ├── components/                   # Reusable UI components
 │   ├── auth/                    # Authentication UI
-│   ├── journal/                 # Journal components (tabs, text input)
+│   ├── journal/                 # Journal components (bottom sheet modal)
 │   ├── mirror/                  # Mirror screens & viewer
 │   ├── onboarding/              # Onboarding flow screens
 │   ├── voice/                   # Voice recording UI
@@ -56,7 +56,7 @@ starlight/
 ├── hooks/                        # Custom React hooks
 │   ├── useAudioPermissions.tsx  # Audio permission logic
 │   ├── useAudioRecording.tsx    # Recording state & controls
-│   ├── useMirrorData.ts         # Mirror data fetching
+│   ├── useMirrorData.ts         # Mirror data fetching & polling
 │   └── useColorScheme.ts        # Theme management
 │
 ├── lib/                          # Utility libraries & services
@@ -64,9 +64,19 @@ starlight/
 │   │   ├── client.js           # Supabase client init
 │   │   ├── auth.js             # Auth operations
 │   │   ├── journals.js         # Journal CRUD
-│   │   ├── mirrors.js          # Mirror CRUD
+│   │   ├── mirrors.js          # Mirror CRUD & generation requests
 │   │   └── feedback.js         # Feedback handling
-│   └── whisperService.ts        # OpenAI Whisper integration
+│   ├── whisperService.ts        # OpenAI Whisper integration
+│   └── guidedPrompts.ts         # Journal prompt management
+│
+├── supabase/                     # Supabase Edge Functions
+│   └── functions/
+│       ├── generate-mirror/     # Full Mirror generation
+│       │   └── index.ts
+│       ├── generate-onboarding-preview/  # Onboarding preview
+│       │   └── index.ts
+│       └── transcribe-audio/    # Whisper transcription
+│           └── index.ts
 │
 ├── types/                        # TypeScript definitions
 │   └── database.ts              # Database schema types
@@ -184,23 +194,46 @@ components/
 
 **Implementation:** `hooks/useAudioRecording.tsx` + `lib/whisperService.ts`
 
-### 3. Modal-Based Mirror Experience
+### 3. Server-Side Mirror Generation
+
+**Why:** Security, reliability, and performance
+- OpenAI API key never exposed to client
+- Automatic retry logic for timeout handling
+- Uses GPT-5-mini for faster response times (typically 3-8 seconds)
+- Client polls for status updates via mirror_generation_requests table
+- Handles failures gracefully with request status tracking
+
+**Implementation:** Supabase Edge Function (`generate-mirror`) + client polling in `useMirrorData.ts`
+
+### 4. Modal-Based Mirror Experience
 
 **Why:** Immersive reflection experience separate from main app
 - Full-screen modals with swipeable screens
 - Creates focused spiritual reflection moment
 - Easy to revisit past mirrors
+- 3-screen format: Themes, Biblical Mirror, Observations
 
 **Implementation:** `components/mirror/MirrorModal.tsx`
 
-### 4. 15-Journal Threshold
+### 5. Guided Journal Prompts
+
+**Why:** Help users overcome "blank page" syndrome
+- Deterministic shuffle algorithm based on user ID (consistent but unique per user)
+- Sequential cycling through all 19 prompts to eliminate repeats
+- Filters out already-answered prompts from current day
+- Stores prompt_text with journal for AI context
+- Users can skip to free-form at any time
+
+**Implementation:** `guidedPrompts.ts` + AsyncStorage for progress tracking
+
+### 6. 10-Journal Mirror Threshold
 
 **Why:** Core progression mechanic
 - Ensures sufficient content for meaningful AI reflection
 - Creates anticipation and engagement
 - Natural chunking of journaling journey
 
-**Implementation:** Progress tracking in `app/(tabs)/mirror.tsx`
+**Implementation:** Progress tracking in `useMirrorData.ts`
 
 ---
 
@@ -223,19 +256,29 @@ UI Update (navigation to mirror screen)
 
 ### Mirror Generation Flow
 ```
-15 Journals Collected
+10+ Journals Collected
     ↓
-User taps "Unlock Mirror"
+User taps "Generate Mirror"
     ↓
-lib/supabase/mirrors.generateMirror()
+Client: requestMirrorGeneration() creates request record
     ↓
-Server-side AI Processing (OpenAI)
+Edge Function: generate-mirror invoked
     ↓
-Mirror saved to database
+Server: Fetches journals, calls OpenAI GPT-5-mini
     ↓
-Associated journals marked with mirror_id
+Server: Generates 3-screen Mirror with retry logic (up to 2 attempts)
     ↓
-User views 4-screen Mirror experience
+Server: Saves Mirror to database
+    ↓
+Server: Links journals with mirror_id
+    ↓
+Server: Updates request status to 'completed' or 'failed'
+    ↓
+Client: Polls mirror_generation_requests table every 5 seconds
+    ↓
+Client: Detects completion, fetches Mirror
+    ↓
+User views 3-screen Mirror experience
 ```
 
 ---

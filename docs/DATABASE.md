@@ -72,8 +72,9 @@ Stores individual journal entries from users (text or transcribed voice).
 ```typescript
 {
   id: string (uuid, primary key)
-  user_id: string (uuid, foreign key → custom_users.id)
+  custom_user_id: string (uuid, foreign key → custom_users.id)
   content: string (not null)
+  prompt_text: string (nullable) // Guided prompt if used
   mirror_id: string (uuid, nullable, foreign key → mirrors.id)
   created_at: timestamp
   updated_at: timestamp
@@ -82,19 +83,20 @@ Stores individual journal entries from users (text or transcribed voice).
 
 **Fields Explained:**
 - `id` - Unique identifier for the journal entry
-- `user_id` - The user who created this journal
+- `custom_user_id` - The user who created this journal
 - `content` - The journal text (typed or transcribed from voice)
+- `prompt_text` - The guided journal prompt that was used (null for free-form entries)
 - `mirror_id` - Links to the Mirror this journal was used to generate (null until included in a Mirror)
 - `created_at` - When the journal was created
 - `updated_at` - Last modification time
 
 **Relationships:**
-- `user_id` → `custom_users.id` (many journals to one user)
+- `custom_user_id` → `custom_users.id` (many journals to one user)
 - `mirror_id` → `mirrors.id` (many journals to one mirror)
 
 **Indexes:**
 - Primary key on `id`
-- Index on `user_id` for user-specific queries
+- Index on `custom_user_id` for user-specific queries
 - Index on `mirror_id` for finding journals in a mirror
 - Index on `created_at` for chronological sorting
 
@@ -102,6 +104,7 @@ Stores individual journal entries from users (text or transcribed voice).
 - Each journal can only be associated with ONE Mirror
 - Once `mirror_id` is set, that journal is "locked" to that Mirror
 - New journals have `mirror_id: null` until included in Mirror generation
+- Guided prompts are stored in `prompt_text` for AI context when generating Mirrors
 
 **Example Row:**
 ```json
@@ -119,16 +122,20 @@ Stores individual journal entries from users (text or transcribed voice).
 
 ### `mirrors`
 
-Stores AI-generated spiritual reflections based on 15 journal entries.
+Stores AI-generated spiritual reflections based on 10+ journal entries.
 ```typescript
 {
   id: string (uuid, primary key)
-  user_id: string (uuid, foreign key → custom_users.id)
+  custom_user_id: string (uuid, foreign key → custom_users.id)
   screen_1_themes: JSON (not null)
   screen_2_biblical: JSON (not null)
   screen_3_observations: JSON (not null)
-  screen_4_suggestions: JSON (not null)
-  journal_count: integer (default: 15)
+  screen_4_suggestions: JSON (nullable) // No longer generated
+  journal_count: integer (minimum: 10)
+  has_been_viewed: boolean (default: false)
+  status: string (default: 'completed')
+  generation_started_at: timestamp (nullable)
+  generation_completed_at: timestamp (nullable)
   created_at: timestamp
   updated_at: timestamp
 }
@@ -136,23 +143,33 @@ Stores AI-generated spiritual reflections based on 15 journal entries.
 
 **Fields Explained:**
 - `id` - Unique identifier for the Mirror
-- `user_id` - The user this Mirror belongs to
+- `custom_user_id` - The user this Mirror belongs to
 - `screen_1_themes` - JSON containing identified themes from journals
-- `screen_2_biblical` - JSON containing relevant biblical references
+- `screen_2_biblical` - JSON containing relevant biblical references and stories
 - `screen_3_observations` - JSON containing observations about spiritual journey
-- `screen_4_suggestions` - JSON containing suggestions for growth
-- `journal_count` - Number of journals used (should always be 15)
-- `created_at` - When the Mirror was generated
+- `screen_4_suggestions` - Legacy field, set to null (no longer generated)
+- `journal_count` - Number of journals used (10+)
+- `has_been_viewed` - Whether user has opened this Mirror (for UI state)
+- `status` - Mirror generation status ('completed', 'failed')
+- `generation_started_at` - When Mirror generation began (server-side)
+- `generation_completed_at` - When Mirror generation finished (server-side)
+- `created_at` - When the Mirror record was created
 - `updated_at` - Last modification time
 
 **Relationships:**
-- `user_id` → `custom_users.id` (many mirrors to one user)
+- `custom_user_id` → `custom_users.id` (many mirrors to one user)
 - One mirror ← many journals (via `journals.mirror_id`)
 
 **Indexes:**
 - Primary key on `id`
-- Index on `user_id` for user-specific queries
+- Index on `custom_user_id` for user-specific queries
 - Index on `created_at` for chronological sorting
+
+**Generation Details:**
+- Mirrors are generated server-side using Supabase Edge Functions
+- Uses OpenAI GPT-5-mini for faster response times (3-8 seconds typical)
+- Automatic retry logic handles timeouts (up to 2 attempts)
+- Status tracked in `mirror_generation_requests` table during generation
 
 **JSON Structure Examples:**
 
@@ -225,6 +242,67 @@ Stores AI-generated spiritual reflections based on 15 journal entries.
   "journal_count": 15,
   "created_at": "2024-03-25T14:30:00Z",
   "updated_at": "2024-03-25T14:30:00Z"
+}
+```
+
+---
+
+### `mirror_generation_requests`
+
+Tracks Mirror generation requests and their status (used for server-side polling).
+```typescript
+{
+  id: string (uuid, primary key)
+  custom_user_id: string (uuid, foreign key → custom_users.id)
+  mirror_id: string (uuid, nullable, foreign key → mirrors.id)
+  status: string (not null) // 'pending', 'processing', 'completed', 'failed'
+  requested_at: timestamp (not null)
+  completed_at: timestamp (nullable)
+  created_at: timestamp
+}
+```
+
+**Fields Explained:**
+- `id` - Unique identifier for the generation request
+- `custom_user_id` - The user requesting Mirror generation
+- `mirror_id` - Links to the generated Mirror once complete (null during generation)
+- `status` - Current status of the generation request
+  - `'pending'` - Request created, not yet started
+  - `'processing'` - Edge Function actively generating
+  - `'completed'` - Mirror successfully generated
+  - `'failed'` - Generation failed (timeout, error, etc.)
+- `requested_at` - When generation was requested
+- `completed_at` - When generation finished (success or failure)
+- `created_at` - Record creation timestamp
+
+**Relationships:**
+- `custom_user_id` → `custom_users.id` (many requests to one user)
+- `mirror_id` → `mirrors.id` (one request to one mirror)
+
+**Indexes:**
+- Primary key on `id`
+- Index on `custom_user_id` for user-specific queries
+- Index on `status` for finding active requests
+- Index on `requested_at` for chronological sorting
+
+**Business Logic:**
+- Client creates record with status 'pending' when user taps "Generate Mirror"
+- Edge Function updates to 'processing' when it starts
+- Edge Function updates to 'completed' with mirror_id when done
+- Edge Function updates to 'failed' if generation fails or times out
+- Client polls this table every 5 seconds to check status
+- Used for rate limiting (1 Mirror per 24 hours per user)
+
+**Example Row:**
+```json
+{
+  "id": "req-1a2b3c4d-5678-90ab-cdef-1234567890ab",
+  "custom_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "mirror_id": "m9z8y7x6-w5v4-u3t2-s1r0-q9p8o7n6m5l4",
+  "status": "completed",
+  "requested_at": "2024-03-25T14:25:00Z",
+  "completed_at": "2024-03-25T14:25:08Z",
+  "created_at": "2024-03-25T14:25:00Z"
 }
 ```
 

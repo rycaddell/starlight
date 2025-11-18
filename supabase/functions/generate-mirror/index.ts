@@ -174,12 +174,49 @@ async function generateMirrorWithAI(
   }
 }
 
+// Retry wrapper for AI generation
+async function generateWithRetry(
+  journalEntries: JournalEntry[],
+  openaiApiKey: string,
+  maxRetries: number = 1
+): Promise<any> {
+  let lastError: Error;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        console.log(`🔄 Retry attempt ${attempt}/${maxRetries}`);
+      }
+      
+      return await generateMirrorWithAI(journalEntries, openaiApiKey);
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`❌ Attempt ${attempt + 1} failed:`, error.message);
+      
+      // If this was the last attempt, throw
+      if (attempt === maxRetries) {
+        throw lastError;
+      }
+      
+      // Otherwise, log and continue to retry
+      console.log('⏳ Waiting 2 seconds before retry...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  }
+  
+  throw lastError!;
+}
+
 // Main request handler
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
+
+  let requestRecord: any = null;
+  let supabase: any = null;
 
   try {
     console.log('🚀 Generate Mirror Edge Function invoked');
@@ -193,7 +230,7 @@ serve(async (req) => {
     // Create Supabase client with service role key
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Get request body
     const { customUserId } = await req.json();
@@ -260,7 +297,7 @@ serve(async (req) => {
 
     // Step 3: Create generation request record (marks as 'processing')
     console.log('📝 Creating generation request record...');
-    const { data: requestRecord, error: requestError } = await supabase
+    const { data: requestData, error: requestError } = await supabase
       .from('mirror_generation_requests')
       .insert({
         custom_user_id: customUserId,
@@ -275,11 +312,12 @@ serve(async (req) => {
       throw new Error('Failed to create generation request');
     }
 
+    requestRecord = requestData;
     console.log(`✅ Request record created: ${requestRecord.id}`);
 
-    // Step 4: Generate Mirror with AI
-    console.log('🤖 Starting AI generation...');
-    const aiResult = await generateMirrorWithAI(journals, openaiApiKey);
+    // Step 4: Generate Mirror with AI (with automatic retry)
+    console.log('🤖 Starting AI generation with retry...');
+    const aiResult = await generateWithRetry(journals, openaiApiKey, 1);
 
     if (!aiResult.success) {
       throw new Error('AI generation failed');
@@ -359,6 +397,18 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error in generate-mirror function:', error);
+
+    // Mark request as failed if it exists
+    if (requestRecord?.id && supabase) {
+      console.log('📝 Marking request as failed...');
+      await supabase
+        .from('mirror_generation_requests')
+        .update({
+          status: 'failed',
+          completed_at: new Date().toISOString(),
+        })
+        .eq('id', requestRecord.id);
+    }
 
     return new Response(
       JSON.stringify({

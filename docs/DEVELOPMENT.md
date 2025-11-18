@@ -89,6 +89,23 @@ npx tsc --noEmit
 npx tsc --noEmit --watch
 ```
 
+### Edge Function Deployment
+```bash
+# Deploy all Edge Functions
+supabase functions deploy
+
+# Deploy specific function
+supabase functions deploy generate-mirror
+supabase functions deploy generate-onboarding-preview
+supabase functions deploy transcribe-audio
+
+# Test function locally
+supabase functions serve generate-mirror
+
+# View function logs
+supabase functions logs generate-mirror --tail
+```
+
 ### Linting
 ```bash
 # Run ESLint (if configured)
@@ -193,16 +210,20 @@ Voice Journaling
 
 Mirror Generation
 
- Create 14 journals
- Verify progress shows 14/15
- Create 15th journal
- Verify "Unlock Mirror" button appears
- Tap unlock
- Verify loading animation
- Verify Mirror modal opens
- Swipe through all 4 screens
+ Create 10 journals (threshold changed from 15 to 10)
+ Verify progress shows correct count (X/10)
+ Create 10th journal
+ Verify "Generate Mirror" button appears
+ Tap generate
+ Verify loading animation with status polling
+ Monitor for 3-8 seconds (typical GPT-5-mini response)
+ Verify Mirror modal opens with 3 screens (not 4)
+ Swipe through all 3 screens: Themes, Biblical Mirror, Observations
  Close and reopen Mirror from history
- Create 15 more journals and generate second Mirror
+ Verify has_been_viewed flag set correctly
+ Create 10 more journals and generate second Mirror
+ Test timeout scenario: Check mirror_generation_requests table status
+ Test retry: If generation times out, verify automatic retry occurs
 
 Edge Cases
 
@@ -534,6 +555,34 @@ cd android
 # Or full clean
 rm -rf android/.gradle
 rm -rf android/build
+
+"Edge Function timing out"
+
+Check Supabase Edge Function logs in dashboard (Project → Edge Functions → Logs)
+Edge Functions have 150-second (2.5 min) default timeout
+GPT-5-mini usually responds in 3-8 seconds
+Check mirror_generation_requests table for stuck records
+Retry logic handles most timeouts automatically (up to 2 attempts)
+
+"Mirror generation stuck in 'processing'"
+sql-- Check for stuck generation requests
+SELECT id, custom_user_id, status, requested_at,
+       EXTRACT(EPOCH FROM (NOW() - requested_at))/60 as minutes_old
+FROM mirror_generation_requests 
+WHERE status IN ('pending', 'processing')
+  AND requested_at < NOW() - INTERVAL '5 minutes';
+
+-- Mark as failed to allow retry
+UPDATE mirror_generation_requests 
+SET status = 'failed', completed_at = NOW()
+WHERE id = 'stuck-request-id';
+"Whisper transcription failing"
+
+Check Edge Function logs for transcribe-audio in Supabase dashboard
+Verify audio file is under 25MB (Whisper API limit)
+Check OpenAI API key is set in Edge Function secrets
+Audio must be in supported format (m4a, mp3, wav)
+Test with shorter recording first (< 30 seconds)
 
 🔍 Debugging Techniques
 Console Logging

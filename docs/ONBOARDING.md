@@ -144,59 +144,105 @@ const transcription = await transcribeAudio(recordingUri);
 
 ### 4. Mirror Generation System
 
-**Location:** `app/(tabs)/mirror.tsx`
+**Location:** `app/(tabs)/mirror.tsx` + Supabase Edge Function
 
-Mirrors are **AI-generated spiritual reflections** based on 15 journal entries.
+Mirrors are **AI-generated spiritual reflections** based on 10+ journal entries.
 
 #### The Mirror Concept
-After collecting 15 journals, users can "unlock" a Mirror containing:
-- **Screen 1:** Identified themes from their journals
-- **Screen 2:** Relevant biblical references
-- **Screen 3:** Observations about their journey
-- **Screen 4:** Suggestions for spiritual growth
+After collecting 10 journals, users can generate a Mirror containing:
+- **Screen 1 (Themes):** Identified patterns and recurring themes from journals
+- **Screen 2 (Biblical Mirror):** Relevant biblical stories, verses, and connections
+- **Screen 3 (Observations):** Observations about self-perception, God-perception, others, and blind spots
+
+**Note:** Screen 4 (Suggestions) was deprecated - we now focus on observations rather than prescriptive advice.
 
 #### Technical Implementation
+
+**Server-Side Generation:**
+Mirrors are generated using a Supabase Edge Function (`generate-mirror`) that:
+1. Fetches unassigned journals for the user
+2. Calls OpenAI GPT-5-mini API (faster response: 3-8 seconds typical)
+3. Implements automatic retry logic (up to 2 attempts on timeout)
+4. Saves Mirror to database with generation timestamps
+5. Updates `mirror_generation_requests` table with status
+
+**Client-Side Polling:**
+```typescript
+// Client polls for status updates
+const { data } = await supabase
+  .from('mirror_generation_requests')
+  .select('status, mirror_id')
+  .eq('custom_user_id', userId)
+  .order('requested_at', { ascending: false })
+  .limit(1);
+
+// Status progression: 'pending' → 'processing' → 'completed' or 'failed'
+```
+
+**Mirror Structure:**
 ```typescript
 // Mirror structure in database
 {
   id: string
-  user_id: string
+  custom_user_id: string
   screen_1_themes: JSON
   screen_2_biblical: JSON
   screen_3_observations: JSON
-  screen_4_suggestions: JSON
+  screen_4_suggestions: JSON | null  // Deprecated, set to null
+  journal_count: number  // 10+
+  has_been_viewed: boolean
+  status: 'completed' | 'failed'
+  generation_started_at: string
+  generation_completed_at: string
   created_at: string
-  journal_count: number  // Should be 15
 }
 ```
 
 #### Mirror Flow
 ```
-15 Journals Collected
+10+ Journals Collected
   ↓
-"Unlock Mirror" button appears
+"Generate Mirror" button appears
   ↓
-User taps unlock
+User taps Generate Mirror
   ↓
-Loading animation
+Client: Creates generation_request record
   ↓
-Server generates Mirror (AI processing)
+Client: Calls Edge Function
   ↓
-Mirror saved to database
+Server: Updates status to 'processing'
   ↓
-Associated journals marked with mirror_id
+Server: Fetches journals, calls GPT-5-mini
   ↓
-User views 4-screen immersive experience
+Server: Generates 3 screens (with retry if timeout)
+  ↓
+Server: Saves Mirror, updates status to 'completed'
+  ↓
+Client: Polling detects completion (every 5 seconds)
+  ↓
+Client: Fetches Mirror data
+  ↓
+User views 3-screen swipeable experience
+  ↓
+Mirror marked as has_been_viewed
   ↓
 Mirror saved to history for re-viewing
 ```
 
 **Key Files:**
+- `supabase/functions/generate-mirror/index.ts` - Server-side Mirror generation
 - `app/(tabs)/mirror.tsx` - Mirror screen orchestration
 - `components/mirror/MirrorModal.tsx` - Full-screen mirror viewer
-- `components/mirror/ScreenOne.tsx` through `ScreenFour.tsx` - Individual screens
-- `lib/supabase/mirrors.js` - Database operations
-- `hooks/useMirrorData.ts` - Data fetching and state
+- `components/mirror/ScreenOne.tsx` through `ScreenThree.tsx` - Individual screens
+- `lib/supabase/mirrors.js` - Client-side API calls & request management
+- `hooks/useMirrorData.ts` - Data fetching, polling, and state management
+
+**Important Implementation Details:**
+- **Rate Limiting:** 1 Mirror per 24 hours per user (enforced server-side)
+- **Timeout Handling:** 4-minute timeout with automatic retry
+- **Model:** Uses GPT-5-mini for balance of quality and speed
+- **Error Recovery:** Failed requests marked with status='failed', allowing user retry
+- **Status Polling:** Client polls every 5 seconds until completion or failure
 
 ---
 
@@ -293,31 +339,45 @@ New users go through a multi-step wizard:
 
 ### Complete Mirror Generation Workflow
 ```
-1. User reaches 15 journals
+1. User reaches 10 journals (threshold changed from 15 to 10)
    ↓
-2. "Unlock Mirror" button appears on Mirror screen
+2. "Generate Mirror" button appears on Mirror screen
    ↓
-3. User taps unlock
+3. User taps Generate Mirror
    ↓
-4. Loading animation plays
+4. Client creates generation_request record (status: 'pending')
    ↓
-5. API call to generate Mirror
+5. Client calls Edge Function: generate-mirror
    ↓
-6. Server processes journals with AI (OpenAI)
+6. Edge Function updates status to 'processing'
    ↓
-7. Mirror content generated (4 screens of insights)
+7. Server fetches unassigned journals
    ↓
-8. Mirror saved to database
+8. Server calls OpenAI GPT-5-mini (typically 3-8 seconds)
    ↓
-9. Associated 15 journals marked with mirror_id
+9. If timeout (4 min): Automatic retry (up to 2 attempts total)
    ↓
-10. Modal opens with swipeable 4-screen experience
+10. Mirror content generated (3 screens: Themes, Biblical, Observations)
     ↓
-11. User can swipe through all 4 screens
+11. Mirror saved to database with generation timestamps
     ↓
-12. Mirror saved to history
+12. Associated journals marked with mirror_id
     ↓
-13. User can re-view past mirrors anytime
+13. Request status updated to 'completed' with mirror_id
+    ↓
+14. Client polling (every 5 seconds) detects completion
+    ↓
+15. Client fetches complete Mirror data
+    ↓
+16. Modal opens with swipeable 3-screen experience
+    ↓
+17. User swipes through Themes → Biblical → Observations
+    ↓
+18. Mirror marked as has_been_viewed when opened
+    ↓
+19. Mirror saved to history for re-viewing anytime
+    ↓
+20. User can generate new Mirror after 10 more journals
 ```
 
 ---
@@ -338,24 +398,37 @@ Voice journaling isn't a "nice-to-have" feature added later. The entire UX is de
 
 ---
 
-### 3. The 15-Journal Threshold is Sacred
-The "15 journals = 1 Mirror" mechanic is a **core product decision**, not arbitrary:
+### 3. The 10-Journal Threshold (Updated from 15)
+The "10 journals = 1 Mirror" mechanic is a **core product decision**:
 - Creates progression system and anticipation
 - Ensures sufficient content for meaningful AI reflection
 - Natural chunking of the journaling journey
+- Threshold was reduced from 15 to 10 based on user feedback
 
 **Don't change this number without product team approval.**
 
 ---
 
-### 4. Mirrors are Immersive Experiences
+### 4. Server-Side Mirror Generation is Critical
+Mirror generation happens entirely server-side via Supabase Edge Functions, **not** in the client:
+- Keeps OpenAI API key secure (never exposed to client)
+- Enables automatic retry logic for reliability
+- Uses GPT-5-mini for optimal speed/quality balance
+- Client polls `mirror_generation_requests` table for status updates
+- Timeouts and failures are handled gracefully with request status tracking
+
+**Never move Mirror generation back to client-side without security review.**
+
+---
+
+### 5. Mirrors are Immersive Experiences
 Mirrors render as full-screen modals with swipeable screens, not as part of the main navigation flow. This is intentional to create a focused, contemplative moment separate from the daily journaling routine.
 
 **Respect the modal pattern - don't try to inline Mirror content.**
 
 ---
 
-### 5. Expo Router Conventions Matter
+### 6. Expo Router Conventions Matter
 Understanding Expo Router patterns is critical:
 ```
 (tabs)/           # Parentheses = layout group (not in URL)
@@ -368,7 +441,7 @@ index.tsx         # Default route for a directory
 
 ---
 
-### 6. Service Layer is Your Friend
+### 7. Service Layer is Your Friend
 All Supabase operations are abstracted into `lib/supabase/`. **Always use these service functions** rather than calling Supabase directly from components.
 ```typescript
 // ❌ Don't do this in components
@@ -381,7 +454,7 @@ const journals = await fetchJournals(userId);
 
 ---
 
-### 7. Context + Hooks Pattern
+### 8. Context + Hooks Pattern
 State management follows a consistent pattern:
 - **Contexts** provide global state
 - **Custom hooks** encapsulate logic
