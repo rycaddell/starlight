@@ -6,7 +6,10 @@ import { MirrorScreen1 } from './MirrorScreen1';
 import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
 import { ReflectionJournal } from './ReflectionJournal';
+import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { supabase } from '../../lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 interface MirrorViewerProps {
   mirrorContent: any;
@@ -15,14 +18,16 @@ interface MirrorViewerProps {
   onClosedForFeedback?: () => void;
 }
 
-export const MirrorViewer: React.FC<MirrorViewerProps> = ({ 
+export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   mirrorContent,
   mirrorId,
-  onClose, 
+  onClose,
   onClosedForFeedback
 }) => {
+  const { user } = useAuth();
   const [currentScreen, setCurrentScreen] = useState(0);
   const totalScreens = 4; // Screens: Themes, Biblical, Observations, Reflection
+  const [shareSheetVisible, setShareSheetVisible] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -116,10 +121,21 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Close Button - Top Right */}
-      <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
-        <Text style={styles.closeIconText}>✕</Text>
-      </TouchableOpacity>
+      {/* Top Right Buttons */}
+      <View style={styles.topRightButtons}>
+        {/* Share Button */}
+        <TouchableOpacity
+          style={styles.shareIconButton}
+          onPress={() => setShareSheetVisible(true)}
+        >
+          <IconSymbol name="square.and.arrow.up" size={18} color="#f8fafc" />
+        </TouchableOpacity>
+
+        {/* Close Button */}
+        <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
+          <Text style={styles.closeIconText}>✕</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Progress Dots */}
       <View style={styles.progressContainer}>
@@ -176,6 +192,19 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Share Mirror Sheet */}
+      {user && (
+        <ShareMirrorSheet
+          visible={shareSheetVisible}
+          onClose={() => setShareSheetVisible(false)}
+          userId={user.id}
+          mirrorId={mirrorId}
+          onShareSuccess={() => {
+            console.log('✅ Mirror shared successfully');
+          }}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -185,11 +214,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1e293b',
   },
-  closeIconButton: {
+  topRightButtons: {
     position: 'absolute',
     top: 60,
     right: 20,
     zIndex: 10,
+    flexDirection: 'row',
+    gap: 8,
+  },
+  shareIconButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeIconButton: {
     width: 28,
     height: 28,
     borderRadius: 14,

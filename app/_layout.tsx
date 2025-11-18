@@ -27,6 +27,14 @@ export default function RootLayout() {
           <AuthNavigator>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="friend-invite/[token]"
+                options={{
+                  headerShown: true,
+                  title: 'Friend Invite',
+                  presentation: 'modal',
+                }}
+              />
               <Stack.Screen name="+not-found" />
             </Stack>
           </AuthNavigator>
