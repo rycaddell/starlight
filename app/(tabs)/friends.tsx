@@ -1,21 +1,24 @@
 // app/(tabs)/friends.tsx
-// Friends tab - manage friend links and view shared mirrors
+// Friends tab - redesigned with inline invite and slots
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
   Alert,
   SafeAreaView,
+  Share as RNShare,
+  ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { fetchFriends, unlinkFriend } from '@/lib/supabase/friends';
-import { fetchIncomingShares } from '@/lib/supabase/mirrorShares';
-import { InviteSheet } from '@/components/friends/InviteSheet';
+import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
+import { fetchIncomingShares, getUnviewedSharesCount } from '@/lib/supabase/mirrorShares';
+import { FriendSlots } from '@/components/friends/FriendSlots';
+import { SharePromptCard } from '@/components/friends/SharePromptCard';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function FriendsScreen() {
@@ -24,7 +27,7 @@ export default function FriendsScreen() {
   const [incomingShares, setIncomingShares] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [inviteSheetVisible, setInviteSheetVisible] = useState(false);
+  const [creatingInvite, setCreatingInvite] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -58,161 +61,154 @@ export default function FriendsScreen() {
     loadData();
   };
 
-  const handleUnlink = (linkId, friendName) => {
-    Alert.alert(
-      'Unlink Friend?',
-      `Are you sure you want to unlink ${friendName}? They'll still be able to view mirrors you've already shared with them.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Unlink',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await unlinkFriend(linkId);
-            if (result.success) {
-              loadData(); // Reload friends list
-            } else {
-              Alert.alert('Error', result.error || 'Failed to unlink friend');
-            }
-          },
-        },
-      ]
-    );
+  const handleCreateInvite = async () => {
+    if (!user?.id || !user?.display_name) return;
+
+    setCreatingInvite(true);
+
+    try {
+      const result = await createInviteLink(user.id, user.display_name);
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to create invite link');
+        setCreatingInvite(false);
+        return;
+      }
+
+      // Open native share sheet
+      await RNShare.share({
+        message: `Join me on Oxbow! Use this link to connect as friends:\n\n${result.deepLink}\n\nThis link expires in 72 hours.`,
+        title: 'Join me on Oxbow',
+      });
+
+      setCreatingInvite(false);
+    } catch (error) {
+      console.error('Error sharing invite:', error);
+      Alert.alert('Error', 'Failed to share invite link');
+      setCreatingInvite(false);
+    }
   };
 
-  const renderEmptyState = () => (
-    <View style={styles.emptyContainer}>
-      <IconSymbol name="person.2" size={64} color="#999" />
-      <Text style={styles.emptyTitle}>Invite a trusted friend</Text>
-      <Text style={styles.emptySubtitle}>
-        Invite a trusted friend to walk with you.{'\n'}
-        You decide what to share.
-      </Text>
-      <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={() => setInviteSheetVisible(true)}
-      >
-        <IconSymbol name="plus" size={20} color="#fff" />
-        <Text style={styles.primaryButtonText}>Add Friend</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
-  const renderFriendItem = ({ item }) => (
-    <View style={styles.friendItem}>
-      <View style={styles.friendInfo}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {item.displayName.charAt(0).toUpperCase()}
-          </Text>
-        </View>
-        <View style={styles.friendDetails}>
-          <Text style={styles.friendName}>{item.displayName}</Text>
-          <Text style={styles.friendStatus}>Linked</Text>
-        </View>
-      </View>
-      <TouchableOpacity
-        onPress={() => handleUnlink(item.linkId, item.displayName)}
-        style={styles.unlinkButton}
-      >
-        <Text style={styles.unlinkText}>Unlink</Text>
-      </TouchableOpacity>
-    </View>
-  );
-
-  const renderShareItem = ({ item }) => {
-    // Extract first theme for preview
-    const firstTheme = item.mirror.screen1Themes?.themes?.[0];
-    const preview = firstTheme?.name || 'Mirror reflection';
+  const renderShareItem = (share) => {
+    const isNew = share.isNew;
+    const badgeColor = isNew ? '#f59e0b' : '#6366f1'; // Goldenrod vs Purple
+    const badgeText = isNew ? 'NEW' : 'VIEW';
 
     return (
       <TouchableOpacity
+        key={share.shareId}
         style={styles.shareItem}
         onPress={() => {
-          // TODO: Open mirror viewer in Phase 5
-          Alert.alert('Open Mirror', 'Mirror viewer integration coming soon');
+          // TODO: Open shared mirror viewer
+          Alert.alert('View Mirror', 'Mirror viewer coming in Phase 5');
         }}
       >
-        <View style={styles.shareHeader}>
-          <IconSymbol name="sparkles" size={24} color="#6366f1" />
-          <View style={styles.shareInfo}>
-            <Text style={styles.shareSender}>{item.senderName}</Text>
-            <Text style={styles.sharePreview}>{preview}</Text>
+        <View style={styles.shareContent}>
+          <View style={styles.shareIcon}>
+            <IconSymbol name="sparkles" size={20} color="#6366f1" />
           </View>
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>NEW</Text>
+          <View style={styles.shareInfo}>
+            <Text style={styles.shareSender}>{share.senderName}</Text>
+            <Text style={styles.shareDate}>{formatDate(share.mirror.createdAt)}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: badgeColor }]}>
+            <Text style={styles.badgeText}>{badgeText}</Text>
           </View>
         </View>
       </TouchableOpacity>
-    );
-  };
-
-  const renderHeader = () => {
-    if (incomingShares.length === 0 && friends.length === 0) {
-      return null;
-    }
-
-    return (
-      <View>
-        {/* Incoming Shares Section */}
-        {incomingShares.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Shared with You</Text>
-            {incomingShares.map((share) => (
-              <View key={share.shareId}>{renderShareItem({ item: share })}</View>
-            ))}
-          </View>
-        )}
-
-        {/* Friends Section Header */}
-        {friends.length > 0 && (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Friends ({friends.length})
-            </Text>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => setInviteSheetVisible(true)}
-            >
-              <IconSymbol name="plus" size={20} color="#6366f1" />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
     );
   };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
-        <Text style={styles.loadingText}>Loading...</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#6366f1" />
+        </View>
       </SafeAreaView>
     );
   }
 
+  const hasIncomingShares = incomingShares.length > 0;
+
   return (
     <SafeAreaView style={styles.container}>
-      {friends.length === 0 && incomingShares.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <FlatList
-          data={friends}
-          renderItem={renderFriendItem}
-          keyExtractor={(item) => item.linkId}
-          ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-        />
-      )}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        {/* Header Section */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Friends</Text>
+        </View>
 
-      <InviteSheet
-        visible={inviteSheetVisible}
-        onClose={() => setInviteSheetVisible(false)}
-        userId={user?.id}
-        userName={user?.display_name}
-      />
+        {/* Pitch Section */}
+        <View style={styles.pitchSection}>
+          <View style={styles.iconContainer}>
+            <IconSymbol name="bolt.fill" size={40} color="#6366f1" />
+          </View>
+          <Text style={styles.pitchTitle}>Pursue Jesus</Text>
+          <Text style={styles.pitchTitle}>with Friends</Text>
+          <View style={styles.pitchDivider}>
+            <Text style={styles.pitchSubtitle}>Share mirrors</Text>
+          </View>
+          <Text style={styles.pitchDescription}>
+            Observe God's leading together
+          </Text>
+          <Text style={styles.pitchNote}>
+            You control what is shared
+          </Text>
+        </View>
+
+        {/* Create Invite Button */}
+        <TouchableOpacity
+          style={[styles.createInviteButton, creatingInvite && styles.buttonDisabled]}
+          onPress={handleCreateInvite}
+          disabled={creatingInvite}
+        >
+          {creatingInvite ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <IconSymbol name="link" size={18} color="#fff" />
+              <Text style={styles.createInviteButtonText}>Create Invite Link</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.expiryNote}>This link expires in 72 hours</Text>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Friend Slots */}
+        <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Share a Mirror Prompt (only if no incoming shares) */}
+        {!hasIncomingShares && <SharePromptCard />}
+
+        {/* Shared with You Section */}
+        {hasIncomingShares && (
+          <View style={styles.sharedSection}>
+            <Text style={styles.sectionTitle}>Shared with you</Text>
+            {incomingShares.map(renderShareItem)}
+          </View>
+        )}
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -222,84 +218,117 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  loadingText: {
-    textAlign: 'center',
-    marginTop: 40,
-    fontSize: 16,
-    color: '#999',
-  },
-  emptyContainer: {
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    marginTop: 16,
-    marginBottom: 8,
+  scrollContent: {
+    padding: 20,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '700',
     color: '#000',
   },
-  emptySubtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 32,
+  pitchSection: {
+    alignItems: 'center',
+    marginBottom: 24,
   },
-  primaryButton: {
+  iconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#f0f0ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  pitchTitle: {
+    fontSize: 28,
+    fontWeight: '600',
+    color: '#000',
+    textAlign: 'center',
+  },
+  pitchDivider: {
+    marginVertical: 12,
+  },
+  pitchSubtitle: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500',
+  },
+  pitchDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  pitchNote: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  createInviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#6366f1',
+    paddingVertical: 14,
     paddingHorizontal: 24,
-    paddingVertical: 12,
     borderRadius: 8,
     gap: 8,
+    marginBottom: 8,
   },
-  primaryButtonText: {
+  createInviteButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  listContent: {
-    padding: 16,
+  buttonDisabled: {
+    opacity: 0.6,
   },
-  section: {
+  expiryNote: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'center',
     marginBottom: 24,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+    marginVertical: 20,
+  },
+  sharedSection: {
+    marginTop: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 12,
-  },
-  addButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f0f0f0',
-    justifyContent: 'center',
-    alignItems: 'center',
+    marginBottom: 16,
   },
   shareItem: {
-    backgroundColor: '#f8f9ff',
+    backgroundColor: '#f9fafb',
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0ff',
+    borderColor: '#e5e7eb',
   },
-  shareHeader: {
+  shareContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  shareIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f0f0ff',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shareInfo: {
     flex: 1,
@@ -310,68 +339,18 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 2,
   },
-  sharePreview: {
+  shareDate: {
     fontSize: 14,
-    color: '#666',
+    color: '#6b7280',
   },
-  newBadge: {
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 8,
+  badge: {
+    paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 4,
   },
-  newBadgeText: {
+  badgeText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '600',
-  },
-  friendItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
-  },
-  friendInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  friendDetails: {
-    flex: 1,
-  },
-  friendName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 2,
-  },
-  friendStatus: {
-    fontSize: 14,
-    color: '#666',
-  },
-  unlinkButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  unlinkText: {
-    color: '#ef4444',
-    fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '700',
   },
 });
