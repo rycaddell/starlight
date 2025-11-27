@@ -13,12 +13,19 @@ import {
   SafeAreaView,
   Share as RNShare,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
-import { fetchIncomingShares, getUnviewedSharesCount } from '@/lib/supabase/mirrorShares';
+import {
+  fetchIncomingShares,
+  getUnviewedSharesCount,
+  getSharedMirrorDetails,
+  markShareAsViewed,
+} from '@/lib/supabase/mirrorShares';
 import { FriendSlots } from '@/components/friends/FriendSlots';
 import { SharePromptCard } from '@/components/friends/SharePromptCard';
+import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function FriendsScreen() {
@@ -28,6 +35,12 @@ export default function FriendsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
+
+  // Shared mirror viewer state
+  const [viewingMirror, setViewingMirror] = useState(false);
+  const [selectedMirror, setSelectedMirror] = useState(null);
+  const [selectedMirrorId, setSelectedMirrorId] = useState(null);
+  const [loadingMirror, setLoadingMirror] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -98,6 +111,46 @@ export default function FriendsScreen() {
     });
   };
 
+  const handleViewSharedMirror = async (share) => {
+    if (!user?.id) return;
+
+    setLoadingMirror(true);
+
+    try {
+      // Fetch full mirror details
+      const result = await getSharedMirrorDetails(share.shareId, user.id);
+
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to load mirror');
+        setLoadingMirror(false);
+        return;
+      }
+
+      // Mark as viewed if it's new
+      if (share.isNew) {
+        await markShareAsViewed(share.shareId, user.id);
+      }
+
+      // Open mirror viewer
+      setSelectedMirror(result.mirror);
+      setSelectedMirrorId(result.mirror.id);
+      setViewingMirror(true);
+      setLoadingMirror(false);
+    } catch (error) {
+      console.error('Error loading shared mirror:', error);
+      Alert.alert('Error', 'Failed to load mirror');
+      setLoadingMirror(false);
+    }
+  };
+
+  const handleCloseMirrorViewer = () => {
+    setViewingMirror(false);
+    setSelectedMirror(null);
+    setSelectedMirrorId(null);
+    // Reload shares to update badges
+    loadData();
+  };
+
   const renderShareItem = (share) => {
     const isNew = share.isNew;
     const badgeColor = isNew ? '#f59e0b' : '#6366f1'; // Goldenrod vs Purple
@@ -107,10 +160,8 @@ export default function FriendsScreen() {
       <TouchableOpacity
         key={share.shareId}
         style={styles.shareItem}
-        onPress={() => {
-          // TODO: Open shared mirror viewer
-          Alert.alert('View Mirror', 'Mirror viewer coming in Phase 5');
-        }}
+        onPress={() => handleViewSharedMirror(share)}
+        disabled={loadingMirror}
       >
         <View style={styles.shareContent}>
           <View style={styles.shareIcon}>
@@ -209,6 +260,21 @@ export default function FriendsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Shared Mirror Viewer Modal */}
+      {viewingMirror && selectedMirror && selectedMirrorId && (
+        <Modal
+          visible={viewingMirror}
+          animationType="slide"
+          presentationStyle="fullScreen"
+        >
+          <MirrorViewer
+            mirrorContent={selectedMirror}
+            mirrorId={selectedMirrorId}
+            onClose={handleCloseMirrorViewer}
+          />
+        </Modal>
+      )}
     </SafeAreaView>
   );
 }
