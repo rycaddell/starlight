@@ -16,6 +16,7 @@ import {
   Modal,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
 import {
   fetchIncomingShares,
@@ -30,6 +31,7 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function FriendsScreen() {
   const { user } = useAuth();
+  const { refreshUnreadCount } = useUnreadShares();
   const [friends, setFriends] = useState([]);
   const [incomingShares, setIncomingShares] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -149,6 +151,8 @@ export default function FriendsScreen() {
     setSelectedMirrorId(null);
     // Reload shares to update badges
     loadData();
+    // Refresh tab badge count
+    refreshUnreadCount();
   };
 
   const renderShareItem = (share) => {

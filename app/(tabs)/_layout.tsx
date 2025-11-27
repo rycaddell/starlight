@@ -8,9 +8,11 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const { unreadCount } = useUnreadShares();
 
   return (
       <Tabs
@@ -45,6 +47,7 @@ export default function TabLayout() {
           options={{
             title: 'Friends',
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2" color={color} />,
+            tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
           }}
         />
       </Tabs>

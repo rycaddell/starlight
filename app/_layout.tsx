@@ -7,6 +7,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
 import { OnboardingProvider } from '../contexts/OnboardingContext'; // This will use the placeholder
+import { UnreadSharesProvider } from '../contexts/UnreadSharesContext';
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 
@@ -22,25 +23,27 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
-      <OnboardingProvider>
-        <GlobalSettingsProvider>
-          <AuthNavigator>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="friend-invite/[token]"
-                options={{
-                  headerShown: true,
-                  title: 'Friend Invite',
-                  presentation: 'modal',
-                }}
-              />
-              <Stack.Screen name="+not-found" />
-            </Stack>
-          </AuthNavigator>
-          <StatusBar style="auto" />
-        </GlobalSettingsProvider>
-      </OnboardingProvider>
+      <UnreadSharesProvider>
+        <OnboardingProvider>
+          <GlobalSettingsProvider>
+            <AuthNavigator>
+              <Stack>
+                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                <Stack.Screen
+                  name="friend-invite/[token]"
+                  options={{
+                    headerShown: true,
+                    title: 'Friend Invite',
+                    presentation: 'modal',
+                  }}
+                />
+                <Stack.Screen name="+not-found" />
+              </Stack>
+            </AuthNavigator>
+            <StatusBar style="auto" />
+          </GlobalSettingsProvider>
+        </OnboardingProvider>
+      </UnreadSharesProvider>
     </AuthProvider>
   );
 }
