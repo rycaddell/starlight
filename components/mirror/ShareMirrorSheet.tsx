@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { fetchFriends } from '@/lib/supabase/friends';
 import { shareMirror } from '@/lib/supabase/mirrorShares';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -31,6 +32,7 @@ export function ShareMirrorSheet({
   mirrorId,
   onShareSuccess,
 }: ShareMirrorSheetProps) {
+  const router = useRouter();
   const [friends, setFriends] = useState<any[]>([]);
   const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -39,9 +41,17 @@ export function ShareMirrorSheet({
   useEffect(() => {
     if (visible) {
       loadFriends();
-      setSelectedFriendId(null);
     }
   }, [visible]);
+
+  // Auto-select if only 1 friend
+  useEffect(() => {
+    if (friends.length === 1 && visible) {
+      setSelectedFriendId(friends[0].userId);
+    } else if (!visible) {
+      setSelectedFriendId(null);
+    }
+  }, [friends, visible]);
 
   const loadFriends = async () => {
     setLoading(true);
@@ -70,18 +80,47 @@ export function ShareMirrorSheet({
     setSharing(true);
 
     try {
-      const result = await shareMirror(mirrorId, userId, selectedFriendId);
+      // Handle "All Linked Friends" option
+      if (selectedFriendId === 'ALL') {
+        // Share with all friends sequentially
+        let successCount = 0;
+        let errorCount = 0;
 
-      if (!result.success) {
-        Alert.alert('Unable to Share', result.error || 'Failed to share mirror');
-        setSharing(false);
-        return;
+        for (const friend of friends) {
+          const result = await shareMirror(mirrorId, userId, friend.userId);
+          if (result.success) {
+            successCount++;
+          } else {
+            errorCount++;
+            console.warn(`Failed to share with ${friend.displayName}:`, result.error);
+          }
+        }
+
+        if (successCount > 0) {
+          Alert.alert(
+            'Mirror Shared',
+            `Shared with ${successCount} friend${successCount > 1 ? 's' : ''}` +
+              (errorCount > 0 ? ` (${errorCount} failed)` : '')
+          );
+          onShareSuccess?.();
+          onClose();
+        } else {
+          Alert.alert('Unable to Share', 'Failed to share with any friends');
+        }
+      } else {
+        // Share with single friend
+        const result = await shareMirror(mirrorId, userId, selectedFriendId);
+
+        if (!result.success) {
+          Alert.alert('Unable to Share', result.error || 'Failed to share mirror');
+          setSharing(false);
+          return;
+        }
+
+        Alert.alert('Mirror Shared', 'Your mirror has been shared successfully');
+        onShareSuccess?.();
+        onClose();
       }
-
-      // Success!
-      Alert.alert('Mirror Shared', 'Your mirror has been shared successfully');
-      onShareSuccess?.();
-      onClose();
     } catch (error) {
       console.error('Error sharing mirror:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
@@ -121,14 +160,64 @@ export function ShareMirrorSheet({
     );
   };
 
-  const renderEmptyState = () => (
+  const renderNoFriendsState = () => (
     <View style={styles.emptyState}>
-      <IconSymbol name="person.2" size={48} color="#ccc" />
-      <Text style={styles.emptyText}>No friends yet</Text>
+      <IconSymbol name="person.2" size={56} color="#6366f1" />
+      <Text style={styles.emptyText}>No linked friends yet</Text>
       <Text style={styles.emptySubtext}>
-        Link with friends to share mirrors with them
+        Link with friends to share your mirrors
       </Text>
+      <TouchableOpacity
+        style={styles.inviteButton}
+        onPress={() => {
+          onClose();
+          router.push('/(tabs)/friends');
+        }}
+      >
+        <IconSymbol name="link" size={18} color="#fff" />
+        <Text style={styles.inviteButtonText}>Invite a Friend</Text>
+      </TouchableOpacity>
     </View>
+  );
+
+  const renderAllFriendsOption = () => (
+    <TouchableOpacity
+      style={[
+        styles.friendItem,
+        styles.allFriendsItem,
+        selectedFriendId === 'ALL' && styles.friendItemSelected,
+      ]}
+      onPress={() => setSelectedFriendId('ALL')}
+    >
+      <View style={styles.friendInfo}>
+        <View
+          style={[
+            styles.avatar,
+            styles.allFriendsAvatar,
+            selectedFriendId === 'ALL' && styles.avatarSelected,
+          ]}
+        >
+          <IconSymbol name="person.2.fill" size={20} color="#fff" />
+        </View>
+        <Text
+          style={[
+            styles.friendName,
+            selectedFriendId === 'ALL' && styles.friendNameSelected,
+          ]}
+        >
+          All Linked Friends
+        </Text>
+      </View>
+
+      <View
+        style={[
+          styles.radioButton,
+          selectedFriendId === 'ALL' && styles.radioButtonSelected,
+        ]}
+      >
+        {selectedFriendId === 'ALL' && <View style={styles.radioButtonInner} />}
+      </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -159,15 +248,32 @@ export function ShareMirrorSheet({
               <ActivityIndicator size="large" color="#6366f1" />
             </View>
           ) : friends.length === 0 ? (
-            renderEmptyState()
+            renderNoFriendsState()
           ) : (
             <>
-              <View style={styles.instructionContainer}>
-                <Text style={styles.instructionText}>
-                  Select exactly one friend to share this mirror with
-                </Text>
-              </View>
+              {/* Instruction text based on friend count */}
+              {friends.length === 1 ? (
+                <View style={styles.instructionContainer}>
+                  <Text style={styles.instructionText}>
+                    Share this mirror with your friend
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.instructionContainer}>
+                  <Text style={styles.instructionText}>
+                    Select one friend or share with all
+                  </Text>
+                </View>
+              )}
 
+              {/* All Friends Option (only for 2-3 friends) */}
+              {friends.length >= 2 && friends.length <= 3 && (
+                <View style={styles.allFriendsContainer}>
+                  {renderAllFriendsOption()}
+                </View>
+              )}
+
+              {/* Friends List */}
               <FlatList
                 data={friends}
                 renderItem={renderFriendItem}
@@ -250,16 +356,44 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#666',
-    marginTop: 16,
+    color: '#000',
+    marginTop: 20,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#999',
+    color: '#6b7280',
     marginTop: 8,
+    marginBottom: 24,
     textAlign: 'center',
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#6366f1',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 12,
+  },
+  inviteButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  allFriendsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  allFriendsItem: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 2,
+  },
+  allFriendsAvatar: {
+    backgroundColor: '#6366f1',
   },
   instructionContainer: {
     paddingHorizontal: 20,

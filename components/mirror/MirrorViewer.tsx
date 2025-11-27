@@ -121,17 +121,8 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Top Right Buttons */}
+      {/* Top Right Close Button */}
       <View style={styles.topRightButtons}>
-        {/* Share Button */}
-        <TouchableOpacity
-          style={styles.shareIconButton}
-          onPress={() => setShareSheetVisible(true)}
-        >
-          <IconSymbol name="square.and.arrow.up" size={18} color="#f8fafc" />
-        </TouchableOpacity>
-
-        {/* Close Button */}
         <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
           <Text style={styles.closeIconText}>✕</Text>
         </TouchableOpacity>
@@ -151,7 +142,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       </View>
 
       {/* Screen Content */}
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
         style={styles.screenContainer}
         contentContainerStyle={styles.screenContentContainer}
@@ -159,6 +150,17 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       >
         {renderCurrentScreen()}
       </ScrollView>
+
+      {/* Share Button - Above Navigation */}
+      <View style={styles.shareButtonContainer}>
+        <TouchableOpacity
+          style={styles.shareButton}
+          onPress={() => setShareSheetVisible(true)}
+        >
+          <IconSymbol name="square.and.arrow.up" size={18} color="#6366f1" />
+          <Text style={styles.shareButtonText}>Share this Mirror</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Navigation - Fixed at bottom */}
       <View style={styles.navigationContainer}>
@@ -219,16 +221,6 @@ const styles = StyleSheet.create({
     top: 60,
     right: 20,
     zIndex: 10,
-    flexDirection: 'row',
-    gap: 8,
-  },
-  shareIconButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#6366f1',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   closeIconButton: {
     width: 28,
@@ -267,6 +259,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 28,
     paddingBottom: 20,
+  },
+  shareButtonContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#374151',
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    backgroundColor: '#f0f0ff',
+    borderWidth: 1,
+    borderColor: '#6366f1',
+  },
+  shareButtonText: {
+    color: '#6366f1',
+    fontSize: 15,
+    fontWeight: '600',
   },
   navigationContainer: {
     flexDirection: 'row',
