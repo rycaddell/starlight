@@ -103,29 +103,29 @@ export default function AcceptInviteScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.iconContainer}>
-            <IconSymbol name="person.2.fill" size={64} color="#6366f1" />
-          </View>
-          <Text style={styles.title}>Friend Invite</Text>
-        </View>
-
         {/* Inviter Info */}
-        <View style={styles.inviterCard}>
+        <View style={styles.inviterSection}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {inviterName.charAt(0).toUpperCase()}
             </Text>
           </View>
           <Text style={styles.inviterName}>{inviterName}</Text>
-          <Text style={styles.invitedText}>invited you to link as Friends in Oxbow</Text>
+          <Text style={styles.invitedText}>wants to link as friends</Text>
         </View>
 
-        {/* Scope Information */}
-        <View style={styles.scopeCard}>
-          <IconSymbol name="lock.shield" size={24} color="#666" />
-          <Text style={styles.scopeText}>
+        {/* Pitch Section */}
+        <View style={styles.pitchSection}>
+          <Text style={styles.pitchHeading}>Share mirrors</Text>
+          <Text style={styles.pitchSubheading}>
+            Observe the Lord's work in them
+          </Text>
+        </View>
+
+        {/* Privacy Note - Prominent */}
+        <View style={styles.privacyBox}>
+          <IconSymbol name="lock.shield.fill" size={20} color="#059669" />
+          <Text style={styles.privacyText}>
             You'll only see Mirrors they explicitly share with you. Your journal entries remain private.
           </Text>
         </View>
@@ -153,9 +153,9 @@ export default function AcceptInviteScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Helper Text */}
-        <Text style={styles.helperText}>
-          This invite expires in 72 hours from when it was created
+        {/* Expiry Note */}
+        <Text style={styles.expiryNote}>
+          Link expires in 72 hours
         </Text>
       </View>
     </SafeAreaView>
@@ -172,73 +172,66 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
-  header: {
+  inviterSection: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
   },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#f0f0ff',
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#000',
-  },
-  inviterCard: {
-    alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 24,
-  },
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
   avatarText: {
     color: '#fff',
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '600',
   },
   inviterName: {
-    fontSize: 22,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 4,
+  },
+  invitedText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  pitchSection: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  pitchHeading: {
+    fontSize: 28,
     fontWeight: '600',
     color: '#000',
     marginBottom: 8,
   },
-  invitedText: {
+  pitchSubheading: {
     fontSize: 16,
-    color: '#666',
+    color: '#6b7280',
     textAlign: 'center',
-    lineHeight: 24,
   },
-  scopeCard: {
+  privacyBox: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#d1fae5',
     borderRadius: 12,
-    padding: 16,
+    padding: 20,
     marginBottom: 32,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
+    borderWidth: 2,
+    borderColor: '#10b981',
   },
-  scopeText: {
+  privacyText: {
     flex: 1,
     fontSize: 14,
-    color: '#166534',
+    color: '#065f46',
     lineHeight: 20,
+    fontWeight: '500',
   },
   actions: {
     gap: 12,
@@ -262,17 +255,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
   },
   declineButtonText: {
-    color: '#666',
+    color: '#6b7280',
     fontSize: 16,
     fontWeight: '500',
   },
   buttonDisabled: {
     opacity: 0.6,
   },
-  helperText: {
-    fontSize: 14,
-    color: '#999',
+  expiryNote: {
+    fontSize: 12,
+    color: '#9ca3af',
     textAlign: 'center',
-    lineHeight: 20,
   },
 });
