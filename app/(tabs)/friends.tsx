@@ -173,7 +173,7 @@ export default function FriendsScreen() {
           </View>
           <View style={styles.shareInfo}>
             <Text style={styles.shareSender}>{share.senderName}</Text>
-            <Text style={styles.shareDate}>{formatDate(share.mirror.createdAt)}</Text>
+            <Text style={styles.shareDate}>{formatDate(share.mirror.created_at)}</Text>
           </View>
           <View style={[styles.badge, { backgroundColor: badgeColor }]}>
             <Text style={styles.badgeText}>{badgeText}</Text>
