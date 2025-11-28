@@ -6,7 +6,6 @@ import { MirrorScreen1 } from './MirrorScreen1';
 import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
 import { ReflectionJournal } from './ReflectionJournal';
-import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -27,7 +26,6 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const { user } = useAuth();
   const [currentScreen, setCurrentScreen] = useState(0);
   const totalScreens = 4; // Screens: Themes, Biblical, Observations, Reflection
-  const [shareSheetVisible, setShareSheetVisible] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -151,17 +149,6 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
         {renderCurrentScreen()}
       </ScrollView>
 
-      {/* Share Button - Above Navigation */}
-      <View style={styles.shareButtonContainer}>
-        <TouchableOpacity
-          style={styles.shareButton}
-          onPress={() => setShareSheetVisible(true)}
-        >
-          <IconSymbol name="square.and.arrow.up" size={18} color="#6366f1" />
-          <Text style={styles.shareButtonText}>Share this Mirror</Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Navigation - Fixed at bottom */}
       <View style={styles.navigationContainer}>
         <TouchableOpacity
@@ -194,19 +181,6 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           </TouchableOpacity>
         )}
       </View>
-
-      {/* Share Mirror Sheet */}
-      {user && (
-        <ShareMirrorSheet
-          visible={shareSheetVisible}
-          onClose={() => setShareSheetVisible(false)}
-          userId={user.id}
-          mirrorId={mirrorId}
-          onShareSuccess={() => {
-            console.log('✅ Mirror shared successfully');
-          }}
-        />
-      )}
     </SafeAreaView>
   );
 };
@@ -259,30 +233,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 28,
     paddingBottom: 20,
-  },
-  shareButtonContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#374151',
-  },
-  shareButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    backgroundColor: '#f0f0ff',
-    borderWidth: 1,
-    borderColor: '#6366f1',
-  },
-  shareButtonText: {
-    color: '#6366f1',
-    fontSize: 15,
-    fontWeight: '600',
   },
   navigationContainer: {
     flexDirection: 'row',

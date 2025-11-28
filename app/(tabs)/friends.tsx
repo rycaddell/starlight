@@ -194,6 +194,7 @@ export default function FriendsScreen() {
   }
 
   const hasIncomingShares = incomingShares.length > 0;
+  const hasFriends = friends.length > 0;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -203,65 +204,77 @@ export default function FriendsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        {/* Header Section */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Friends</Text>
-        </View>
+        {/* Conditional rendering based on friend status */}
+        {!hasFriends ? (
+          /* No Friends State - Show only pitch and button */
+          <>
+            {/* Pitch Section */}
+            <View style={styles.pitchSection}>
+              <View style={styles.iconContainer}>
+                <IconSymbol name="bolt.fill" size={40} color="#6366f1" />
+              </View>
+              <Text style={styles.pitchTitle}>Pursue Jesus</Text>
+              <Text style={styles.pitchTitle}>with Friends</Text>
+              <Text style={styles.pitchDescription}>Share mirrors</Text>
+              <Text style={styles.pitchDescription}>
+                Observe God's leading together
+              </Text>
+              <Text style={styles.pitchDescription}>
+                You control what is shared
+              </Text>
+            </View>
 
-        {/* Pitch Section */}
-        <View style={styles.pitchSection}>
-          <View style={styles.iconContainer}>
-            <IconSymbol name="bolt.fill" size={40} color="#6366f1" />
-          </View>
-          <Text style={styles.pitchTitle}>Pursue Jesus</Text>
-          <Text style={styles.pitchTitle}>with Friends</Text>
-          <View style={styles.pitchDivider}>
-            <Text style={styles.pitchSubtitle}>Share mirrors</Text>
-          </View>
-          <Text style={styles.pitchDescription}>
-            Observe God's leading together
-          </Text>
-          <Text style={styles.pitchNote}>
-            You control what is shared
-          </Text>
-        </View>
+            {/* Create Invite Button */}
+            <TouchableOpacity
+              style={[styles.createInviteButton, creatingInvite && styles.buttonDisabled]}
+              onPress={handleCreateInvite}
+              disabled={creatingInvite}
+            >
+              {creatingInvite ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <>
+                  <IconSymbol name="link" size={18} color="#fff" />
+                  <Text style={styles.createInviteButtonText}>Create Invite Link</Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-        {/* Create Invite Button */}
-        <TouchableOpacity
-          style={[styles.createInviteButton, creatingInvite && styles.buttonDisabled]}
-          onPress={handleCreateInvite}
-          disabled={creatingInvite}
-        >
-          {creatingInvite ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <IconSymbol name="link" size={18} color="#fff" />
-              <Text style={styles.createInviteButtonText}>Create Invite Link</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            <Text style={styles.expiryNote}>This link expires in 72 hours</Text>
+          </>
+        ) : (
+          /* Has Friends State - Show full UI */
+          <>
+            {/* Header Section */}
+            <View style={styles.header}>
+              <Text style={styles.title}>Friends</Text>
+            </View>
 
-        <Text style={styles.expiryNote}>This link expires in 72 hours</Text>
+            {/* Friend Slots */}
+            <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
 
-        {/* Divider */}
-        <View style={styles.divider} />
+            {/* Divider */}
+            <View style={styles.divider} />
 
-        {/* Friend Slots */}
-        <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
+            {/* Guided Journaling Component - TODO: Add questions later */}
+            <View style={styles.guidedJournalSection}>
+              <Text style={styles.sectionTitle}>Reflect Together</Text>
+              <Text style={styles.guidedJournalPlaceholder}>
+                Guided journaling questions coming soon
+              </Text>
+            </View>
 
-        {/* Divider */}
-        <View style={styles.divider} />
+            {/* Divider */}
+            <View style={styles.divider} />
 
-        {/* Share a Mirror Prompt (only if no incoming shares) */}
-        {!hasIncomingShares && <SharePromptCard />}
-
-        {/* Shared with You Section */}
-        {hasIncomingShares && (
-          <View style={styles.sharedSection}>
-            <Text style={styles.sectionTitle}>Shared with you</Text>
-            {incomingShares.map(renderShareItem)}
-          </View>
+            {/* Shared with You Section */}
+            {hasIncomingShares && (
+              <View style={styles.sharedSection}>
+                <Text style={styles.sectionTitle}>Shared with you</Text>
+                {incomingShares.map(renderShareItem)}
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -306,7 +319,8 @@ const styles = StyleSheet.create({
   },
   pitchSection: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
+    marginTop: 40,
   },
   iconContainer: {
     width: 64,
@@ -323,22 +337,21 @@ const styles = StyleSheet.create({
     color: '#000',
     textAlign: 'center',
   },
-  pitchDivider: {
-    marginVertical: 12,
-  },
-  pitchSubtitle: {
-    fontSize: 16,
-    color: '#000',
-    fontWeight: '500',
-  },
   pitchDescription: {
     fontSize: 14,
     color: '#6b7280',
-    marginBottom: 8,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  pitchNote: {
-    fontSize: 12,
+  guidedJournalSection: {
+    marginTop: 8,
+  },
+  guidedJournalPlaceholder: {
+    fontSize: 14,
     color: '#9ca3af',
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 20,
   },
   createInviteButton: {
     flexDirection: 'row',

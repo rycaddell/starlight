@@ -251,21 +251,6 @@ export function ShareMirrorSheet({
             renderNoFriendsState()
           ) : (
             <>
-              {/* Instruction text based on friend count */}
-              {friends.length === 1 ? (
-                <View style={styles.instructionContainer}>
-                  <Text style={styles.instructionText}>
-                    Share this mirror with your friend
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.instructionContainer}>
-                  <Text style={styles.instructionText}>
-                    Select one friend or share with all
-                  </Text>
-                </View>
-              )}
-
               {/* All Friends Option (only for 2-3 friends) */}
               {friends.length >= 2 && friends.length <= 3 && (
                 <View style={styles.allFriendsContainer}>
@@ -394,16 +379,6 @@ const styles = StyleSheet.create({
   },
   allFriendsAvatar: {
     backgroundColor: '#6366f1',
-  },
-  instructionContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: '#f9fafb',
-  },
-  instructionText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
   },
   list: {
     maxHeight: 400,

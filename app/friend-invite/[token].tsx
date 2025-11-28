@@ -111,23 +111,7 @@ export default function AcceptInviteScreen() {
             </Text>
           </View>
           <Text style={styles.inviterName}>{inviterName}</Text>
-          <Text style={styles.invitedText}>wants to link as friends</Text>
-        </View>
-
-        {/* Pitch Section */}
-        <View style={styles.pitchSection}>
-          <Text style={styles.pitchHeading}>Share mirrors</Text>
-          <Text style={styles.pitchSubheading}>
-            Observe the Lord's work in them
-          </Text>
-        </View>
-
-        {/* Privacy Note - Prominent */}
-        <View style={styles.privacyBox}>
-          <IconSymbol name="lock.shield.fill" size={20} color="#059669" />
-          <Text style={styles.privacyText}>
-            You'll only see Mirrors they explicitly share with you. Your journal entries remain private.
-          </Text>
+          <Text style={styles.invitedText}>wants to be friends in Oxbow</Text>
         </View>
 
         {/* Action Buttons */}
@@ -174,7 +158,7 @@ const styles = StyleSheet.create({
   },
   inviterSection: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 64,
   },
   avatar: {
     width: 80,
@@ -194,44 +178,11 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   invitedText: {
     fontSize: 16,
     color: '#6b7280',
-  },
-  pitchSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  pitchHeading: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 8,
-  },
-  pitchSubheading: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
-  },
-  privacyBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    backgroundColor: '#d1fae5',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 32,
-    borderWidth: 2,
-    borderColor: '#10b981',
-  },
-  privacyText: {
-    flex: 1,
-    fontSize: 14,
-    color: '#065f46',
-    lineHeight: 20,
-    fontWeight: '500',
   },
   actions: {
     gap: 12,
