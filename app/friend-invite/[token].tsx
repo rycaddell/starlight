@@ -61,8 +61,8 @@ export default function AcceptInviteScreen() {
 
       // Success!
       Alert.alert(
-        'Linked!',
-        `You're now linked with ${result.inviterName || inviterName}`,
+        'Success!',
+        `You're now friends with ${result.inviterName || inviterName}`,
         [
           {
             text: 'View Friends',

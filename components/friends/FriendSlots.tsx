@@ -42,9 +42,12 @@ export function FriendSlots({ friends, onCreateInvite }: FriendSlotsProps) {
         {/* Empty slots - show + icons with Link buttons */}
         {Array.from({ length: emptySlots }).map((_, index) => (
           <View key={`empty-${index}`} style={styles.slot}>
-            <View style={styles.emptyAvatar}>
+            <TouchableOpacity
+              style={styles.emptyAvatar}
+              onPress={onCreateInvite}
+            >
               <IconSymbol name="plus" size={32} color="#9ca3af" />
-            </View>
+            </TouchableOpacity>
             <TouchableOpacity
               style={styles.linkButton}
               onPress={onCreateInvite}

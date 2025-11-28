@@ -444,12 +444,11 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
       )}
 
       <View style={styles.mirrorCardActions}>
-        <TouchableOpacity 
-          style={styles.viewJournalsButton}
+        <TouchableOpacity
           onPress={() => setShowJournals(!showJournals)}
         >
-          <Text style={styles.viewJournalsButtonText}>
-            {showJournals ? 'Hide' : 'View'} Journals ({journals.length})
+          <Text style={styles.viewJournalsLink}>
+            {showJournals ? 'Hide' : 'View'} Journals
           </Text>
         </TouchableOpacity>
       </View>
@@ -608,19 +607,11 @@ const styles = StyleSheet.create({
     borderTopColor: '#f1f5f9',
     paddingTop: 16,
   },
-  viewJournalsButton: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignSelf: 'flex-start',
-  },
-  viewJournalsButtonText: {
-    color: '#64748b',
+  viewJournalsLink: {
+    color: '#6366f1',
     fontSize: 14,
     fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   mirrorJournalsContainer: {
     marginTop: 16,

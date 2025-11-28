@@ -92,7 +92,7 @@ export default function FriendsScreen() {
 
       // Open native share sheet
       await RNShare.share({
-        message: `Join me on Oxbow! Use this link to connect as friends:\n\n${result.deepLink}\n\nThis link expires in 72 hours.`,
+        message: `Join me on Oxbow! Use this link to connect as friends:\n\n${result.deepLink}`,
         title: 'Join me on Oxbow',
       });
 
@@ -199,7 +199,7 @@ export default function FriendsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={!hasFriends ? styles.scrollContentCentered : styles.scrollContent}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
@@ -207,7 +207,7 @@ export default function FriendsScreen() {
         {/* Conditional rendering based on friend status */}
         {!hasFriends ? (
           /* No Friends State - Show only pitch and button */
-          <>
+          <View style={styles.centeredContent}>
             {/* Pitch Section */}
             <View style={styles.pitchSection}>
               <View style={styles.iconContainer}>
@@ -241,34 +241,33 @@ export default function FriendsScreen() {
             </TouchableOpacity>
 
             <Text style={styles.expiryNote}>This link expires in 72 hours</Text>
-          </>
+          </View>
         ) : (
           /* Has Friends State - Show full UI */
           <>
-            {/* Header Section */}
-            <View style={styles.header}>
-              <Text style={styles.title}>Friends</Text>
+            {/* Header Section - Centered */}
+            <View style={styles.headerCentered}>
+              <Text style={styles.titleCentered}>Friends</Text>
             </View>
 
-            {/* Friend Slots */}
-            <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
-
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Guided Journaling Component - TODO: Add questions later */}
-            <View style={styles.guidedJournalSection}>
-              <Text style={styles.sectionTitle}>Reflect Together</Text>
-              <Text style={styles.guidedJournalPlaceholder}>
-                Guided journaling questions coming soon
-              </Text>
+            {/* Invites Section */}
+            <View style={styles.invitesSection}>
+              <Text style={styles.h3Title}>Invites</Text>
+              <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
             </View>
 
             {/* Divider */}
             <View style={styles.divider} />
 
-            {/* Shared with You Section */}
-            {hasIncomingShares && (
+            {/* Getting Started or Shared Section */}
+            {!hasIncomingShares ? (
+              <View style={styles.gettingStartedSection}>
+                <Text style={styles.h3Title}>Getting started</Text>
+                <Text style={styles.gettingStartedBody}>
+                  Kick things off by sharing your most recent mirror with your friend. When they send you a mirror, ask God to show you what He's doing in their life.
+                </Text>
+              </View>
+            ) : (
               <View style={styles.sharedSection}>
                 <Text style={styles.sectionTitle}>Shared with you</Text>
                 {incomingShares.map(renderShareItem)}
@@ -309,6 +308,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
   },
+  scrollContentCentered: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: 20,
+  },
+  centeredContent: {
+    alignItems: 'center',
+  },
   header: {
     marginBottom: 24,
   },
@@ -316,6 +323,33 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: '700',
     color: '#000',
+  },
+  headerCentered: {
+    marginBottom: 24,
+    alignItems: 'center',
+  },
+  titleCentered: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#000',
+    textAlign: 'center',
+  },
+  h3Title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 16,
+  },
+  invitesSection: {
+    marginBottom: 0,
+  },
+  gettingStartedSection: {
+    marginTop: 8,
+  },
+  gettingStartedBody: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
   },
   pitchSection: {
     alignItems: 'center',
