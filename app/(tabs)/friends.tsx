@@ -211,7 +211,7 @@ export default function FriendsScreen() {
             {/* Pitch Section */}
             <View style={styles.pitchSection}>
               <View style={styles.iconContainer}>
-                <IconSymbol name="bolt.fill" size={40} color="#6366f1" />
+                <IconSymbol name="hand.sparkles" size={40} color="#6366f1" />
               </View>
               <Text style={styles.pitchTitle}>Pursue Jesus</Text>
               <Text style={styles.pitchTitle}>with Friends</Text>
