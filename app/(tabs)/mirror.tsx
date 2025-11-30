@@ -283,8 +283,8 @@ export default function MirrorScreen() {
                 Past Mirrors
               </Text>
               {Object.entries(mirrorGroups).map(([mirrorId, mirrorJournals]) => {
-                const firstJournal = mirrorJournals[0];
-                const mirrorDate = new Date(firstJournal.created_at);
+                // Use the mirror's actual created_at date from the mirrors table
+                const mirrorDate = mirrorDates[mirrorId] || new Date(mirrorJournals[0].created_at);
 
                 return (
                   <MirrorCard
