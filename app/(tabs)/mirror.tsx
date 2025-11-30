@@ -64,10 +64,11 @@ export default function MirrorScreen() {
     React.useCallback(() => {
       if (isAuthenticated && user) {
         console.log('🔍 Mirror tab focused - checking status and reloading journals');
+        console.log('📊 Current mirror state before focus check:', { mirrorState, hasViewedCurrentMirror, generatedMirrorId: generatedMirror?.id });
         checkGenerationStatusOnFocus();
         loadJournals(false); // ✅ Allow state updates based on journal count
       }
-    }, [isAuthenticated, user])
+    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror])
   );
 
   useEffect(() => {
@@ -387,20 +388,24 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
   const [checkingFriends, setCheckingFriends] = React.useState(false);
 
   const handleSharePress = async () => {
+    console.log('🔍 Share button pressed for mirror:', mirrorId);
     setCheckingFriends(true);
 
     try {
       const result = await fetchFriends(userId);
+      console.log('👥 Friends check result:', result);
 
       if (result.success && result.friends && result.friends.length > 0) {
         // Has friends - show share sheet
+        console.log('✅ Has friends, opening share sheet');
         setShareSheetVisible(true);
       } else {
         // No friends - navigate to Friends tab
+        console.log('⚠️ No friends, navigating to Friends tab');
         router.push('/(tabs)/friends');
       }
     } catch (error) {
-      console.error('Error checking friends:', error);
+      console.error('❌ Error checking friends:', error);
       Alert.alert('Error', 'Failed to check friends. Please try again.');
     } finally {
       setCheckingFriends(false);

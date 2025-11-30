@@ -15,17 +15,19 @@ interface MirrorViewerProps {
   mirrorId: string;
   onClose: () => void;
   onClosedForFeedback?: () => void;
+  isSharedMirror?: boolean; // If true, hide Reflection step
 }
 
 export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   mirrorContent,
   mirrorId,
   onClose,
-  onClosedForFeedback
+  onClosedForFeedback,
+  isSharedMirror = false,
 }) => {
   const { user } = useAuth();
   const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = 4; // Screens: Themes, Biblical, Observations, Reflection
+  const totalScreens = isSharedMirror ? 3 : 4; // Shared mirrors: 3 screens, Own mirrors: 4 screens
 
   const scrollViewRef = useRef<ScrollView>(null);
 

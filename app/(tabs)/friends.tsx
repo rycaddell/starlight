@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
@@ -30,6 +31,7 @@ import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 export default function FriendsScreen() {
+  const router = useRouter();
   const { user } = useAuth();
   const { refreshUnreadCount } = useUnreadShares();
   const [friends, setFriends] = useState([]);
@@ -211,7 +213,7 @@ export default function FriendsScreen() {
             {/* Pitch Section */}
             <View style={styles.pitchSection}>
               <View style={styles.iconContainer}>
-                <IconSymbol name="hand.sparkles" size={40} color="#6366f1" />
+                <IconSymbol name="hand.sparkles.fill" size={40} color="#6366f1" />
               </View>
               <Text style={styles.pitchTitle}>Pursue Jesus</Text>
               <Text style={styles.pitchTitle}>with Friends</Text>
@@ -264,7 +266,14 @@ export default function FriendsScreen() {
               <View style={styles.gettingStartedSection}>
                 <Text style={styles.h3Title}>Getting started</Text>
                 <Text style={styles.gettingStartedBody}>
-                  Kick things off by sharing your most recent mirror with your friend. When they send you a mirror, ask God to show you what He's doing in their life.
+                  Kick things off by sharing{' '}
+                  <Text
+                    style={styles.inlineLink}
+                    onPress={() => router.push('/(tabs)/mirror')}
+                  >
+                    your most recent mirror
+                  </Text>
+                  {' '}with your friend.
                 </Text>
               </View>
             ) : (
@@ -288,6 +297,7 @@ export default function FriendsScreen() {
             mirrorContent={selectedMirror}
             mirrorId={selectedMirrorId}
             onClose={handleCloseMirrorViewer}
+            isSharedMirror={true}
           />
         </Modal>
       )}
@@ -350,6 +360,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     lineHeight: 20,
+  },
+  inlineLink: {
+    color: '#6366f1',
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   pitchSection: {
     alignItems: 'center',
