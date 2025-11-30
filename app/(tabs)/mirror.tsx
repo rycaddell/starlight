@@ -26,7 +26,8 @@ export default function MirrorScreen() {
   const { showSettings } = useGlobalSettings();
   
   const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
-  
+  const [mirrorDates, setMirrorDates] = React.useState<Record<string, Date>>({});
+
   const {
     journals,
     loading,
@@ -72,37 +73,47 @@ export default function MirrorScreen() {
   );
 
   useEffect(() => {
-    const loadMirrorReflections = async () => {
+    const loadMirrorData = async () => {
       const mirrorIds = [...new Set(journals
         .filter(j => j.mirror_id)
         .map(j => j.mirror_id))];
-      
+
       if (mirrorIds.length === 0) return;
 
       try {
         const { data, error } = await supabase
           .from('mirrors')
-          .select('id, reflection_focus, reflection_action')
+          .select('id, reflection_focus, reflection_action, created_at')
           .in('id', mirrorIds);
 
         if (!error && data) {
           const reflections: Record<string, {focus: string, action: string}> = {};
+          const dates: Record<string, Date> = {};
+
           data.forEach(mirror => {
+            // Store reflection data
             if (mirror.reflection_focus && mirror.reflection_action) {
               reflections[mirror.id] = {
                 focus: mirror.reflection_focus,
                 action: mirror.reflection_action
               };
             }
+
+            // Store mirror creation dates
+            if (mirror.created_at) {
+              dates[mirror.id] = new Date(mirror.created_at);
+            }
           });
+
           setMirrorReflections(reflections);
+          setMirrorDates(dates);
         }
       } catch (error) {
-        console.error('Error loading mirror reflections:', error);
+        console.error('Error loading mirror data:', error);
       }
     };
 
-    loadMirrorReflections();
+    loadMirrorData();
   }, [journals]);
 
   const handleViewNewMirror = () => {
