@@ -11,7 +11,11 @@ Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 - `custom_users` - User accounts (access code-based auth)
 - `journals` - Journal entries (text or voice transcriptions)
 - `mirrors` - AI-generated spiritual reflections
-- `mirror_reflections` - User responses to mirror prompts
+- `mirror_reflections` - User responses to mirror prompts (deprecated)
+- `friend_invites` - Friend invite links and tracking
+- `friend_links` - Bi-directional friend relationships
+- `mirror_shares` - Mirrors shared between friends
+- `mirror_generation_requests` - Server-side mirror generation status
 
 **Type Definitions:** See `types/database.ts` for TypeScript interfaces
 
@@ -122,7 +126,7 @@ Stores individual journal entries from users (text or transcribed voice).
 
 ### `mirrors`
 
-Stores AI-generated spiritual reflections based on 10+ journal entries.
+Stores AI-generated spiritual reflections based on 10 journal entries.
 ```typescript
 {
   id: string (uuid, primary key)
@@ -130,12 +134,12 @@ Stores AI-generated spiritual reflections based on 10+ journal entries.
   screen_1_themes: JSON (not null)
   screen_2_biblical: JSON (not null)
   screen_3_observations: JSON (not null)
-  screen_4_suggestions: JSON (nullable) // No longer generated
-  journal_count: integer (minimum: 10)
+  screen_4_suggestions: JSON (nullable)
+  journal_count: integer (default: 10)
+  reflection_focus: text (nullable)
+  reflection_action: text (nullable)
+  reflection_completed_at: timestamp (nullable)
   has_been_viewed: boolean (default: false)
-  status: string (default: 'completed')
-  generation_started_at: timestamp (nullable)
-  generation_completed_at: timestamp (nullable)
   created_at: timestamp
   updated_at: timestamp
 }
@@ -147,13 +151,13 @@ Stores AI-generated spiritual reflections based on 10+ journal entries.
 - `screen_1_themes` - JSON containing identified themes from journals
 - `screen_2_biblical` - JSON containing relevant biblical references and stories
 - `screen_3_observations` - JSON containing observations about spiritual journey
-- `screen_4_suggestions` - Legacy field, set to null (no longer generated)
-- `journal_count` - Number of journals used (10+)
-- `has_been_viewed` - Whether user has opened this Mirror (for UI state)
-- `status` - Mirror generation status ('completed', 'failed')
-- `generation_started_at` - When Mirror generation began (server-side)
-- `generation_completed_at` - When Mirror generation finished (server-side)
-- `created_at` - When the Mirror record was created
+- `screen_4_suggestions` - JSON containing suggestions for growth
+- `journal_count` - Number of journals used (default: 10)
+- `reflection_focus` - User's answer to "What will you focus on?" (Screen 4)
+- `reflection_action` - User's answer to "What action will you take?" (Screen 4)
+- `reflection_completed_at` - When user completed the reflection journal
+- `has_been_viewed` - Tracks if mirror has been viewed (prevents re-showing generation card)
+- `created_at` - When the Mirror was generated
 - `updated_at` - Last modification time
 
 **Relationships:**
@@ -355,6 +359,243 @@ Stores user responses to prompts/questions within Mirrors.
   "response": "Gratitude definitely stands out to me. I hadn't realized how often I was expressing thankfulness.",
   "created_at": "2024-03-25T15:00:00Z",
   "updated_at": "2024-03-25T15:00:00Z"
+}
+```
+
+**⚠️ Note:** This table is **deprecated** in favor of storing reflection data directly on the `mirrors` table (`reflection_focus`, `reflection_action` fields).
+
+---
+
+### `friend_invites`
+
+Tracks friend invite creation for analytics and validation.
+
+```typescript
+{
+  id: string (uuid, primary key)
+  inviter_user_id: string (uuid, foreign key → custom_users.id)
+  inviter_display_name: string (not null)
+  token: string (unique, not null)
+  created_at: timestamp
+  accepted_at: timestamp (nullable)
+  accepted_by_user_id: string (uuid, foreign key → custom_users.id, nullable)
+}
+```
+
+**Fields Explained:**
+- `id` - Unique identifier for the invite
+- `inviter_user_id` - User who created the invite
+- `inviter_display_name` - Cached display name (avoids join when accepting)
+- `token` - Plain UUID used in deep link (ephemeral, 72h expiry)
+- `created_at` - When invite was created
+- `accepted_at` - When invite was accepted (null if not yet accepted)
+- `accepted_by_user_id` - Who accepted the invite
+
+**Relationships:**
+- `inviter_user_id` → `custom_users.id` (many invites to one inviter)
+- `accepted_by_user_id` → `custom_users.id` (many invites to one accepter)
+
+**Indexes:**
+- Primary key on `id`
+- Unique index on `token`
+- Index on `inviter_user_id`
+
+**Business Logic:**
+- 72-hour expiry enforced in application (not database constraint)
+- Token is plain UUID (not hashed) - sufficient for ephemeral links
+- Once accepted, `accepted_at` and `accepted_by_user_id` are set
+
+**Example Row:**
+```json
+{
+  "id": "i1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "inviter_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "inviter_display_name": "Sarah M.",
+  "token": "f8e7d6c5-b4a3-9281-7065-f4e3d2c1b0a9",
+  "created_at": "2024-03-20T10:00:00Z",
+  "accepted_at": "2024-03-20T11:30:00Z",
+  "accepted_by_user_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a"
+}
+```
+
+---
+
+### `friend_links`
+
+Bi-directional friend relationships with 3-friend limit.
+
+```typescript
+{
+  id: string (uuid, primary key)
+  user_a_id: string (uuid, foreign key → custom_users.id)
+  user_b_id: string (uuid, foreign key → custom_users.id)
+  status: string (default: 'active') CHECK ('active' | 'revoked')
+  created_at: timestamp
+  CONSTRAINT unique_friend_link UNIQUE (user_a_id, user_b_id)
+  CONSTRAINT no_self_link CHECK (user_a_id != user_b_id)
+  CONSTRAINT ordered_ids CHECK (user_a_id < user_b_id)
+}
+```
+
+**Fields Explained:**
+- `id` - Unique identifier for the friend link
+- `user_a_id` - First user (always UUID < user_b_id)
+- `user_b_id` - Second user (always UUID > user_a_id)
+- `status` - 'active' or 'revoked' (soft delete)
+- `created_at` - When friendship was created
+
+**Key Design:**
+- **Ordered IDs:** `user_a_id` always < `user_b_id` prevents duplicate rows
+- **Bi-directional:** Single row represents both sides of friendship
+- **Soft Delete:** `status='revoked'` instead of DELETE
+- **3-Friend Limit:** Enforced in service layer (not database constraint)
+
+**Relationships:**
+- `user_a_id` → `custom_users.id`
+- `user_b_id` → `custom_users.id`
+
+**Indexes:**
+- Primary key on `id`
+- Unique constraint on `(user_a_id, user_b_id)`
+- Partial index on `user_a_id` WHERE status = 'active'
+- Partial index on `user_b_id` WHERE status = 'active'
+
+**Helper Function:**
+```sql
+CREATE OR REPLACE FUNCTION are_users_friends(user1_id UUID, user2_id UUID)
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM friend_links
+    WHERE status = 'active'
+      AND user_a_id = LEAST(user1_id, user2_id)
+      AND user_b_id = GREATEST(user1_id, user2_id)
+  );
+END;
+$$ LANGUAGE plpgsql;
+```
+
+**Example Row:**
+```json
+{
+  "id": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "user_a_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "user_b_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a",
+  "status": "active",
+  "created_at": "2024-03-20T11:30:00Z"
+}
+```
+
+---
+
+### `mirror_shares`
+
+Tracks mirrors shared between friends.
+
+```typescript
+{
+  id: string (uuid, primary key)
+  mirror_id: string (uuid, foreign key → mirrors.id)
+  sender_user_id: string (uuid, foreign key → custom_users.id)
+  recipient_user_id: string (uuid, foreign key → custom_users.id)
+  created_at: timestamp
+  viewed_at: timestamp (nullable)
+  CONSTRAINT unique_mirror_share UNIQUE (mirror_id, recipient_user_id)
+}
+```
+
+**Fields Explained:**
+- `id` - Unique identifier for the share
+- `mirror_id` - The mirror being shared
+- `sender_user_id` - User who shared the mirror
+- `recipient_user_id` - User receiving the share
+- `created_at` - When mirror was shared
+- `viewed_at` - When recipient first viewed the mirror (null if not viewed)
+
+**Relationships:**
+- `mirror_id` → `mirrors.id` (many shares to one mirror)
+- `sender_user_id` → `custom_users.id` (many shares from one sender)
+- `recipient_user_id` → `custom_users.id` (many shares to one recipient)
+
+**Indexes:**
+- Primary key on `id`
+- Unique constraint on `(mirror_id, recipient_user_id)` prevents duplicate shares
+- Index on `recipient_user_id` for inbox queries
+- Index on `sender_user_id` for outbox queries
+- Index on `mirror_id` for finding all shares of a mirror
+
+**Business Logic:**
+- Same mirror can be shared with multiple friends (different recipients)
+- Cannot share same mirror twice with same friend (unique constraint)
+- `viewed_at` tracks first view (for "NEW" badge)
+
+**Example Row:**
+```json
+{
+  "id": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "mirror_id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "sender_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "recipient_user_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a",
+  "created_at": "2024-03-25T16:00:00Z",
+  "viewed_at": null
+}
+```
+
+---
+
+### `mirror_generation_requests`
+
+Tracks server-side mirror generation status (polling).
+
+```typescript
+{
+  id: string (uuid, primary key)
+  custom_user_id: string (uuid, foreign key → custom_users.id)
+  status: string (default: 'pending') CHECK ('pending' | 'processing' | 'completed' | 'failed')
+  mirror_id: string (uuid, foreign key → mirrors.id, nullable)
+  requested_at: timestamp (default: NOW())
+  completed_at: timestamp (nullable)
+  error_message: text (nullable)
+}
+```
+
+**Fields Explained:**
+- `id` - Unique identifier for the generation request
+- `custom_user_id` - User requesting mirror generation
+- `status` - Current status of generation
+  - `pending` - Request created, waiting for Edge Function
+  - `processing` - Edge Function picked up request, generating
+  - `completed` - Mirror generated successfully
+  - `failed` - Generation failed with error
+- `mirror_id` - Generated mirror (set when status = 'completed')
+- `requested_at` - When request was created
+- `completed_at` - When generation finished (success or fail)
+- `error_message` - Error details if status = 'failed'
+
+**Relationships:**
+- `custom_user_id` → `custom_users.id` (many requests to one user)
+- `mirror_id` → `mirrors.id` (one request to one mirror)
+
+**Indexes:**
+- Primary key on `id`
+- Composite index on `(custom_user_id, status)` for polling queries
+- Index on `requested_at` for rate limiting
+
+**Business Logic:**
+- Client polls this table every 3 seconds during generation
+- Rate limit: 1 mirror per 24 hours (enforced by checking recent requests)
+- Edge Function updates status as generation progresses
+
+**Example Row:**
+```json
+{
+  "id": "g1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "custom_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "completed",
+  "mirror_id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "requested_at": "2024-03-25T14:00:00Z",
+  "completed_at": "2024-03-25T14:00:35Z",
+  "error_message": null
 }
 ```
 

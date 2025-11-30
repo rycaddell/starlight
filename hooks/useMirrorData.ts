@@ -160,11 +160,17 @@ export const useMirrorData = () => {
           case 'completed':
             console.log('✅ Mirror generation completed!');
             stopPolling();
-            
+
             // ✅ Get has_been_viewed from database (should be false for new mirror)
             const dbHasBeenViewed = mirror.has_been_viewed || false;
-            console.log('✅ New mirror has_been_viewed from DB:', dbHasBeenViewed);
-            
+            console.log('✅ Mirror has_been_viewed from DB:', dbHasBeenViewed);
+
+            // ✅ Safety check: Don't update state if this is an old viewed mirror
+            if (dbHasBeenViewed && mirrorStateRef.current !== 'generating') {
+              console.log('⚠️ Polling found already-viewed mirror while not generating - ignoring');
+              return;
+            }
+
             setGeneratedMirror(mirror);
             setMirrorState('completed');
             setGenerationStartTime(null);
@@ -327,14 +333,17 @@ export const useMirrorData = () => {
       // Coming to foreground
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         console.log('📱 Returned to foreground');
-        
+
         if (user) {
           checkGenerationStatusOnFocus(); // Check DB once
-        
-          // 👇 ensure polling restarts if needed
-          if (!isPollingRef.current) {
-            console.log('🔄 Ensuring polling is active after foreground');
+
+          // ✅ Only restart polling if we're actively generating
+          const currentState = mirrorStateRef.current;
+          if (!isPollingRef.current && currentState === 'generating') {
+            console.log('🔄 Ensuring polling is active after foreground (state: generating)');
             pollMirrorStatus();
+          } else if (currentState !== 'generating') {
+            console.log(`ℹ️ Not starting polling (state: ${currentState})`);
           }
         }
       }

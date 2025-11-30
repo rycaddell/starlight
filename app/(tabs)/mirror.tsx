@@ -9,12 +9,14 @@ import { useMirrorData } from '../../hooks/useMirrorData';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
 import { MirrorStatusCard } from '../../components/mirror/MirrorStatusCard';
 import { MirrorViewer } from '../../components/mirror/MirrorViewer';
+import { ShareMirrorSheet } from '../../components/mirror/ShareMirrorSheet';
 import { MirrorTestPanel } from '../../components/mirror/MirrorTestPanel';
 import { JournalHistory } from '../../components/mirror/JournalHistory';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { markMirrorAsViewed } from '../../lib/supabase/mirrors';
 import { deleteJournalEntry } from '../../lib/supabase/journals';
+import { fetchFriends } from '../../lib/supabase/friends';
 import { supabase } from '../../lib/supabase/client';
 
 export default function MirrorScreen() {
@@ -24,7 +26,8 @@ export default function MirrorScreen() {
   const { showSettings } = useGlobalSettings();
   
   const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
-  
+  const [mirrorDates, setMirrorDates] = React.useState<Record<string, Date>>({});
+
   const {
     journals,
     loading,
@@ -62,44 +65,55 @@ export default function MirrorScreen() {
     React.useCallback(() => {
       if (isAuthenticated && user) {
         console.log('🔍 Mirror tab focused - checking status and reloading journals');
+        console.log('📊 Current mirror state before focus check:', { mirrorState, hasViewedCurrentMirror, generatedMirrorId: generatedMirror?.id });
         checkGenerationStatusOnFocus();
         loadJournals(false); // ✅ Allow state updates based on journal count
       }
-    }, [isAuthenticated, user])
+    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror])
   );
 
   useEffect(() => {
-    const loadMirrorReflections = async () => {
+    const loadMirrorData = async () => {
       const mirrorIds = [...new Set(journals
         .filter(j => j.mirror_id)
         .map(j => j.mirror_id))];
-      
+
       if (mirrorIds.length === 0) return;
 
       try {
         const { data, error } = await supabase
           .from('mirrors')
-          .select('id, reflection_focus, reflection_action')
+          .select('id, reflection_focus, reflection_action, created_at')
           .in('id', mirrorIds);
 
         if (!error && data) {
           const reflections: Record<string, {focus: string, action: string}> = {};
+          const dates: Record<string, Date> = {};
+
           data.forEach(mirror => {
+            // Store reflection data
             if (mirror.reflection_focus && mirror.reflection_action) {
               reflections[mirror.id] = {
                 focus: mirror.reflection_focus,
                 action: mirror.reflection_action
               };
             }
+
+            // Store mirror creation dates
+            if (mirror.created_at) {
+              dates[mirror.id] = new Date(mirror.created_at);
+            }
           });
+
           setMirrorReflections(reflections);
+          setMirrorDates(dates);
         }
       } catch (error) {
-        console.error('Error loading mirror reflections:', error);
+        console.error('Error loading mirror data:', error);
       }
     };
 
-    loadMirrorReflections();
+    loadMirrorData();
   }, [journals]);
 
   const handleViewNewMirror = () => {
@@ -280,9 +294,9 @@ export default function MirrorScreen() {
                 Past Mirrors
               </Text>
               {Object.entries(mirrorGroups).map(([mirrorId, mirrorJournals]) => {
-                const firstJournal = mirrorJournals[0];
-                const mirrorDate = new Date(firstJournal.created_at);
-                
+                // Use the mirror's actual created_at date from the mirrors table
+                const mirrorDate = mirrorDates[mirrorId] || new Date(mirrorJournals[0].created_at);
+
                 return (
                   <MirrorCard
                     key={mirrorId}
@@ -293,6 +307,7 @@ export default function MirrorScreen() {
                     onDeleteJournal={handleDeleteJournal}
                     reflectionFocus={mirrorReflections[mirrorId]?.focus}
                     reflectionAction={mirrorReflections[mirrorId]?.action}
+                    userId={user.id}
                   />
                 );
               })}
@@ -313,6 +328,7 @@ interface MirrorCardProps {
   onDeleteJournal: (journalId: string) => void;
   reflectionFocus?: string;
   reflectionAction?: string;
+  userId: string;
 }
 
 interface ReflectionDisplayProps {
@@ -367,16 +383,45 @@ const ReflectionDisplay: React.FC<ReflectionDisplayProps> = ({ focus, action }) 
   );
 };
 
-const MirrorCard: React.FC<MirrorCardProps> = ({ 
-  mirrorId, 
-  mirrorDate, 
-  journals, 
+const MirrorCard: React.FC<MirrorCardProps> = ({
+  mirrorId,
+  mirrorDate,
+  journals,
   onViewMirror,
   onDeleteJournal,
   reflectionFocus,
-  reflectionAction
+  reflectionAction,
+  userId
 }) => {
+  const router = useRouter();
   const [showJournals, setShowJournals] = React.useState(false);
+  const [shareSheetVisible, setShareSheetVisible] = React.useState(false);
+  const [checkingFriends, setCheckingFriends] = React.useState(false);
+
+  const handleSharePress = async () => {
+    console.log('🔍 Share button pressed for mirror:', mirrorId);
+    setCheckingFriends(true);
+
+    try {
+      const result = await fetchFriends(userId);
+      console.log('👥 Friends check result:', result);
+
+      if (result.success && result.friends && result.friends.length > 0) {
+        // Has friends - show share sheet
+        console.log('✅ Has friends, opening share sheet');
+        setShareSheetVisible(true);
+      } else {
+        // No friends - navigate to Friends tab
+        console.log('⚠️ No friends, navigating to Friends tab');
+        router.push('/(tabs)/friends');
+      }
+    } catch (error) {
+      console.error('❌ Error checking friends:', error);
+      Alert.alert('Error', 'Failed to check friends. Please try again.');
+    } finally {
+      setCheckingFriends(false);
+    }
+  };
 
   return (
     <View style={styles.mirrorCard}>
@@ -388,12 +433,23 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
             day: 'numeric'
           })}
         </Text>
-        <TouchableOpacity 
-          style={styles.viewMirrorButton}
-          onPress={onViewMirror}
-        >
-          <Text style={styles.viewMirrorButtonText}>Open Mirror ✨</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={styles.viewMirrorButton}
+            onPress={onViewMirror}
+          >
+            <Text style={styles.viewMirrorButtonText}>Open Mirror ✨</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={handleSharePress}
+            disabled={checkingFriends}
+          >
+            <Text style={styles.shareButtonText}>
+              {checkingFriends ? 'Loading...' : 'Share'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {reflectionFocus && reflectionAction && (
@@ -404,25 +460,35 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
       )}
 
       <View style={styles.mirrorCardActions}>
-        <TouchableOpacity 
-          style={styles.viewJournalsButton}
+        <TouchableOpacity
           onPress={() => setShowJournals(!showJournals)}
         >
-          <Text style={styles.viewJournalsButtonText}>
-            {showJournals ? 'Hide' : 'View'} Journals ({journals.length})
+          <Text style={styles.viewJournalsLink}>
+            {showJournals ? 'Hide' : 'View'} Journals
           </Text>
         </TouchableOpacity>
       </View>
 
       {showJournals && (
         <View style={styles.mirrorJournalsContainer}>
-          <JournalHistory 
+          <JournalHistory
             journals={journals}
             loading={false}
             onDeleteJournal={onDeleteJournal}
           />
         </View>
       )}
+
+      {/* Share Mirror Sheet */}
+      <ShareMirrorSheet
+        visible={shareSheetVisible}
+        onClose={() => setShareSheetVisible(false)}
+        userId={userId}
+        mirrorId={mirrorId}
+        onShareSuccess={() => {
+          console.log('✅ Mirror shared successfully');
+        }}
+      />
     </View>
   );
 };
@@ -523,36 +589,45 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 12,
   },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
   viewMirrorButton: {
     backgroundColor: '#fbbf24',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
-    alignSelf: 'flex-start',
   },
   viewMirrorButtonText: {
     color: '#1e293b',
     fontSize: 16,
     fontWeight: '600',
   },
+  shareButton: {
+    backgroundColor: '#f8fafc',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  shareButtonText: {
+    color: '#64748b',
+    fontSize: 16,
+    fontWeight: '500',
+  },
   mirrorCardActions: {
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
     paddingTop: 16,
   },
-  viewJournalsButton: {
-    backgroundColor: '#f8fafc',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignSelf: 'flex-start',
-  },
-  viewJournalsButtonText: {
-    color: '#64748b',
+  viewJournalsLink: {
+    color: '#6366f1',
     fontSize: 14,
     fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   mirrorJournalsContainer: {
     marginTop: 16,

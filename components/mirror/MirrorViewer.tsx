@@ -7,22 +7,27 @@ import { MirrorScreen2 } from './MirrorScreen2';
 import { MirrorScreen3 } from './MirrorScreen3';
 import { ReflectionJournal } from './ReflectionJournal';
 import { supabase } from '../../lib/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { IconSymbol } from '@/components/ui/IconSymbol';
 
 interface MirrorViewerProps {
   mirrorContent: any;
   mirrorId: string;
   onClose: () => void;
   onClosedForFeedback?: () => void;
+  isSharedMirror?: boolean; // If true, hide Reflection step
 }
 
-export const MirrorViewer: React.FC<MirrorViewerProps> = ({ 
+export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   mirrorContent,
   mirrorId,
-  onClose, 
-  onClosedForFeedback
+  onClose,
+  onClosedForFeedback,
+  isSharedMirror = false,
 }) => {
+  const { user } = useAuth();
   const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = 4; // Screens: Themes, Biblical, Observations, Reflection
+  const totalScreens = isSharedMirror ? 3 : 4; // Shared mirrors: 3 screens, Own mirrors: 4 screens
 
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -116,10 +121,12 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Close Button - Top Right */}
-      <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
-        <Text style={styles.closeIconText}>✕</Text>
-      </TouchableOpacity>
+      {/* Top Right Close Button */}
+      <View style={styles.topRightButtons}>
+        <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
+          <Text style={styles.closeIconText}>✕</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Progress Dots */}
       <View style={styles.progressContainer}>
@@ -135,7 +142,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       </View>
 
       {/* Screen Content */}
-      <ScrollView 
+      <ScrollView
         ref={scrollViewRef}
         style={styles.screenContainer}
         contentContainerStyle={styles.screenContentContainer}
@@ -185,11 +192,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1e293b',
   },
-  closeIconButton: {
+  topRightButtons: {
     position: 'absolute',
     top: 60,
     right: 20,
     zIndex: 10,
+  },
+  closeIconButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
