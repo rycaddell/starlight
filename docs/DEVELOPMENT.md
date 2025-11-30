@@ -193,16 +193,61 @@ Voice Journaling
 
 Mirror Generation
 
- Create 14 journals
- Verify progress shows 14/15
- Create 15th journal
+ Create 9 journals
+ Verify progress shows 9/10 (or appropriate threshold)
+ Create 10th journal
  Verify "Unlock Mirror" button appears
  Tap unlock
- Verify loading animation
+ Verify polling starts (check logs: "🔄 Starting to poll...")
+ Verify loading state while generating
+ Verify polling completes (check logs: "📊 Generation status: completed")
  Verify Mirror modal opens
  Swipe through all 4 screens
+ Verify mirror marked as viewed (has_been_viewed: true)
  Close and reopen Mirror from history
- Create 15 more journals and generate second Mirror
+ Create 10 more journals and generate second Mirror
+
+Friend Invites
+
+ Open Friends tab (should show pitch if no friends)
+ Tap "Create Invite Link"
+ Verify native share sheet opens
+ Verify deep link format: oxbow://friend-invite/[token]
+ Copy link and paste in notes app
+ Open link from another device/test account
+ Verify app opens to friend-invite route
+ Verify token validation (not expired, not already used)
+ Verify friendship created (bi-directional)
+ Verify both users see each other in Friends screen
+ Test expired invite (72+ hours old) - should fail
+ Test already-accepted invite - should fail
+ Verify friend slots update correctly (max 5 friends)
+
+Mirror Sharing
+
+ Generate a mirror (10+ journals)
+ Ensure at least one friend exists
+ Navigate to Mirror screen
+ Scroll to past mirrors section
+ Tap "Share" button on a completed mirror
+ Verify FriendPickerModal opens
+ Select one or more friends
+ Tap "Share"
+ Verify success message
+ Verify shares created in database
+ On recipient's device:
+   - Verify Friends tab badge shows unread count
+   - Open Friends tab
+   - Verify shared mirror appears with "NEW" badge
+   - Tap to view shared mirror
+   - Verify MirrorViewer opens with 3 screens (not 4)
+   - Verify screens shown: themes, biblical, observations
+   - Verify screen 4 (reflection questions) is excluded
+   - Verify share marked as viewed (viewed_at timestamp)
+   - Verify badge changes from "NEW" to "VIEW"
+   - Close and reopen - badge should still say "VIEW"
+ Test sharing same mirror with multiple friends
+ Test viewing shared mirror multiple times
 
 Edge Cases
 
@@ -212,17 +257,62 @@ Edge Cases
  App backgrounded during recording
  Device locked during recording
  Force quit app mid-recording
+ App backgrounded during mirror generation
+ App force-quit during mirror generation
+ Deep link opened when app already running
+ Deep link opened when app is not running
+ Accept invite from user who is already a friend
+ Share mirror with friend who already has it shared
 
-Testing with Real Devices
-iOS:
-bash# Connect iPhone via USB
+Testing Deep Linking
+
+Test deep links on real devices (simulators may not handle deep links correctly):
+
+**iOS:**
+```bash
+# Connect iPhone via USB
 # Trust computer on device
 npx expo run:ios --device
-Android:
-bash# Enable USB debugging on device
+
+# Test deep link
+# Send invite link via Messages or Notes app
+# Tap link to open app
+```
+
+**Android:**
+```bash
+# Enable USB debugging on device
 # Connect via USB
 adb devices  # Verify device shows up
 npx expo run:android --device
+
+# Test deep link via ADB
+adb shell am start -W -a android.intent.action.VIEW \
+  -d "oxbow://friend-invite/test-token-here" \
+  com.caddell.oxbow
+```
+
+**Manual Testing:**
+1. Create invite link on Device A
+2. Send link via Messages/Email to Device B
+3. Open link on Device B
+4. Verify app opens to friend-invite route
+5. Verify friendship created
+
+Testing with Real Devices
+iOS:
+```bash
+# Connect iPhone via USB
+# Trust computer on device
+npx expo run:ios --device
+```
+Android:
+```bash
+# Enable USB debugging on device
+# Connect via USB
+adb devices  # Verify device shows up
+npx expo run:android --device
+```
 Debugging Tools
 React Native Debugger:
 bash# Install
@@ -527,13 +617,48 @@ Update provisioning profiles in Xcode
 Clean build folder: Xcode → Product → Clean Build Folder
 
 "Android build fails with Gradle error"
-bash# Clear Gradle cache
+```bash
+# Clear Gradle cache
 cd android
 ./gradlew clean
 
 # Or full clean
 rm -rf android/.gradle
 rm -rf android/build
+```
+
+**"Deep link not opening app"**
+- **iOS:** Verify `scheme: "oxbow"` in app.config.js
+- **Android:** Verify intent filter in AndroidManifest.xml
+- Rebuild app after changing scheme configuration
+- Test on real device (simulators may not handle deep links)
+- Check that app is installed and not just in Expo Go
+
+**"Friend invite token expired"**
+- Tokens expire after 72 hours
+- Check `friend_invites.created_at` timestamp
+- Generate new invite link
+
+**"Friendship already exists"**
+- Check `friend_links` table for existing relationship
+-友情 records use ordered IDs (user_a_id < user_b_id)
+- Accepting duplicate invite should fail gracefully
+
+**"Friends tab badge not updating"**
+- Verify `UnreadSharesContext` is initialized in root layout
+- Check `refreshUnreadCount()` is called after viewing shares
+- Verify `getUnviewedSharesCount()` query is correct
+
+**"Shared mirror showing 4 screens instead of 3"**
+- Verify `isSharedMirror={true}` prop passed to MirrorViewer
+- Check MirrorViewer conditional rendering logic
+- Screen 4 should only show when `!isSharedMirror`
+
+**"Mirror generation card disappearing"**
+- Check polling logic in `hooks/useMirrorData.ts`
+- Polling should only restart if `mirrorState === 'generating'`
+- Verify `mirrorStateRef.current` is up-to-date (not stale closure)
+- Check logs for polling status messages
 
 🔍 Debugging Techniques
 Console Logging
@@ -639,7 +764,13 @@ Before releasing a new version:
  Test app backgrounding/foregrounding
  Verify microphone permissions work
  Test voice recording end-to-end
- Test Mirror generation with 15 journals
+ Test Mirror generation with 10+ journals
+ Test server-side mirror generation polling
+ Test friend invite creation and acceptance
+ Test deep linking on real devices
+ Test mirror sharing (sender and recipient)
+ Verify unread badge updates correctly
+ Test shared mirror shows 3 screens (not 4)
  Check for console warnings/errors
  Run type checking: npx tsc --noEmit
  Build preview version: eas build --profile preview

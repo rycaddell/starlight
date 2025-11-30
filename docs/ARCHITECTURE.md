@@ -37,7 +37,10 @@ starlight/
 │   ├── (tabs)/                  # Tab navigation group
 │   │   ├── _layout.tsx         # Tab bar configuration
 │   │   ├── index.tsx           # Journal screen (main entry point)
-│   │   └── mirror.tsx          # Mirror reflection screen
+│   │   ├── mirror.tsx          # Mirror reflection screen
+│   │   └── friends.tsx         # Friends & sharing screen
+│   ├── friend-invite/           # Deep link routes
+│   │   └── [token].tsx         # Accept friend invite
 │   └── +not-found.tsx          # 404 page
 │
 ├── components/                   # Reusable UI components
@@ -46,12 +49,16 @@ starlight/
 │   ├── mirror/                  # Mirror screens & viewer
 │   ├── onboarding/              # Onboarding flow screens
 │   ├── voice/                   # Voice recording UI
+│   ├── friends/                 # Friends & sharing components
+│   │   ├── FriendSlots.tsx     # Friend slot UI with invite button
+│   │   └── SharePromptCard.tsx # Mirror sharing prompt
 │   ├── navigation/              # Auth navigator
 │   └── ui/                      # Generic UI components
 │
 ├── contexts/                     # React Context providers
 │   ├── AuthContext.tsx          # Authentication state
-│   └── OnboardingContext.tsx    # Onboarding state
+│   ├── OnboardingContext.tsx    # Onboarding state
+│   └── UnreadSharesContext.tsx  # Unread mirror shares tracking
 │
 ├── hooks/                        # Custom React hooks
 │   ├── useAudioPermissions.tsx  # Audio permission logic
@@ -65,6 +72,8 @@ starlight/
 │   │   ├── auth.js             # Auth operations
 │   │   ├── journals.js         # Journal CRUD
 │   │   ├── mirrors.js          # Mirror CRUD
+│   │   ├── friends.js          # Friend invite & linking
+│   │   ├── mirrorShares.js     # Mirror sharing operations
 │   │   └── feedback.js         # Feedback handling
 │   └── whisperService.ts        # OpenAI Whisper integration
 │
@@ -120,6 +129,7 @@ const { user, signIn } = useAuth();
 **Key Contexts:**
 - `AuthContext` - User authentication state
 - `OnboardingContext` - First-time user flow state
+- `UnreadSharesContext` - Unread mirror shares tracking
 - `GlobalSettingsContext` - App-wide settings
 
 ### 3. Service Layer Pattern
@@ -193,14 +203,44 @@ components/
 
 **Implementation:** `components/mirror/MirrorModal.tsx`
 
-### 4. 15-Journal Threshold
+### 4. 10-Journal Threshold (Configurable)
 
 **Why:** Core progression mechanic
 - Ensures sufficient content for meaningful AI reflection
 - Creates anticipation and engagement
 - Natural chunking of journaling journey
+- Default threshold is 10 journals (configurable server-side)
 
 **Implementation:** Progress tracking in `app/(tabs)/mirror.tsx`
+
+### 5. Friends & Mirror Sharing
+
+**Why:** Social accountability and spiritual growth together
+- Users can connect with friends via invite links
+- Share specific mirrors for mutual encouragement
+- 3-screen view for shared mirrors (vs 4 screens for own)
+- Reflection privacy preserved (questions/actions not shared)
+- Deep linking for seamless friend invites
+
+**Implementation:**
+- `app/(tabs)/friends.tsx` - Friends screen with conditional UI
+- `app/friend-invite/[token].tsx` - Deep link invite acceptance
+- `lib/supabase/friends.js` + `lib/supabase/mirrorShares.js` - Service layer
+- `contexts/UnreadSharesContext.tsx` - Tab badge tracking
+- Server-side mirror generation with polling
+
+### 6. Deep Linking for Friend Invites
+
+**Why:** Seamless friend connection experience
+- Users share custom invite links via native share sheet
+- Recipients tap link to accept invite automatically
+- Links expire after 72 hours
+- Custom URL scheme: `oxbow://friend-invite/[token]`
+
+**Implementation:**
+- `app.config.js` - Custom scheme configuration
+- `app/friend-invite/[token].tsx` - Invite acceptance route
+- Expo Router handles deep link navigation
 
 ---
 
@@ -223,19 +263,89 @@ UI Update (navigation to mirror screen)
 
 ### Mirror Generation Flow
 ```
-15 Journals Collected
+10+ Journals Collected (configurable threshold)
     ↓
 User taps "Unlock Mirror"
     ↓
 lib/supabase/mirrors.generateMirror()
     ↓
-Server-side AI Processing (OpenAI)
+Server-side Edge Function (mirror-generation-request)
+    ↓
+Client polls status every 3 seconds
+    ↓
+Server processes journals with OpenAI
     ↓
 Mirror saved to database
     ↓
 Associated journals marked with mirror_id
     ↓
+Polling detects completion
+    ↓
 User views 4-screen Mirror experience
+    ↓
+Mirror marked as viewed (has_been_viewed: true)
+```
+
+### Friend Invite Flow
+```
+User A taps "Create Invite Link"
+    ↓
+lib/supabase/friends.createInviteLink()
+    ↓
+Generate unique token + deep link (oxbow://friend-invite/[token])
+    ↓
+Save invite record (inviter_user_id, token, expires 72h)
+    ↓
+Open native share sheet with invite message
+    ↓
+User B receives link and taps it
+    ↓
+Deep link opens app → app/friend-invite/[token].tsx
+    ↓
+Token validated (not expired, not already accepted)
+    ↓
+lib/supabase/friends.acceptFriendInvite()
+    ↓
+Create friend_link record (bi-directional, ordered IDs)
+    ↓
+Update invite record (accepted_at, accepted_by_user_id)
+    ↓
+User B sees success message
+    ↓
+Both users see each other in Friends screen
+```
+
+### Mirror Sharing Flow
+```
+User A views completed mirror
+    ↓
+Taps "Share" button
+    ↓
+Friend picker modal appears (shows all friends)
+    ↓
+User A selects friend(s) to share with
+    ↓
+lib/supabase/mirrorShares.shareMirrorWithFriend()
+    ↓
+Create mirror_share record for each recipient
+    ↓
+User B's tab badge updates (UnreadSharesContext)
+    ↓
+User B opens Friends tab
+    ↓
+Sees shared mirror with "NEW" badge
+    ↓
+Taps to view → lib/supabase/mirrorShares.getSharedMirrorDetails()
+    ↓
+MirrorViewer opens with isSharedMirror={true}
+    ↓
+Shows 3 screens (themes, biblical, observations)
+    ↓
+Reflection questions/actions excluded for privacy
+    ↓
+Share marked as viewed (viewed_at timestamp)
+    ↓
+Badge changes from "NEW" to "VIEW"
 ```
 
 ---
@@ -247,6 +357,34 @@ User views 4-screen Mirror experience
 - **Display Name:** "Oxbow"
 - **EAS Project ID:** `5bd0cede-3ebf-4efe-8b38-706e792e5b20`
 - **Platforms:** iOS, Android, Web
+- **Custom Scheme:** `oxbow://` (for deep linking)
+
+### Deep Linking Configuration
+
+**Scheme:** `oxbow://`
+
+**Routes:**
+- `oxbow://friend-invite/[token]` - Accept friend invite
+
+**Implementation:**
+```javascript
+// app.config.js
+{
+  expo: {
+    scheme: "oxbow",
+    // ...
+  }
+}
+```
+
+**Usage:**
+```typescript
+// Deep link URL format
+const deepLink = `oxbow://friend-invite/${token}`;
+
+// Expo Router automatically handles navigation
+// Route: app/friend-invite/[token].tsx
+```
 
 ### Environment Variables
 Required in `.env`:
