@@ -235,13 +235,23 @@ components/
 
 **Implementation:** Progress tracking in `useMirrorData.ts`
 
-### 5. Friends & Mirror Sharing
+### 5. Guided Journal Prompts
+
+**Why:** Help users overcome "blank page" syndrome
+- Deterministic shuffle algorithm based on user ID (consistent but unique per user)
+- Sequential cycling through all 19 prompts to eliminate repeats
+- Filters out already-answered prompts from current day
+- Stores prompt_text with journal for AI context
+- Users can skip to free-form at any time
+
+**Implementation:** `guidedPrompts.ts` + AsyncStorage for progress tracking
+
+### 6. Friends & Mirror Sharing
 
 **Why:** Social accountability and spiritual growth together
 - Users can connect with friends via invite links
 - Share specific mirrors for mutual encouragement
-- 3-screen view for shared mirrors (vs 4 screens for own)
-- Reflection privacy preserved (questions/actions not shared)
+- All mirrors use 3-screen format (Themes, Biblical, Observations)
 - Deep linking for seamless friend invites
 
 **Implementation:**
@@ -251,7 +261,7 @@ components/
 - `contexts/UnreadSharesContext.tsx` - Tab badge tracking
 - Server-side mirror generation with polling
 
-### 6. Deep Linking for Friend Invites
+### 7. Deep Linking for Friend Invites
 
 **Why:** Seamless friend connection experience
 - Users share custom invite links via native share sheet
@@ -303,7 +313,7 @@ Server: Generates 3-screen Mirror with retry logic (up to 2 attempts)
     ↓
 Polling detects completion
     ↓
-User views 4-screen Mirror experience
+User views 3-screen Mirror experience
     ↓
 Mirror marked as viewed (has_been_viewed: true)
 ```
@@ -362,8 +372,6 @@ Taps to view → lib/supabase/mirrorShares.getSharedMirrorDetails()
 MirrorViewer opens with isSharedMirror={true}
     ↓
 Shows 3 screens (themes, biblical, observations)
-    ↓
-Reflection questions/actions excluded for privacy
     ↓
 Share marked as viewed (viewed_at timestamp)
     ↓

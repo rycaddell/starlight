@@ -152,13 +152,11 @@ Mirrors are **AI-generated spiritual reflections** based on 10+ journal entries 
 
 #### The Mirror Concept
 After collecting enough journals (default: 10), users can "unlock" a Mirror containing:
-- **Screen 1:** Identified themes from their journals
-- **Screen 2:** Relevant biblical references
-- **Screen 3:** Observations about their journey
-- **Screen 4:** Reflection questions and suggested spiritual practices
+- **Screen 1 (Themes):** Identified patterns and recurring themes from journals
+- **Screen 2 (Biblical Mirror):** Relevant biblical stories, verses, and connections
+- **Screen 3 (Observations):** Observations about self-perception, God-perception, others, and blind spots
 
-**For Own Mirrors:** Users see all 4 screens
-**For Shared Mirrors:** Users see 3 screens (themes, biblical, observations) - reflection questions/practices are private
+**Note:** ALL mirrors use a 3-screen format. Screen 4 (Suggestions) was deprecated - we now focus on observations rather than prescriptive advice
 
 #### Technical Implementation
 
@@ -245,7 +243,7 @@ Mirror saved to history for re-viewing
 - `supabase/functions/generate-mirror/index.ts` - Server-side Mirror generation
 - `app/(tabs)/mirror.tsx` - Mirror screen orchestration
 - `components/mirror/MirrorModal.tsx` - Full-screen mirror viewer
-- `components/mirror/ScreenOne.tsx` through `ScreenFour.tsx` - Individual screens
+- `components/mirror/ScreenOne.tsx` through `ScreenThree.tsx` - Individual screens (3-screen format)
 - `lib/supabase/mirrors.js` - Database operations
 - `hooks/useMirrorData.ts` - Data fetching, polling, and state management
 
@@ -305,7 +303,7 @@ Success → Both users see each other in Friends screen
 2. Taps "Share" button
 3. Friend picker modal appears showing all friends
 4. User selects friend(s) to share with
-5. Mirror shared (3 screens only - reflection questions/actions excluded)
+5. Mirror shared (3 screens: Themes, Biblical, Observations)
 6. Recipient sees "NEW" badge on Friends tab
 7. Recipient taps to view shared mirror
 8. Share marked as viewed → badge changes to "VIEW"
@@ -541,13 +539,11 @@ New users go through a multi-step wizard:
     ↓
 11. User B taps to view
     ↓
-12. MirrorViewer opens with 3 screens (not 4)
+12. MirrorViewer opens with 3 screens
     ↓
 13. User B sees: themes, biblical references, observations
     ↓
-14. Reflection questions/actions excluded for privacy
-    ↓
-15. Share marked as viewed (viewed_at timestamp)
+14. Share marked as viewed (viewed_at timestamp)
     ↓
 16. Badge changes from "NEW" to "VIEW"
     ↓
@@ -628,15 +624,14 @@ const journals = await fetchJournals(userId);
 
 ---
 
-### 7. Friends & Sharing are Social Features
+### 7. Friends & Sharing Enable Social Growth
 The Friends & Mirror Sharing features enable spiritual accountability:
 - Friend connections via deep-linked invite tokens (72-hour expiry)
 - Bi-directional friendships stored with ordered user IDs
-- Mirror sharing shows 3 screens (themes, biblical, observations)
-- Reflection questions/actions kept private (screen 4 excluded)
+- Mirror sharing shows all 3 screens (Themes, Biblical, Observations)
 - Unread shares tracked with context and tab badges
 
-**Preserve privacy by never sharing screen 4 (reflection questions/actions).**
+**Maintain the seamless sharing experience and deep link functionality.**
 
 ---
 

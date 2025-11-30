@@ -257,9 +257,8 @@ Mirror Sharing
    - Open Friends tab
    - Verify shared mirror appears with "NEW" badge
    - Tap to view shared mirror
-   - Verify MirrorViewer opens with 3 screens (not 4)
+   - Verify MirrorViewer opens with 3 screens
    - Verify screens shown: themes, biblical, observations
-   - Verify screen 4 (reflection questions) is excluded
    - Verify share marked as viewed (viewed_at timestamp)
    - Verify badge changes from "NEW" to "VIEW"
    - Close and reopen - badge should still say "VIEW"
@@ -666,10 +665,10 @@ rm -rf android/build
 - Check `refreshUnreadCount()` is called after viewing shares
 - Verify `getUnviewedSharesCount()` query is correct
 
-**"Shared mirror showing 4 screens instead of 3"**
-- Verify `isSharedMirror={true}` prop passed to MirrorViewer
-- Check MirrorViewer conditional rendering logic
-- Screen 4 should only show when `!isSharedMirror`
+**"Mirror showing wrong number of screens"**
+- All mirrors now use 3-screen format (Screen 4 deprecated)
+- Verify ScreenOne, ScreenTwo, ScreenThree are rendered
+- Screen 4 (Suggestions) was removed from the codebase
 
 **"Mirror generation card disappearing"**
 - Check polling logic in `hooks/useMirrorData.ts`
@@ -815,7 +814,7 @@ Before releasing a new version:
  Test deep linking on real devices
  Test mirror sharing (sender and recipient)
  Verify unread badge updates correctly
- Test shared mirror shows 3 screens (not 4)
+ Test shared mirror shows 3 screens (all mirrors are 3 screens)
  Check for console warnings/errors
  Run type checking: npx tsc --noEmit
  Build preview version: eas build --profile preview
