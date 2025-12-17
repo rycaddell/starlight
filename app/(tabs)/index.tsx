@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 32,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: '#1e293b',
     marginBottom: 8,
     textAlign: 'center',
@@ -407,10 +407,10 @@ const styles = StyleSheet.create({
   },
   progressSubtext: {
     fontSize: 14,
+    fontWeight: '400',
     color: '#64748b',
     textAlign: 'center',
     marginTop: 8,
-    fontStyle: 'italic',
   },
   quickStartSection: {
     width: '100%',
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#334155',
+    color: '#1e293b',
     marginBottom: 16,
   },
   loadingContainer: {
@@ -429,9 +429,9 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 18,
+    fontWeight: '400',
     color: '#64748b',
     textAlign: 'center',
-    fontStyle: 'italic',
   },
   errorContainer: {
     flex: 1,

@@ -70,11 +70,10 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
     }
   };
 
-  const handlePromptSelect = async () => {
-    // When user selects a prompt, advance to the next one for their next visit
-    await handleNext();
-    
-    // Then trigger the selection callback
+  const handlePromptSelect = () => {
+    // Trigger the selection callback with the current prompt
+    // Don't advance here - only advance when user explicitly taps "Next question"
+    // or when they answer (component will re-initialize with answered prompts filtered out)
     onPromptSelect(availablePrompts[currentIndex]);
   };
 
@@ -97,17 +96,17 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
   return (
     <View style={styles.container}>
       {/* Guided Prompt Card */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.card}
         onPress={handlePromptSelect}
         activeOpacity={0.7}
       >
         <View style={styles.header}>
-          <Text style={styles.label}>GUIDED</Text>
+          <Text style={styles.label}>Guided</Text>
         </View>
-        
+
         <Text style={styles.promptText}>{currentPrompt.text}</Text>
-        
+
         <View style={styles.actionButton}>
           <Text style={styles.actionButtonText}>Start</Text>
         </View>
@@ -115,7 +114,7 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
 
       {/* Next Button - Only show if there are multiple available prompts */}
       {availablePrompts.length > 1 && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.nextButton}
           onPress={handleNext}
           activeOpacity={0.7}
@@ -153,17 +152,15 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   label: {
-    fontSize: 12,
+    fontSize: 18,
     fontWeight: '600',
-    color: '#2563eb',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#1e293b',
   },
   promptText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '400',
-    color: '#1e293b',
-    lineHeight: 26,
+    color: '#334155',
+    lineHeight: 24,
     flex: 1,
   },
   actionButton: {
@@ -193,8 +190,7 @@ const styles = StyleSheet.create({
   },
   nextText: {
     fontSize: 14,
-    color: '#64748b',
     fontWeight: '400',
-    fontStyle: 'italic',
+    color: '#64748b',
   },
 });

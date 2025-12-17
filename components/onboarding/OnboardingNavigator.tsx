@@ -1,6 +1,7 @@
 // components/onboarding/OnboardingNavigator.tsx - Simplified flow
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
+import Animated, { FadeInRight } from 'react-native-reanimated';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { MicrophonePermissionScreen } from './MicrophonePermissionScreen';
@@ -44,7 +45,13 @@ export const OnboardingNavigator: React.FC = () => {
 
   return (
     <View style={styles.container}>
-      {renderCurrentScreen()}
+      <Animated.View
+        key={currentStep}
+        entering={FadeInRight.duration(350)}
+        style={styles.screenWrapper}
+      >
+        {renderCurrentScreen()}
+      </Animated.View>
     </View>
   );
 };
@@ -53,5 +60,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  screenWrapper: {
+    flex: 1,
   },
 });

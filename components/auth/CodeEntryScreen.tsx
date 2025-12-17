@@ -146,7 +146,7 @@ export const CodeEntryScreen: React.FC<CodeEntryScreenProps> = ({
               {/* Title at top */}
               <View style={styles.headerSection}>
                 <Text style={styles.title}>Oxbow</Text>
-                <Text style={styles.subtitle}>observe the leading of God</Text>
+                <Text style={styles.subtitle}>a spiritual attention app</Text>
               </View>
               
               {/* Input and button at bottom */}

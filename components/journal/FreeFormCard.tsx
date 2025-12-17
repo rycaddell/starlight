@@ -15,7 +15,6 @@ export const FreeFormCard: React.FC<FreeFormCardProps> = ({ onPress }) => {
     >
       <View style={styles.content}>
         <Text style={styles.title}>Free Form</Text>
-        <Text style={styles.subtitle}>What feels important to capture?</Text>
       </View>
       
       <View style={styles.actionButton}>
@@ -47,18 +46,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+    justifyContent: 'center',
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#1e293b',
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    fontStyle: 'italic',
-    lineHeight: 20,
   },
   actionButton: {
     backgroundColor: '#2563eb', // Changed from #3b82f6 to match GuidedPromptCard

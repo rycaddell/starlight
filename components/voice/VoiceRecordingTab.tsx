@@ -42,12 +42,12 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           {formatDuration(recordingDuration)}
         </Text>
         
-        {isRecording && (
+        {isRecording && !isProcessing && (
           <Text style={styles.recordingStatus}>
             {isPaused ? '⏸️ Paused' : '🔴 Recording'}
           </Text>
         )}
-        
+
         {isProcessing && (
           <Text style={styles.processingStatus}>
             🤖 Transcribing audio...
