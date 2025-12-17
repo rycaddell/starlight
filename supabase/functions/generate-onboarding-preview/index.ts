@@ -53,7 +53,7 @@ async function generatePreviewWithAI(
   const requestBody = {
     model: 'gpt-5-mini',
     messages: [{ role: 'user', content: prompt }],
-    max_completion_tokens: 2000,
+    max_completion_tokens: 3000,
   };
   
   console.log('📤 Request body:', JSON.stringify({
