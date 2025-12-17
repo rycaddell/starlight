@@ -1,7 +1,7 @@
 // app/(tabs)/friends.tsx
 // Friends tab - redesigned with inline invite and slots
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,10 @@ import {
   ActivityIndicator,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
+import { useFriendBadge } from '@/contexts/FriendBadgeContext';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
 import {
   fetchIncomingShares,
@@ -29,11 +30,13 @@ import { FriendSlots } from '@/components/friends/FriendSlots';
 import { SharePromptCard } from '@/components/friends/SharePromptCard';
 import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { supabase } from '@/lib/supabase/client';
 
 export default function FriendsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { refreshUnreadCount } = useUnreadShares();
+  const { markFriendsAsViewed, refreshNewFriendsCount } = useFriendBadge();
   const [friends, setFriends] = useState([]);
   const [incomingShares, setIncomingShares] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -72,6 +75,129 @@ export default function FriendsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Mark friends as viewed when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      markFriendsAsViewed();
+    }, [markFriendsAsViewed])
+  );
+
+  // Realtime subscription for incoming mirror shares
+  useEffect(() => {
+    if (!user?.id || !supabase) return;
+
+    let isMounted = true;
+
+    if (__DEV__) {
+      console.log('📡 [FriendsScreen] Setting up mirror_shares subscription');
+    }
+
+    const sharesSubscription = supabase
+      .channel(`friends_screen_shares:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'mirror_shares',
+          filter: `recipient_user_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (!isMounted) return;
+
+          if (__DEV__) {
+            console.log('✨ [FriendsScreen] Mirror share change:', payload.eventType);
+          }
+
+          // Reload shares list from database
+          loadData();
+        }
+      )
+      .subscribe((status) => {
+        if (__DEV__ && status === 'SUBSCRIBED') {
+          console.log('✅ [FriendsScreen] Connected to mirror_shares Realtime');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (__DEV__) {
+        console.log('🔌 [FriendsScreen] Cleaning up mirror_shares subscription');
+      }
+      sharesSubscription.unsubscribe();
+    };
+  }, [user?.id, loadData]);
+
+  // Realtime subscriptions for friend_links (two subscriptions for user_a and user_b)
+  useEffect(() => {
+    if (!user?.id || !supabase) return;
+
+    let isMounted = true;
+
+    if (__DEV__) {
+      console.log('📡 [FriendsScreen] Setting up friend_links subscriptions');
+    }
+
+    const friendsSubscriptionA = supabase
+      .channel(`friends_screen_links_a:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'friend_links',
+          filter: `user_a_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (!isMounted) return;
+
+          if (__DEV__) {
+            console.log('✨ [FriendsScreen] New friend link (user_a)');
+          }
+
+          // Reload friends list from database
+          loadData();
+        }
+      )
+      .subscribe();
+
+    const friendsSubscriptionB = supabase
+      .channel(`friends_screen_links_b:${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'friend_links',
+          filter: `user_b_id=eq.${user.id}`
+        },
+        (payload) => {
+          if (!isMounted) return;
+
+          if (__DEV__) {
+            console.log('✨ [FriendsScreen] New friend link (user_b)');
+          }
+
+          // Reload friends list from database
+          loadData();
+        }
+      )
+      .subscribe((status) => {
+        if (__DEV__ && status === 'SUBSCRIBED') {
+          console.log('✅ [FriendsScreen] Connected to friend_links Realtime');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      if (__DEV__) {
+        console.log('🔌 [FriendsScreen] Cleaning up friend_links subscriptions');
+      }
+      friendsSubscriptionA.unsubscribe();
+      friendsSubscriptionB.unsubscribe();
+    };
+  }, [user?.id, loadData]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -153,8 +279,9 @@ export default function FriendsScreen() {
     setSelectedMirrorId(null);
     // Reload shares to update badges
     loadData();
-    // Refresh tab badge count
+    // Refresh tab badge counts
     refreshUnreadCount();
+    refreshNewFriendsCount();
   };
 
   const renderShareItem = (share) => {

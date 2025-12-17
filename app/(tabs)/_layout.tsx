@@ -9,10 +9,15 @@ import TabBarBackground from '@/components/ui/TabBarBackground';
 import { Colors } from '@/constants/Colors';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
+import { useFriendBadge } from '@/contexts/FriendBadgeContext';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const { unreadCount } = useUnreadShares();
+  const { newFriendsCount } = useFriendBadge();
+
+  // Combined badge count: unread shares + new friends
+  const totalBadgeCount = unreadCount + newFriendsCount;
 
   return (
       <Tabs
@@ -47,7 +52,7 @@ export default function TabLayout() {
           options={{
             title: 'Friends',
             tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2" color={color} />,
-            tabBarBadge: unreadCount > 0 ? unreadCount : undefined,
+            tabBarBadge: totalBadgeCount > 0 ? totalBadgeCount : undefined,
           }}
         />
       </Tabs>
