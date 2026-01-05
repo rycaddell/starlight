@@ -1,14 +1,10 @@
-// components/onboarding/OnboardingNavigator.tsx - Simplified flow
+// components/onboarding/OnboardingNavigator.tsx - Narrative onboarding flow
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import Animated, { FadeInRight } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
-import { MicrophonePermissionScreen } from './MicrophonePermissionScreen';
-import { JournalEntryScreen } from './JournalEntryScreen';
-import { LoadingReflectionScreen } from './LoadingReflectionScreen';
-import { MirrorScreen } from './MirrorScreen';
-import { JourneyTogetherScreen } from './JourneyTogetherScreen';
+import { NarrativeOnboardingScreen } from './NarrativeOnboardingScreen';
 
 export const OnboardingNavigator: React.FC = () => {
   const { user } = useAuth();
@@ -25,33 +21,13 @@ export const OnboardingNavigator: React.FC = () => {
   console.log('📍 Current onboarding step:', currentStep);
 
   const renderCurrentScreen = () => {
-    switch (currentStep) {
-      case 'microphone-permission':
-        return <MicrophonePermissionScreen />;
-      case 'journal-entry':
-        return <JournalEntryScreen />;
-      case 'loading-reflection':
-        return <LoadingReflectionScreen />;
-      case 'mirror':
-        return <MirrorScreen />;
-      case 'journey-together':
-        return <JourneyTogetherScreen />;
-      default:
-        // Default to microphone permission if unknown step
-        console.warn('⚠️ Unknown onboarding step:', currentStep);
-        return <MicrophonePermissionScreen />;
-    }
+    // Single narrative screen handles all steps
+    return <NarrativeOnboardingScreen />;
   };
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        key={currentStep}
-        entering={FadeInRight.duration(350)}
-        style={styles.screenWrapper}
-      >
-        {renderCurrentScreen()}
-      </Animated.View>
+      {renderCurrentScreen()}
     </View>
   );
 };
@@ -59,7 +35,7 @@ export const OnboardingNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#1a1a1a', // Dark gray to match overlay tone
   },
   screenWrapper: {
     flex: 1,

@@ -4,29 +4,25 @@ import { Image } from 'react-native';
 import { useAuth } from './AuthContext';
 import { completeUserOnboarding } from '../lib/supabase/auth';
 
-export type OnboardingStep = 
-  | 'microphone-permission'
-  | 'journal-entry'
-  | 'loading-reflection'
-  | 'ai-preview'
-  | 'understanding-info'
-  | 'act-info'
+export type OnboardingStep =
+  | 'name-input'          // Step 1
+  | 'welcome'             // Step 2
+  | 'moment-one'          // Step 3
+  | 'moments-question'    // Step 4
+  | 'moment-two'          // Step 5
+  | 'moment-three'        // Step 6
+  | 'moment-four'         // Step 7
+  | 'step-back'           // Step 8 (zoom animation)
+  | 'pattern-revealed'    // Step 9 (product screenshot)
+  | 'call-to-action'      // Step 10
   | 'complete';
 
 interface OnboardingContextType {
   currentStep: OnboardingStep;
   isOnboardingComplete: boolean;
-  hasMicrophonePermission: boolean;
-  hasNotificationPermission: boolean;
-  journalContent: string;
-  journalEntryType: 'text' | 'voice' | null;
-  aiPreviewData: any;
+  userName: string;
+  setUserName: (name: string) => void;
   setCurrentStep: (step: OnboardingStep) => void;
-  setMicrophonePermission: (granted: boolean) => void;
-  setNotificationPermission: (granted: boolean) => void;
-  setJournalContent: (content: string) => void;
-  setJournalEntryType: (type: 'text' | 'voice') => void;
-  setAIPreviewData: (data: any) => void;
   completeOnboarding: () => Promise<void>;
   goToNextStep: () => void;
   goToPreviousStep: () => void;
@@ -35,13 +31,18 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
-// Updated step order - simplified flow
+// Narrative onboarding step order
 const STEP_ORDER: OnboardingStep[] = [
-  'microphone-permission',
-  'journal-entry',
-  'loading-reflection',
-  'mirror',
-  'journey-together',
+  'name-input',
+  'welcome',
+  'moment-one',
+  'moments-question',
+  'moment-two',
+  'moment-three',
+  'moment-four',
+  'step-back',
+  'pattern-revealed',
+  'call-to-action',
   'complete'
 ];
 
@@ -81,53 +82,42 @@ const hasUserCompletedOnboarding = (user: any) => {
 
 export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const { user, refreshUser } = useAuth();
-  const [currentStep, setCurrentStep] = useState<OnboardingStep>('microphone-permission');
-  const [hasMicrophonePermission, setHasMicrophonePermission] = useState(false);
-  const [hasNotificationPermission, setHasNotificationPermission] = useState(false);
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>('name-input');
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
-  const [journalContent, setJournalContent] = useState('');
-  const [journalEntryType, setJournalEntryType] = useState<'text' | 'voice' | null>(null);
-  const [aiPreviewData, setAIPreviewData] = useState<any>(null);
+  const [userName, setUserName] = useState('');
 
   // Check onboarding completion status when user changes
   useEffect(() => {
     if (user) {
       const completed = hasUserCompletedOnboarding(user);
       setIsOnboardingComplete(completed);
-      
+
       if (completed) {
         setCurrentStep('complete');
       } else {
-        setCurrentStep('microphone-permission');
-        setMicrophonePermission(false);
-        setNotificationPermission(false);
-        setJournalContent('');
-        setJournalEntryType(null);
-        setAIPreviewData(null);
+        setCurrentStep('name-input');
+        setUserName(user.display_name || '');
       }
     } else {
       setIsOnboardingComplete(false);
-      setCurrentStep('microphone-permission');
-      setMicrophonePermission(false);
-      setNotificationPermission(false);
-      setJournalContent('');
-      setJournalEntryType(null);
-      setAIPreviewData(null);
+      setCurrentStep('name-input');
+      setUserName('');
     }
   }, [user]);
 
   const canProceed = (() => {
     switch (currentStep) {
-      case 'microphone-permission':
-        return true; // Can skip mic permission
-      case 'journal-entry':
-        return journalContent.trim().length > 0; // Must have content to proceed
-      case 'loading-reflection':
-        return true; // Auto-advances via timer
-      case 'mirror':
-        return true; // Can always proceed
-      case 'journey-together':
-        return true; // Can always proceed
+      case 'name-input':
+        return userName.trim().length > 0; // Must have name
+      case 'welcome':
+      case 'moment-one':
+      case 'moments-question':
+      case 'moment-two':
+      case 'moment-three':
+      case 'moment-four':
+      case 'step-back':
+      case 'pattern-revealed':
+      case 'call-to-action':
       case 'complete':
         return true;
       default:
@@ -159,16 +149,6 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
     console.log('⬅️ Back navigation disabled during onboarding');
   }
 
-  function setMicrophonePermission(granted: boolean) {
-    console.log('🎤 Microphone permission:', granted);
-    setHasMicrophonePermission(granted);
-  }
-
-  function setNotificationPermission(granted: boolean) {
-    console.log('🔔 Notification permission:', granted);
-    setHasNotificationPermission(granted);
-  }
-
   async function completeOnboarding() {
     if (!user) {
       console.error('❌ Cannot complete onboarding: missing user');
@@ -194,17 +174,9 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
   const contextValue: OnboardingContextType = {
     currentStep,
     isOnboardingComplete,
-    hasMicrophonePermission,
-    hasNotificationPermission,
-    journalContent,
-    journalEntryType,
-    aiPreviewData,
+    userName,
+    setUserName,
     setCurrentStep,
-    setMicrophonePermission,
-    setNotificationPermission,
-    setJournalContent,
-    setJournalEntryType,
-    setAIPreviewData,
     completeOnboarding,
     goToNextStep,
     goToPreviousStep,
