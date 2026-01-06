@@ -395,20 +395,44 @@ Badge changes from "NEW" to "VIEW"
 
 ### 7. Onboarding Flow
 
-**Context:** `contexts/OnboardingContext.tsx`  
-**Components:** `components/onboarding/`
+**Context:** `contexts/OnboardingContext.tsx`
+**Components:** `components/onboarding/NarrativeOnboardingScreen.tsx`
 
-New users go through a multi-step wizard:
+New users experience a **10-step narrative journey** using a river metaphor to explain how Oxbow reveals God's leading across individual moments:
 
-1. **Welcome Screen** - Explains the app's purpose
-2. **Microphone Permission** - Requests audio recording access
-3. **Notification Permission** - Requests push notification access
-4. **How It Works** - Explains journaling → Mirror flow
+#### The Narrative Arc
 
-**Implementation Notes:**
+**Act 1: Individual Moments (Steps 1-4)**
+1. **Name Input** - User enters their first name (saved to `display_name`)
+2. **Welcome** - Personalized greeting: "Hey, [Name]. Welcome to Oxbow." (auto-advances after 2.5s)
+3. **One Moment at a Time** - Shows first journal entry (Dec 12 - gratitude)
+4. **The Question** - "But how do these moments fit together into a sensible story?"
+
+**Act 2: Accumulating Experiences (Steps 5-7)**
+5. **Second Moment** - Journal entry (Dec 18 - striving/work)
+6. **Third Moment** - Journal entry (Dec 21 - connection with friends)
+7. **Fourth Moment** - Journal entry (Dec 27 - doubt/pain)
+
+**Act 3: Revelation (Steps 8-9)**
+8. **Step Back** - "If we step back..." with zoom-out animation revealing aerial oxbow view
+9. **Pattern Revealed** - "We can see God's leading across our moments" with product screenshot overlay
+
+**Act 4: Invitation (Step 10)**
+10. **Call to Action** - "So where is God leading you?" with "Get started" button
+
+#### Visual Design
+- **Background:** River imagery transitioning from close-up canoe view → aerial oxbow pattern
+- **Overlay:** Dark transparent grey (rgba(0, 0, 0, 0.4)) for text readability
+- **Journal Cards:** Sample entries displayed one at a time (not accumulated, not saved to database)
+- **Key Animation:** Step 8 features a smooth zoom-out transition that reveals the oxbow pattern
+
+#### Implementation Notes
 - Onboarding shown only once (tracked in AsyncStorage)
-- Can be reset for testing
-- Permissions can be skipped but are requested again when needed
+- Name saved to `custom_users.display_name` during step 1
+- All journal entries are sample data for storytelling (not saved to database)
+- Permissions (microphone, notifications) requested later in-context when needed
+- Can be completed in 60-90 seconds
+- User taps to advance through most screens (except welcome which auto-advances)
 
 ---
 
@@ -635,7 +659,19 @@ The Friends & Mirror Sharing features enable spiritual accountability:
 
 ---
 
-### 8. Context + Hooks Pattern
+### 8. Narrative Onboarding is Experience-Driven
+The onboarding uses a **river journey metaphor** to communicate Oxbow's value proposition:
+- Individual moments (close-up river views) → pattern revealed (aerial oxbow view)
+- Sample journal entries tell an emotional story (gratitude → striving → connection → doubt)
+- No permissions requested, no real data collected - pure storytelling
+- Key moment: zoom-out animation revealing the oxbow pattern
+- Goal: Users leave thinking *"I wonder what my Mirror will be"*
+
+**Don't skip or rush the onboarding experience - it sets user expectations.**
+
+---
+
+### 9. Context + Hooks Pattern
 State management follows a consistent pattern:
 - **Contexts** provide global state (AuthContext, UnreadSharesContext)
 - **Custom hooks** encapsulate logic (useMirrorData, useAudioRecording)
@@ -690,6 +726,21 @@ State management follows a consistent pattern:
    - Tap to view and verify 3 screens only (not 4)
    - Verify badge changes from "NEW" to "VIEW"
 
+### Testing Narrative Onboarding
+1. Clear app data or use a fresh access code
+2. Complete all 10 steps in sequence
+3. Verify name input saves to database
+4. Verify personalized welcome message displays name correctly
+5. Verify each journal card appears individually (not accumulated)
+6. Verify zoom-out animation on step 8 is smooth
+7. Verify product screenshot displays on step 9
+8. Verify "Get started" completes onboarding and navigates to journal
+9. Test edge cases:
+   - Very long names (>50 characters)
+   - Empty name submission (should be blocked)
+   - Rapid tapping during animations
+   - Backgrounding app during onboarding
+
 ### Testing Auth
 1. Sign out completely
 2. Close and reopen app
@@ -700,39 +751,47 @@ State management follows a consistent pattern:
 
 ## 🐛 Common Gotchas
 
-### 1. Permissions Not Granted
-**Problem:** Voice recording fails silently  
+### 1. Permissions Requested During Onboarding
+**Problem:** Users confused about when to grant microphone/notification permissions
+**Solution:** These are NO LONGER requested during onboarding - they're requested in-context when first needed (e.g., when user tries to record)
+
+### 2. Voice Recording Permissions Not Granted
+**Problem:** Voice recording fails silently
 **Solution:** Check `useAudioPermissions.tsx` - permissions must be granted before recording
 
-### 2. Stale Closures in Hooks
-**Problem:** State updates don't reflect in callbacks  
+### 3. Stale Closures in Hooks
+**Problem:** State updates don't reflect in callbacks
 **Solution:** Use refs for values accessed in async callbacks or event listeners
 
-### 3. AsyncStorage Not Clearing
-**Problem:** Auth persists after sign out in dev  
+### 4. AsyncStorage Not Clearing
+**Problem:** Auth persists after sign out in dev
 **Solution:** Manually clear AsyncStorage or reinstall app
 
-### 4. Whisper API Timeout
-**Problem:** Long recordings time out during transcription  
+### 5. Whisper API Timeout
+**Problem:** Long recordings time out during transcription
 **Solution:** This is expected for 8-minute recordings - add retry logic
 
-### 5. Mirror Not Unlocking at Threshold
+### 6. Mirror Not Unlocking at Threshold
 **Problem:** User has 10+ journals but no unlock button
 **Solution:** Check that journals have `mirror_id: null` (not already used)
 
-### 6. Deep Link Not Opening App
+### 7. Onboarding Animation Performance Issues
+**Problem:** Step 8 zoom-out animation is choppy or laggy
+**Solution:** Ensure images are optimized (<300KB each) and using React Native Reanimated for smooth performance
+
+### 8. Deep Link Not Opening App
 **Problem:** Friend invite link opens browser instead of app
 **Solution:** Verify `scheme: "oxbow"` is configured in app.config.js and app is installed
 
-### 7. Shared Mirror Shows 4 Screens Instead of 3
+### 9. Shared Mirror Shows 4 Screens Instead of 3
 **Problem:** Shared mirrors showing reflection questions/actions
 **Solution:** Check `isSharedMirror={true}` prop is passed to MirrorViewer
 
-### 8. Friends Tab Badge Not Updating
+### 10. Friends Tab Badge Not Updating
 **Problem:** Unread shares not showing badge
 **Solution:** Verify UnreadSharesContext is properly initialized and refreshUnreadCount() is called after viewing shares
 
-### 9. Mirror Generation Card Disappearing
+### 11. Mirror Generation Card Disappearing
 **Problem:** Generation card disappears when backgrounding app
 **Solution:** Polling logic checks mirrorState before restarting - should only poll if state is 'generating'
 
