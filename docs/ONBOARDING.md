@@ -43,7 +43,48 @@ Oxbow is a **spiritual journaling mobile app** that:
 
 4. **Get an access code:**
    - Ask your team lead for a test access code
-   - Access codes are pre-created in the `custom_users` table
+   - Access codes are pre-created in the `users` table
+
+---
+
+## ⚠️ TECHNICAL DEBT: Mens Group Customizations
+
+**Context:** Several features have been customized specifically for the "Mens Group" user cohort. This is hardcoded and should be refactored.
+
+### What's Different for Mens Group Users:
+
+1. **Mirror Threshold: 6 journals instead of 10**
+   - Location: `lib/config/constants.js:getMirrorThreshold()`
+   - Client check: `hooks/useMirrorData.ts` + `lib/supabase/mirrors.js:checkCanGenerateMirror()`
+   - Server check: `supabase/functions/generate-mirror/index.ts`
+   - UI: Progress shows "X/6" instead of "X/10"
+
+2. **Wednesday Journaling Reminders**
+   - Only Mens Group users receive these notifications
+   - Sent every Wednesday at 12:30 PM Mountain Time
+   - Message: "What was your takeaway from Men's Group today?"
+   - Function: `supabase/functions/wednesday-journal-reminder/index.ts`
+   - Cron job: Runs weekly via Supabase cron
+
+3. **Push Notifications**
+   - Notification infrastructure is enabled for all users
+   - Only Mens Group users get weekly reminders (see above)
+   - All users get mirror share notifications
+
+### Why This is Technical Debt:
+
+- Hardcoded string matching on `group_name = 'Mens Group'`
+- No configuration system for group-specific features
+- Difficult to extend to other groups without code changes
+
+### Recommended Refactor:
+
+Replace hardcoded group checks with a flexible configuration system:
+- Group-level settings table or JSON config
+- Feature flags per group (mirror_threshold, notifications, etc.)
+- Admin UI for managing group configurations
+
+**Until then:** Search codebase for `'Mens Group'` to find all customization points.
 
 ---
 
@@ -370,7 +411,7 @@ Badge changes from "NEW" to "VIEW"
 
 **User Flow:**
 1. User enters access code on sign-in screen
-2. Code validated against `custom_users` table
+2. Code validated against `users` table
 3. If valid, user data stored in AsyncStorage
 4. User automatically signed in on next app launch
 
@@ -428,7 +469,7 @@ New users experience a **10-step narrative journey** using a river metaphor to e
 
 #### Implementation Notes
 - Onboarding shown only once (tracked in AsyncStorage)
-- Name saved to `custom_users.display_name` during step 1
+- Name saved to `users.display_name` during step 1
 - All journal entries are sample data for storytelling (not saved to database)
 - Permissions (microphone, notifications) requested later in-context when needed
 - Can be completed in 60-90 seconds
@@ -555,24 +596,57 @@ New users experience a **10-step narrative journey** using a river metaphor to e
    ↓
 7. Mirror shared (mirror_share records created)
    ↓
-8. User B's Friends tab badge updates ("1" unread)
+8. Push notification sent to User B (if they have notifications enabled)
    ↓
-9. User B opens Friends tab
+9. User B's Friends tab badge updates ("1" unread)
    ↓
-10. Sees shared mirror from User A with "NEW" badge
+10. User B opens Friends tab
     ↓
-11. User B taps to view
+11. Sees shared mirror from User A with "NEW" badge
     ↓
-12. MirrorViewer opens with 3 screens
+12. User B taps to view
     ↓
-13. User B sees: themes, biblical references, observations
+13. MirrorViewer opens with 3 screens
     ↓
-14. Share marked as viewed (viewed_at timestamp)
+14. User B sees: themes, biblical references, observations
+    ↓
+15. Share marked as viewed (viewed_at timestamp)
     ↓
 16. Badge changes from "NEW" to "VIEW"
     ↓
 17. User B can re-view shared mirror anytime
 ```
+
+### Push Notification Workflow
+```
+1. User opens app for first time
+   ↓
+2. Navigates to Friends tab
+   ↓
+3. Sees "Don't miss out" notification pitch card (if notifications not enabled)
+   ↓
+4. User taps "Enable notifications"
+   ↓
+5. System permission dialog appears
+   ↓
+6. User grants permission
+   ↓
+7. Expo push token generated
+   ↓
+8. Token saved to users.push_token
+   ↓
+9. Notification pitch card disappears
+   ↓
+10. User now receives:
+    - Mirror share notifications (all users)
+    - Wednesday journaling reminders (Mens Group only at 12:30 PM MT)
+```
+
+**Implementation:**
+- Hook: `hooks/usePushNotifications.ts`
+- Component: `components/friends/NotificationPitchCard.tsx`
+- Edge Function: `supabase/functions/send-push-notification/index.ts`
+- Cron Function: `supabase/functions/wednesday-journal-reminder/index.ts`
 
 ---
 
@@ -592,14 +666,17 @@ Voice journaling isn't a "nice-to-have" feature added later. The entire UX is de
 
 ---
 
-### 3. The 10-Journal Threshold is Configurable
-The "10 journals = 1 Mirror" mechanic is a **core product decision**:
+### 3. The Journal Threshold is Group-Configurable
+The "X journals = 1 Mirror" mechanic is a **core product decision**:
 - Creates progression system and anticipation
 - Ensures sufficient content for meaningful AI reflection
 - Natural chunking of the journaling journey
-- Default is 10 journals (configurable server-side)
+- **Default: 10 journals** (for most users)
+- **Mens Group: 6 journals** (see Technical Debt section above)
 
-**Don't change the default threshold without product team approval.**
+**Location:** `lib/config/constants.js:getMirrorThreshold()`
+
+**Don't change thresholds without product team approval.**
 
 ---
 

@@ -8,7 +8,7 @@ Complete reference for the Supabase database structure, relationships, and data 
 
 Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
-- `custom_users` - User accounts (access code-based auth)
+- `users` - User accounts (access code-based auth)
 - `journals` - Journal entries (text or voice transcriptions)
 - `mirrors` - AI-generated spiritual reflections
 - `mirror_reflections` - User responses to mirror prompts (deprecated)
@@ -23,7 +23,7 @@ Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
 ## 📋 Table Schemas
 
-### `custom_users`
+### `users`
 
 Stores user accounts with access code-based authentication.
 
@@ -35,7 +35,8 @@ Stores user accounts with access code-based authentication.
   display_name: string
   status: string
   group_name: string (nullable)
-  invited_by: string (nullable, references custom_users.id)
+  invited_by: string (nullable, references users.id)
+  push_token: string (nullable)
   created_at: timestamp
   updated_at: timestamp
 }
@@ -46,13 +47,19 @@ Stores user accounts with access code-based authentication.
 - `access_code` - The code users enter to sign in (e.g., "SPRING2024")
 - `display_name` - User's chosen display name
 - `status` - User account status (active, inactive, etc.)
-- `group_name` - Optional group/cohort identifier
+- `group_name` - Optional group/cohort identifier (e.g., "Mens Group")
 - `invited_by` - ID of user who invited them (for referral tracking)
+- `push_token` - Expo push notification token for this device
 
 **Indexes:**
 - Primary key on `id`
 - Unique index on `access_code`
 - Index on `status` for filtering active users
+- Index on `push_token` for notification lookups
+
+**⚠️ TECHNICAL DEBT - Mens Group Customizations:**
+- Users with `group_name = 'Mens Group'` receive special treatment (see below)
+- This is hardcoded and should be refactored to a more flexible system
 
 **Example Row:**
 ```json
@@ -63,6 +70,7 @@ Stores user accounts with access code-based authentication.
   "status": "active",
   "group_name": "Beta Testers",
   "invited_by": null,
+  "push_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
   "created_at": "2024-01-15T10:30:00Z",
   "updated_at": "2024-01-15T10:30:00Z"
 }
@@ -76,7 +84,7 @@ Stores individual journal entries from users (text or transcribed voice).
 ```typescript
 {
   id: string (uuid, primary key)
-  custom_user_id: string (uuid, foreign key → custom_users.id)
+  custom_user_id: string (uuid, foreign key → users.id)
   content: string (not null)
   prompt_text: string (nullable) // Guided prompt if used
   mirror_id: string (uuid, nullable, foreign key → mirrors.id)
@@ -85,9 +93,11 @@ Stores individual journal entries from users (text or transcribed voice).
 }
 ```
 
+**⚠️ Note:** Column name is `custom_user_id` for historical reasons but references `users.id`
+
 **Fields Explained:**
 - `id` - Unique identifier for the journal entry
-- `custom_user_id` - The user who created this journal
+- `custom_user_id` - The user who created this journal (references `users.id`)
 - `content` - The journal text (typed or transcribed from voice)
 - `prompt_text` - The guided journal prompt that was used (null for free-form entries)
 - `mirror_id` - Links to the Mirror this journal was used to generate (null until included in a Mirror)
@@ -95,7 +105,7 @@ Stores individual journal entries from users (text or transcribed voice).
 - `updated_at` - Last modification time
 
 **Relationships:**
-- `custom_user_id` → `custom_users.id` (many journals to one user)
+- `custom_user_id` → `users.id` (many journals to one user)
 - `mirror_id` → `mirrors.id` (many journals to one mirror)
 
 **Indexes:**

@@ -93,6 +93,7 @@ IMPORTANT REQUIREMENTS:
 - Do NOT include an "insight" field in screen1_themes
 - For screen3_observations: Focus only on observations without recommendations. Each section should contain ONLY the observation field with specific journal date references. Do not include growth edges, invitations, challenges, or growth opportunities - just neutral observations of patterns. If no clear evidence exists in the journals for a particular area (self, God, others, blind spots), omit that section entirely rather than making generic observations.
 - Reference specific dates from the journal entries provided above
+- CRITICAL: Ensure all text in JSON strings is properly formatted. Do not use unescaped quotes or newline characters within strings. Keep text on single lines.
 
 TONE GUIDELINES:
 - Warm, encouraging, and non-judgmental
@@ -147,15 +148,38 @@ async function generateMirrorWithAI(
     console.log('💰 Tokens used:', data.usage?.total_tokens || 'unknown');
 
     const rawContent = data.choices[0].message.content;
-    
-    // Clean and parse JSON
-    const cleanedContent = rawContent
+
+    // Clean and parse JSON with better error handling
+    let cleanedContent = rawContent
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
       .trim();
-    
-    const mirrorContent = JSON.parse(cleanedContent);
-    console.log('✅ JSON parsed successfully');
+
+    // Log the raw content for debugging
+    console.log('📄 Raw AI response length:', cleanedContent.length);
+
+    let mirrorContent;
+    try {
+      mirrorContent = JSON.parse(cleanedContent);
+      console.log('✅ JSON parsed successfully');
+    } catch (parseError) {
+      console.error('❌ JSON parse error:', parseError.message);
+      console.error('📄 Failed content (first 500 chars):', cleanedContent.substring(0, 500));
+      console.error('📄 Failed content (last 500 chars):', cleanedContent.substring(Math.max(0, cleanedContent.length - 500)));
+
+      // Try to fix common JSON issues
+      // 1. Fix unescaped newlines in strings
+      cleanedContent = cleanedContent.replace(/\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)/g, '\\n');
+
+      // 2. Try parsing again
+      try {
+        mirrorContent = JSON.parse(cleanedContent);
+        console.log('✅ JSON parsed successfully after cleanup');
+      } catch (retryError) {
+        console.error('❌ Still failed after cleanup');
+        throw new Error(`AI generation failed: ${parseError.message}\nContent: ${cleanedContent.substring(0, 200)}...`);
+      }
+    }
 
     return {
       success: true,
@@ -265,7 +289,24 @@ serve(async (req) => {
       );
     }
 
-    // Step 2: Get unassigned journals
+    // Step 2: Get user's group to determine threshold
+    console.log('👥 Fetching user group...');
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('group_name')
+      .eq('id', customUserId)
+      .single();
+
+    if (userError) {
+      console.error('❌ Failed to fetch user:', userError);
+      throw new Error('Failed to fetch user data');
+    }
+
+    // Determine threshold based on group
+    const threshold = userData?.group_name === 'Mens Group' ? 6 : MIRROR_THRESHOLD;
+    console.log(`✅ User group: ${userData?.group_name || 'none'}, Threshold: ${threshold}`);
+
+    // Step 3: Get unassigned journals
     console.log('📚 Fetching unassigned journals...');
     const { data: journals, error: journalsError } = await supabase
       .from('journals')
@@ -279,12 +320,12 @@ serve(async (req) => {
       throw new Error('Failed to fetch journals');
     }
 
-    if (!journals || journals.length < MIRROR_THRESHOLD) {
-      console.log(`⏸️ Insufficient journals: ${journals?.length || 0}/${MIRROR_THRESHOLD}`);
+    if (!journals || journals.length < threshold) {
+      console.log(`⏸️ Insufficient journals: ${journals?.length || 0}/${threshold}`);
       return new Response(
         JSON.stringify({
           success: false,
-          error: `Need at least ${MIRROR_THRESHOLD} journals for Mirror generation. Currently have ${journals?.length || 0}.`,
+          error: `Need at least ${threshold} journals for Mirror generation. Currently have ${journals?.length || 0}.`,
         }),
         {
           status: 400,

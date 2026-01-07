@@ -14,6 +14,7 @@ import {
   Share as RNShare,
   ActivityIndicator,
   Modal,
+  ImageBackground,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,14 +30,19 @@ import {
 import { FriendSlots } from '@/components/friends/FriendSlots';
 import { SharePromptCard } from '@/components/friends/SharePromptCard';
 import { MirrorViewer } from '@/components/mirror/MirrorViewer';
+import { NotificationPitchCard } from '@/components/friends/NotificationPitchCard';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
+
+const FRIEND_EMPTY_STATE_BG = require('@/assets/friends/friend-empty-state.jpg');
 
 export default function FriendsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { refreshUnreadCount } = useUnreadShares();
   const { markFriendsAsViewed, refreshNewFriendsCount } = useFriendBadge();
+  const { permissionStatus, requestPermissionAndRegister } = usePushNotifications(user?.id || null);
   const [friends, setFriends] = useState([]);
   const [incomingShares, setIncomingShares] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -284,6 +290,17 @@ export default function FriendsScreen() {
     refreshNewFriendsCount();
   };
 
+  const handleEnableNotifications = async () => {
+    const token = await requestPermissionAndRegister();
+    if (token) {
+      Alert.alert('Success', 'Push notifications enabled!');
+      return true;
+    } else {
+      Alert.alert('Error', 'Could not enable push notifications. Please check your device settings.');
+      return false;
+    }
+  };
+
   const renderShareItem = (share) => {
     const isNew = share.isNew;
     const badgeColor = isNew ? '#f59e0b' : '#6366f1'; // Goldenrod vs Purple
@@ -327,53 +344,47 @@ export default function FriendsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView
-        contentContainerStyle={!hasFriends ? styles.scrollContentCentered : styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        {/* Conditional rendering based on friend status */}
-        {!hasFriends ? (
-          /* No Friends State - Show only pitch and button */
-          <View style={styles.centeredContent}>
-            {/* Pitch Section */}
-            <View style={styles.pitchSection}>
-              <View style={styles.iconContainer}>
-                <IconSymbol name="figure.stand.line.dotted.figure.stand" size={40} color="#6366f1" />
-              </View>
-              <Text style={styles.pitchTitle}>Pursue Jesus</Text>
-              <Text style={styles.pitchTitle}>with Friends</Text>
-              <Text style={styles.pitchDescription}>Share mirrors</Text>
-              <Text style={styles.pitchDescription}>
-                Observe God's leading together
-              </Text>
-              <Text style={styles.pitchDescription}>
-                You control what is shared
-              </Text>
-            </View>
+      {!hasFriends ? (
+        /* No Friends State - Full screen background image */
+        <ImageBackground
+          source={FRIEND_EMPTY_STATE_BG}
+          style={styles.emptyStateBackground}
+          resizeMode="cover"
+        >
+          <View style={styles.emptyStateOverlay} />
+          <View style={styles.emptyStateContent}>
+            {/* Heading */}
+            <Text style={styles.emptyStateHeading}>
+              Stay spiritually connected to friends
+            </Text>
+
+            {/* Subheading */}
+            <Text style={styles.emptyStateSubheading}>
+              Shared exploration in Oxbow
+            </Text>
 
             {/* Create Invite Button */}
             <TouchableOpacity
-              style={[styles.createInviteButton, creatingInvite && styles.buttonDisabled]}
+              style={[styles.emptyStateButton, creatingInvite && styles.buttonDisabled]}
               onPress={handleCreateInvite}
               disabled={creatingInvite}
             >
               {creatingInvite ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <>
-                  <IconSymbol name="link" size={18} color="#fff" />
-                  <Text style={styles.createInviteButtonText}>Create Invite Link</Text>
-                </>
+                <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
               )}
             </TouchableOpacity>
-
-            <Text style={styles.expiryNote}>This link expires in 72 hours</Text>
           </View>
-        ) : (
-          /* Has Friends State - Show full UI */
-          <>
+        </ImageBackground>
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          {/* Has Friends State - Show full UI */}
             {/* Header Section - Centered */}
             <View style={styles.headerCentered}>
               <Text style={styles.titleCentered}>Friends</Text>
@@ -409,9 +420,13 @@ export default function FriendsScreen() {
                 {incomingShares.map(renderShareItem)}
               </View>
             )}
-          </>
-        )}
-      </ScrollView>
+
+            {/* Notification Pitch - Show if notifications not enabled */}
+            {permissionStatus !== 'granted' && (
+              <NotificationPitchCard onEnablePress={handleEnableNotifications} />
+            )}
+        </ScrollView>
+      )}
 
       {/* Shared Mirror Viewer Modal */}
       {viewingMirror && selectedMirror && selectedMirrorId && (
@@ -443,11 +458,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    padding: 20,
-  },
-  scrollContentCentered: {
-    flexGrow: 1,
-    justifyContent: 'center',
     padding: 20,
   },
   centeredContent: {
@@ -611,5 +621,55 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
+  },
+  // Empty state with background image
+  emptyStateBackground: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  emptyStateContent: {
+    paddingHorizontal: 32,
+    alignItems: 'flex-start',
+    width: '100%',
+    maxWidth: 400,
+  },
+  emptyStateHeading: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 16,
+    textAlign: 'left',
+  },
+  emptyStateSubheading: {
+    fontSize: 20,
+    fontWeight: '400',
+    color: '#FFFFFF',
+    marginBottom: 40,
+    textAlign: 'left',
+  },
+  emptyStateButton: {
+    width: '100%',
+    backgroundColor: '#059669',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  emptyStateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });

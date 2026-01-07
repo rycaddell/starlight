@@ -17,46 +17,66 @@ interface FriendSlotsProps {
 }
 
 export function FriendSlots({ friends, onCreateInvite }: FriendSlotsProps) {
-  const maxSlots = 3;
+  const maxSlots = 6;
   const emptySlots = maxSlots - friends.length;
+
+  // Split into two rows of 3
+  const slotsPerRow = 3;
+  const allSlots = [
+    ...friends.map((friend, idx) => ({ type: 'friend', friend, key: friend.linkId })),
+    ...Array.from({ length: emptySlots }).map((_, idx) => ({ type: 'empty', key: `empty-${idx}` }))
+  ];
+
+  const row1 = allSlots.slice(0, slotsPerRow);
+  const row2 = allSlots.slice(slotsPerRow);
+
+  const renderSlot = (slot: any) => {
+    if (slot.type === 'friend') {
+      return (
+        <View key={slot.key} style={styles.slot}>
+          <View style={styles.filledAvatar}>
+            <Text style={styles.avatarText}>
+              {slot.friend.displayName.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <Text style={styles.friendName} numberOfLines={1}>
+            {slot.friend.displayName}
+          </Text>
+        </View>
+      );
+    } else {
+      return (
+        <View key={slot.key} style={styles.slot}>
+          <TouchableOpacity
+            style={styles.emptyAvatar}
+            onPress={onCreateInvite}
+          >
+            <IconSymbol name="plus" size={32} color="#9ca3af" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={onCreateInvite}
+          >
+            <Text style={styles.linkButtonText}>Link</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.subtitle}>Two friend invites available</Text>
-
+      {/* Row 1 */}
       <View style={styles.slotsContainer}>
-        {/* Filled slots - show linked friends */}
-        {friends.map((friend) => (
-          <View key={friend.linkId} style={styles.slot}>
-            <View style={styles.filledAvatar}>
-              <Text style={styles.avatarText}>
-                {friend.displayName.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <Text style={styles.friendName} numberOfLines={1}>
-              {friend.displayName}
-            </Text>
-          </View>
-        ))}
-
-        {/* Empty slots - show + icons with Link buttons */}
-        {Array.from({ length: emptySlots }).map((_, index) => (
-          <View key={`empty-${index}`} style={styles.slot}>
-            <TouchableOpacity
-              style={styles.emptyAvatar}
-              onPress={onCreateInvite}
-            >
-              <IconSymbol name="plus" size={32} color="#9ca3af" />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.linkButton}
-              onPress={onCreateInvite}
-            >
-              <Text style={styles.linkButtonText}>Link</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
+        {row1.map(renderSlot)}
       </View>
+
+      {/* Row 2 */}
+      {row2.length > 0 && (
+        <View style={[styles.slotsContainer, styles.row2]}>
+          {row2.map(renderSlot)}
+        </View>
+      )}
     </View>
   );
 }
@@ -65,16 +85,13 @@ const styles = StyleSheet.create({
   container: {
     paddingVertical: 20,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
   slotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 24,
+  },
+  row2: {
+    marginTop: 24,
   },
   slot: {
     alignItems: 'center',

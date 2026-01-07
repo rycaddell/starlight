@@ -10,7 +10,7 @@ import {
   checkCanGenerateMirror,
 } from '../lib/supabase';
 import { markMirrorAsViewed } from '../lib/supabase/mirrors';
-import { MIRROR_THRESHOLD } from '../lib/config/constants';
+import { MIRROR_THRESHOLD, getMirrorThreshold } from '../lib/config/constants';
 
 type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing';
 
@@ -88,24 +88,25 @@ export const useMirrorData = () => {
       
       if (countResult.success) {
         setJournalCount(countResult.count);
-        
-        console.log('📚 Journal count:', countResult.count, 'Threshold:', MIRROR_THRESHOLD);
+
+        const threshold = getMirrorThreshold(user);
+        console.log('📚 Journal count:', countResult.count, 'Threshold:', threshold);
         console.log('📚 State check conditions:', {
           skipStateUpdate,
           isNotGenerating: mirrorStateRef.current !== 'generating',
           isNotCompleted: mirrorStateRef.current !== 'completed',
           isNotViewing: mirrorStateRef.current !== 'viewing',
-          willUpdate: !skipStateUpdate && 
-            mirrorStateRef.current !== 'generating' && 
-            mirrorStateRef.current !== 'completed' && 
+          willUpdate: !skipStateUpdate &&
+            mirrorStateRef.current !== 'generating' &&
+            mirrorStateRef.current !== 'completed' &&
             mirrorStateRef.current !== 'viewing'
         });
-        
-        if (!skipStateUpdate && 
-            mirrorStateRef.current !== 'generating' && 
-            mirrorStateRef.current !== 'completed' && 
+
+        if (!skipStateUpdate &&
+            mirrorStateRef.current !== 'generating' &&
+            mirrorStateRef.current !== 'completed' &&
             mirrorStateRef.current !== 'viewing') {
-          const newState = countResult.count >= MIRROR_THRESHOLD ? 'ready' : 'progress';
+          const newState = countResult.count >= threshold ? 'ready' : 'progress';
           console.log('📚 Setting mirrorState to:', newState);
           setMirrorState(newState);
         } else {
@@ -374,7 +375,7 @@ export const useMirrorData = () => {
     }
 
     console.log('🔍 Checking eligibility...');
-    const eligibilityCheck = await checkCanGenerateMirror(user.id);
+    const eligibilityCheck = await checkCanGenerateMirror(user.id, user);
 
     if (!eligibilityCheck.canGenerate) {
       Alert.alert('Cannot Generate Mirror', eligibilityCheck.reason, [{ text: 'OK' }]);
@@ -488,10 +489,11 @@ export const useMirrorData = () => {
       // Get journal count to determine correct state
       const countResult = await getUserJournalCount(user.id);
       const count = countResult.success ? countResult.count : 0;
-      
+
       // Set correct state based on count
-      const newState = count >= MIRROR_THRESHOLD ? 'ready' : 'progress';
-      console.log(`🚪 Setting state to ${newState} (count: ${count}/${MIRROR_THRESHOLD})`);
+      const threshold = getMirrorThreshold(user);
+      const newState = count >= threshold ? 'ready' : 'progress';
+      console.log(`🚪 Setting state to ${newState} (count: ${count}/${threshold})`);
       setMirrorState(newState);
       
       // Now load journals without state update (we already set it)

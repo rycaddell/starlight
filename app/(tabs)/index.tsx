@@ -14,6 +14,7 @@ import { GuidedPromptSingle } from '../../components/journal/GuidedPromptSingle'
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
 import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { useMirrorData } from '../../hooks/useMirrorData';
+import { getMirrorThreshold } from '../../lib/config/constants';
 
 export default function JournalScreen() {
   const router = useRouter();
@@ -27,6 +28,9 @@ export default function JournalScreen() {
   
   // Get journal count for progress bar
   const { journalCount, loadJournals } = useMirrorData();
+
+  // Calculate mirror threshold based on user's group
+  const mirrorThreshold = getMirrorThreshold(user);
 
   // Bottom sheet state
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -328,9 +332,9 @@ export default function JournalScreen() {
 
           {/* Progress Bar */}
           <View style={styles.progressSection}>
-            <MirrorProgress currentCount={journalCount} targetCount={10} />
+            <MirrorProgress currentCount={journalCount} targetCount={mirrorThreshold} />
             <Text style={styles.progressSubtext}>
-              {journalCount} / 10 journals for the next Mirror
+              {journalCount} / {mirrorThreshold} journals for the next Mirror
             </Text>
           </View>
 
