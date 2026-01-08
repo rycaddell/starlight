@@ -6,7 +6,7 @@ import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { saveJournalEntry, getUserJournals } from '../../lib/supabase';
+import { saveJournalEntry, getUserJournals, getLastJournalType } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
 import { FreeFormCard } from '../../components/journal/FreeFormCard';
@@ -25,7 +25,10 @@ export default function JournalScreen() {
 
   // State for today's answered prompts
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
-  
+
+  // State for default journal tab (voice or text)
+  const [defaultJournalTab, setDefaultJournalTab] = useState<'text' | 'voice'>('voice');
+
   // Get journal count for progress bar
   const { journalCount, loadJournals } = useMirrorData();
 
@@ -85,6 +88,27 @@ export default function JournalScreen() {
     formatDuration 
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
+  // Load user's last journal type for default tab selection
+  const loadLastJournalType = async () => {
+    if (!isAuthenticated || !user) return;
+
+    try {
+      const result = await getLastJournalType(user.id);
+
+      if (result.success) {
+        // Default to 'voice' for new users (journalType is null)
+        // Otherwise use their last journal type
+        const defaultTab = result.journalType || 'voice';
+        console.log('📖 Last journal type:', result.journalType, '→ Default tab:', defaultTab);
+        setDefaultJournalTab(defaultTab);
+      }
+    } catch (error) {
+      console.error('Error loading last journal type:', error);
+      // Fallback to voice on error
+      setDefaultJournalTab('voice');
+    }
+  };
+
   // Load today's answered prompts
   const loadTodayAnsweredPrompts = async () => {
     if (!isAuthenticated || !user) return;
@@ -95,7 +119,7 @@ export default function JournalScreen() {
       const todayISO = today.toISOString();
 
       const result = await getUserJournals(user.id);
-      
+
       if (result.success && result.data) {
         // Filter journals from today that have a prompt_text
         const todayJournals = result.data.filter(journal => {
@@ -117,11 +141,12 @@ export default function JournalScreen() {
     }
   };
 
-  // Load journal count and answered prompts on mount
+  // Load journal count, answered prompts, and default tab on mount
   React.useEffect(() => {
     if (isAuthenticated && user) {
       loadJournals();
       loadTodayAnsweredPrompts();
+      loadLastJournalType();
     }
   }, [isAuthenticated, user]);
 
@@ -132,6 +157,7 @@ export default function JournalScreen() {
         console.log('📊 Journal screen focused - reloading journals');
         loadJournals();
         loadTodayAnsweredPrompts();
+        loadLastJournalType(); // Refresh default tab
       }
     }, [isAuthenticated, user])
   );
@@ -360,7 +386,8 @@ export default function JournalScreen() {
         mode={sheetMode}
         promptText={sheetPrompt}
         onSubmit={handleBottomSheetSubmit}
-        
+        defaultTab={defaultJournalTab}
+
         isRecording={isRecording}
         isPaused={isPaused}
         recordingDuration={recordingDuration}

@@ -23,7 +23,8 @@ interface JournalBottomSheetProps {
   mode: 'free' | 'guided';
   promptText: string | null;
   onSubmit: (text: string, timestamp: string, entryType: 'text' | 'voice') => void;
-  
+  defaultTab: 'text' | 'voice'; // Default tab based on last journal type
+
   // Voice recording props
   isRecording: boolean;
   isPaused: boolean;
@@ -43,6 +44,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   mode,
   promptText,
   onSubmit,
+  defaultTab,
   isRecording,
   isPaused,
   recordingDuration,
@@ -55,14 +57,14 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   onDiscardRecording,
 }) => {
   const [journalText, setJournalText] = useState('');
-  const [activeTab, setActiveTab] = useState<TabType>('text');
+  const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
-  // Reset to text tab when sheet opens
+  // Set active tab to user's last used type when sheet opens
   useEffect(() => {
     if (visible) {
-      setActiveTab('text');
+      setActiveTab(defaultTab);
     }
-  }, [visible]);
+  }, [visible, defaultTab]);
 
   const handleSubmit = async () => {
     if (journalText.trim()) {
@@ -95,7 +97,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
             onPress: () => {
               onDiscardRecording(); // Discard without saving
               setJournalText('');
-              setActiveTab('text');
+              setActiveTab(defaultTab);
               onClose();
             }
           }
@@ -106,7 +108,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
     
     // Normal close
     setJournalText('');
-    setActiveTab('text');
+    setActiveTab(defaultTab);
     onClose();
   };
 
@@ -139,8 +141,23 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
           </View>
         )}
 
-        {/* Simple Tab Switcher */}
+        {/* Simple Tab Switcher - Voice first (left), Text second (right) */}
         <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[
+              styles.tab,
+              activeTab === 'voice' && styles.tabActive
+            ]}
+            onPress={() => setActiveTab('voice')}
+          >
+            <Text style={[
+              styles.tabText,
+              activeTab === 'voice' && styles.tabTextActive
+            ]}>
+              Voice
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[
               styles.tab,
@@ -163,21 +180,6 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
               activeTab === 'text' && styles.tabTextActive
             ]}>
               Text
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'voice' && styles.tabActive
-            ]}
-            onPress={() => setActiveTab('voice')}
-          >
-            <Text style={[
-              styles.tabText,
-              activeTab === 'voice' && styles.tabTextActive
-            ]}>
-              Voice
             </Text>
           </TouchableOpacity>
         </View>
