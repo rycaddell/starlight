@@ -29,6 +29,10 @@ import { Audio } from 'expo-av';
 import { transcribeAudio } from '../lib/supabase/transcription';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
+// Maximum recording duration in seconds (8 minutes)
+// For testing: temporarily set to 10 seconds, then restore to 480
+const MAX_RECORDING_DURATION = 480;
+
 export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -44,6 +48,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const latestDurationRef = useRef(0);
   const wasBackgroundedRef = useRef(false);
   const resumeTimeRef = useRef<number>(0);
+  const hasHitMaxDurationRef = useRef(false);
   
   useEffect(() => {
     recordingStateRef.current = { isRecording, isPaused };
@@ -109,6 +114,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       latestDurationRef.current = 0;
       wasBackgroundedRef.current = false;
       resumeTimeRef.current = 0;
+      hasHitMaxDurationRef.current = false;
 
       await activateWakeLock();
     } catch (error) {
@@ -173,6 +179,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         latestDurationRef.current = 0;
         wasBackgroundedRef.current = false;
         resumeTimeRef.current = 0;
+        hasHitMaxDurationRef.current = false;
       }
     }
   };
@@ -198,7 +205,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         latestDurationRef.current = 0;
         wasBackgroundedRef.current = false;
         resumeTimeRef.current = 0;
-        
+        hasHitMaxDurationRef.current = false;
+
         // Reset audio mode
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
@@ -302,14 +310,24 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           // Always track latest duration in ref
           latestDurationRef.current = durationInSeconds;
           setRecordingDuration(durationInSeconds);
-          
-          // 8 minute limit (480 seconds)
-          if (durationInSeconds >= 480) {
-            Alert.alert(
-              'Recording Limit Reached',
-              'Maximum recording time is 8 minutes. Recording will stop now.',
-              [{ text: 'OK', onPress: () => handleStopRecording() }]
-            );
+
+          // Auto-stop at max duration to prevent data loss
+          if (durationInSeconds >= MAX_RECORDING_DURATION && !hasHitMaxDurationRef.current) {
+            hasHitMaxDurationRef.current = true;
+            console.log(`⏱️ Recording hit ${MAX_RECORDING_DURATION}s limit, auto-stopping`);
+
+            // Auto-stop immediately without waiting for user confirmation
+            handleStopRecording();
+
+            // Show non-blocking info alert after stopping
+            const minutes = Math.floor(MAX_RECORDING_DURATION / 60);
+            setTimeout(() => {
+              Alert.alert(
+                'Recording Complete',
+                `Your ${minutes}-minute recording has been saved and is now being transcribed.`,
+                [{ text: 'OK' }]
+              );
+            }, 500);
           }
         }
       });

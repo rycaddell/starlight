@@ -93,6 +93,11 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           </View>
         )}
       </View>
+
+      {/* Recording Limit Info */}
+      <Text style={styles.limitText}>
+        Maximum recording length: 8 minutes
+      </Text>
     </View>
   );
 };
@@ -179,5 +184,11 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  limitText: {
+    fontSize: 13,
+    color: '#64748b',
+    marginTop: 12,
+    fontStyle: 'italic',
   },
 });
