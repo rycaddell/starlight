@@ -89,8 +89,11 @@ export default function JournalScreen() {
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
   // Load user's last journal type for default tab selection
-  const loadLastJournalType = async () => {
-    if (!isAuthenticated || !user) return;
+  const loadLastJournalType = React.useCallback(async () => {
+    if (!isAuthenticated || !user) {
+      console.log('⏭️ Skipping loadLastJournalType - user not authenticated');
+      return;
+    }
 
     try {
       const result = await getLastJournalType(user.id);
@@ -107,11 +110,14 @@ export default function JournalScreen() {
       // Fallback to voice on error
       setDefaultJournalTab('voice');
     }
-  };
+  }, [isAuthenticated, user]);
 
   // Load today's answered prompts
-  const loadTodayAnsweredPrompts = async () => {
-    if (!isAuthenticated || !user) return;
+  const loadTodayAnsweredPrompts = React.useCallback(async () => {
+    if (!isAuthenticated || !user) {
+      console.log('⏭️ Skipping loadTodayAnsweredPrompts - user not authenticated');
+      return;
+    }
 
     try {
       const today = new Date();
@@ -139,7 +145,7 @@ export default function JournalScreen() {
     } catch (error) {
       console.error('Error loading today answered prompts:', error);
     }
-  };
+  }, [isAuthenticated, user]);
 
   // Load journal count, answered prompts, and default tab on mount
   React.useEffect(() => {
@@ -148,7 +154,7 @@ export default function JournalScreen() {
       loadTodayAnsweredPrompts();
       loadLastJournalType();
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, loadJournals, loadTodayAnsweredPrompts, loadLastJournalType]);
 
   // Reload journals when screen comes into focus (e.g., when returning from mirror tab)
   useFocusEffect(
@@ -159,7 +165,7 @@ export default function JournalScreen() {
         loadTodayAnsweredPrompts();
         loadLastJournalType(); // Refresh default tab
       }
-    }, [isAuthenticated, user])
+    }, [isAuthenticated, user, loadJournals, loadTodayAnsweredPrompts, loadLastJournalType])
   );
 
   // Save journal to database
