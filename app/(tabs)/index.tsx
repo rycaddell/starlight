@@ -154,7 +154,8 @@ export default function JournalScreen() {
       loadTodayAnsweredPrompts();
       loadLastJournalType();
     }
-  }, [isAuthenticated, user, loadJournals, loadTodayAnsweredPrompts, loadLastJournalType]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, user]);
 
   // Reload journals when screen comes into focus (e.g., when returning from mirror tab)
   useFocusEffect(
@@ -165,7 +166,8 @@ export default function JournalScreen() {
         loadTodayAnsweredPrompts();
         loadLastJournalType(); // Refresh default tab
       }
-    }, [isAuthenticated, user, loadJournals, loadTodayAnsweredPrompts, loadLastJournalType])
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isAuthenticated, user])
   );
 
   // Save journal to database
