@@ -101,10 +101,6 @@ export const GuidedPromptSingle: React.FC<GuidedPromptSingleProps> = ({
         onPress={handlePromptSelect}
         activeOpacity={0.7}
       >
-        <View style={styles.header}>
-          <Text style={styles.label}>Guided</Text>
-        </View>
-
         <Text style={styles.promptText}>{currentPrompt.text}</Text>
 
         <View style={styles.actionButton}>
@@ -134,7 +130,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
-    padding: 16,
+    padding: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
@@ -147,14 +143,6 @@ const styles = StyleSheet.create({
     elevation: 3,
     minHeight: 140,
     justifyContent: 'space-between',
-  },
-  header: {
-    marginBottom: 12,
-  },
-  label: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1e293b',
   },
   promptText: {
     fontSize: 16,

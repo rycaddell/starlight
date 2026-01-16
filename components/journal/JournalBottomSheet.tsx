@@ -23,7 +23,7 @@ interface JournalBottomSheetProps {
   mode: 'free' | 'guided';
   promptText: string | null;
   onSubmit: (text: string, timestamp: string, entryType: 'text' | 'voice') => void;
-  defaultTab: 'text' | 'voice'; // Default tab based on last journal type
+  defaultTab: 'text' | 'voice'; // Default tab based on which card was pressed
 
   // Voice recording props
   isRecording: boolean;
@@ -59,7 +59,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
-  // Set active tab to user's last used type when sheet opens
+  // Set active tab based on which card was pressed
   useEffect(() => {
     if (visible) {
       setActiveTab(defaultTab);

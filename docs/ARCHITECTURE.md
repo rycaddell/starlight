@@ -47,6 +47,14 @@ starlight/
 │   ├── auth/                    # Authentication UI
 │   ├── journal/                 # Journal components (bottom sheet modal)
 │   ├── mirror/                  # Mirror screens & viewer
+│   │   ├── MirrorViewer.tsx     # Full-screen mirror viewing experience
+│   │   ├── MirrorStatusCard.tsx # Mirror generation status card
+│   │   ├── LastMirrorCard.tsx   # Single mirror display on main screen
+│   │   ├── LastJournalCard.tsx  # Single journal with truncation/expansion
+│   │   ├── PastMirrorsModal.tsx # Full-sheet modal for all past mirrors
+│   │   ├── PastJournalsModal.tsx # Full-sheet modal for all journals
+│   │   ├── ShareMirrorSheet.tsx # Friend picker for mirror sharing
+│   │   └── JournalHistory.tsx   # Legacy journal list component
 │   ├── onboarding/              # Onboarding flow screens
 │   ├── voice/                   # Voice recording UI
 │   ├── friends/                 # Friends & sharing components
@@ -216,7 +224,22 @@ components/
 
 **Implementation:** Supabase Edge Function (`generate-mirror`) + client polling in `useMirrorData.ts`
 
-### 4. Modal-Based Mirror Experience
+### 4. Mirror Page Redesign
+
+**Why:** Streamlined UI focusing on most recent content
+- Shows single "Last Mirror" card instead of full list
+- Shows single "Last journal" card with smart text truncation
+- "View past" links open full-sheet modals for complete history
+- Biblical character extracted from mirror's `screen_2_biblical` JSON field
+- Journal deletion with confirmation dialog (X button in corner)
+
+**Implementation:**
+- Main screen: `LastMirrorCard.tsx`, `LastJournalCard.tsx`
+- Modals: `PastMirrorsModal.tsx`, `PastJournalsModal.tsx`
+- Smart truncation: Uses `onTextLayout` to detect when text exceeds 3 lines
+- Only shows "Read more" link when content actually overflows
+
+### 5. Modal-Based Mirror Experience
 
 **Why:** Immersive reflection experience separate from main app
 - Full-screen modals with swipeable screens
@@ -224,9 +247,9 @@ components/
 - Easy to revisit past mirrors
 - 3-screen format: Themes, Biblical Mirror, Observations
 
-**Implementation:** `components/mirror/MirrorModal.tsx`
+**Implementation:** `components/mirror/MirrorViewer.tsx`
 
-### 4. 10-Journal Threshold (Configurable)
+### 6. 10-Journal Threshold (Configurable)
 
 **Why:** Core progression mechanic
 - Ensures sufficient content for meaningful AI reflection
@@ -236,7 +259,7 @@ components/
 
 **Implementation:** Progress tracking in `useMirrorData.ts`
 
-### 5. Guided Journal Prompts
+### 7. Guided Journal Prompts
 
 **Why:** Help users overcome "blank page" syndrome
 - Deterministic shuffle algorithm based on user ID (consistent but unique per user)
@@ -247,7 +270,7 @@ components/
 
 **Implementation:** `guidedPrompts.ts` + AsyncStorage for progress tracking
 
-### 6. Friends & Mirror Sharing
+### 8. Friends & Mirror Sharing
 
 **Why:** Social accountability and spiritual growth together
 - Users can connect with friends via invite links
@@ -262,7 +285,7 @@ components/
 - `contexts/UnreadSharesContext.tsx` - Tab badge tracking
 - Server-side mirror generation with polling
 
-### 7. Deep Linking for Friend Invites
+### 9. Deep Linking for Friend Invites
 
 **Why:** Seamless friend connection experience
 - Users share custom invite links via native share sheet
@@ -275,7 +298,7 @@ components/
 - `app/friend-invite/[token].tsx` - Invite acceptance route
 - Expo Router handles deep link navigation
 
-### 8. Supabase Realtime for Live Updates
+### 10. Supabase Realtime for Live Updates
 
 **Why:** Instant updates without polling overhead
 - Replaced 30-second polling with WebSocket-based Realtime subscriptions

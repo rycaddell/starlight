@@ -165,13 +165,65 @@ _________________________________________________
 - [ ] Reflection questions appear at bottom (if implemented)
 - [ ] Can complete reflection (if implemented)
 
-### Past Mirrors
-- [ ] After viewing, mirror appears in "Past Mirrors" section
-- [ ] Mirror card shows date correctly
-- [ ] Mirror card shows theme/title
-- [ ] Tap past mirror → Reopens that mirror
-- [ ] Can view multiple past mirrors
-- [ ] Past mirrors sorted by date (newest first)
+### Last Mirror Card (Mirror Screen)
+- [ ] After viewing, "Last Mirror" card appears at top of Mirror screen
+- [ ] Card shows mirror date (Month Day, Year format)
+- [ ] Card shows biblical character name (if available)
+- [ ] Card shows full reflection focus (no truncation)
+- [ ] "Share" button appears on left side
+- [ ] "View Mirror" button appears on right side (goldenrod color)
+- [ ] Tap "View Mirror" → Reopens that mirror
+- [ ] Tap "Share" → Opens friend picker (if friends exist) or navigates to Friends tab
+- [ ] "View past Mirrors" link appears if multiple mirrors exist
+- [ ] Tap "View past Mirrors" → Opens full-sheet modal
+
+### Past Mirrors Modal
+- [ ] Modal opens with pageSheet presentation style
+- [ ] Header shows "Past Mirrors" title
+- [ ] Close button (X) in header works
+- [ ] All past mirrors appear in list
+- [ ] Mirrors sorted by date (newest first)
+- [ ] Each mirror card shows same info as Last Mirror card
+- [ ] Tap any mirror card → Opens that mirror in viewer
+- [ ] After closing mirror viewer, modal restores/reopens
+- [ ] Modal closes properly when tapping X
+
+### Last Journal Card (Mirror Screen)
+- [ ] "Last journal" heading appears above card
+- [ ] Card shows journal date (Month Day, Year format)
+- [ ] Card shows journal content
+- [ ] Content truncates to 3 lines for long entries
+- [ ] "Read more" link appears ONLY when content exceeds 3 lines
+- [ ] "Read more" link does NOT appear for short entries (≤3 lines)
+- [ ] Tap card or "Read more" → Expands to show full content
+- [ ] "Show less" link appears when expanded
+- [ ] Tap "Show less" → Collapses back to 3 lines
+- [ ] Delete button (grey X) appears in upper right corner
+- [ ] Tap delete X → Shows confirmation dialog
+- [ ] Confirm deletion → Journal removed from list
+- [ ] Cancel deletion → Journal remains
+- [ ] "View past Journals" link appears if multiple journals exist
+- [ ] Tap "View past Journals" → Opens full-sheet modal
+
+### Past Journals Modal
+- [ ] Modal opens with pageSheet presentation style
+- [ ] Header shows "Past Journals" title
+- [ ] Close button (X) in header works
+- [ ] All journals appear (including those associated with mirrors)
+- [ ] Journals sorted by date (newest first)
+- [ ] Each journal card shows date, content, delete button
+- [ ] Content truncates to 3 lines for long entries
+- [ ] "Read more" appears only when content exceeds 3 lines
+- [ ] Tap card or "Read more" → Expands inline
+- [ ] Delete button works on each card
+- [ ] Deleting journal removes it from modal immediately
+- [ ] Modal closes properly when tapping X
+
+### Journal Visibility After Mirror Generation
+- [ ] Create 10+ journals → Generate mirror
+- [ ] After mirror generation, journals still visible in Last Journal section
+- [ ] All journals (including those in mirror) visible in Past Journals modal
+- [ ] Journals never disappear after being included in a mirror
 
 ### Mirror Generation Edge Cases
 - [ ] Generate second mirror (20 journals) → Works correctly
@@ -610,5 +662,5 @@ _________________________________________________
 
 ---
 
-**Last Updated:** 2025-01-17
-**Version:** Friends & Sharing MVP
+**Last Updated:** 2026-01-15
+**Version:** Mirror Page Redesign + Friends & Sharing

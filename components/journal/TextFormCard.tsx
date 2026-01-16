@@ -1,21 +1,21 @@
-// components/journal/FreeFormCard.tsx
+// components/journal/TextFormCard.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-interface FreeFormCardProps {
+interface TextFormCardProps {
   onPress: () => void;
 }
 
-export const FreeFormCard: React.FC<FreeFormCardProps> = ({ onPress }) => {
+export const TextFormCard: React.FC<TextFormCardProps> = ({ onPress }) => {
   return (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.container}
       onPress={onPress}
       activeOpacity={0.7}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Voice</Text>
-        <Text style={styles.subtitle}>Unfiltered thinking</Text>
+        <Text style={styles.title}>Text</Text>
+        <Text style={styles.subtitle}>Quick capture</Text>
       </View>
 
       <View style={styles.actionButton}>
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actionButton: {
-    backgroundColor: '#2563eb', // Changed from #3b82f6 to match GuidedPromptCard
+    backgroundColor: '#2563eb',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

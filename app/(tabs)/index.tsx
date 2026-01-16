@@ -6,10 +6,11 @@ import { Audio } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { saveJournalEntry, getUserJournals, getLastJournalType } from '../../lib/supabase';
+import { saveJournalEntry, getUserJournals } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
 import { FreeFormCard } from '../../components/journal/FreeFormCard';
+import { TextFormCard } from '../../components/journal/TextFormCard';
 import { GuidedPromptSingle } from '../../components/journal/GuidedPromptSingle';
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
 import { GuidedPrompt } from '../../constants/guidedPrompts';
@@ -26,9 +27,6 @@ export default function JournalScreen() {
   // State for today's answered prompts
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
 
-  // State for default journal tab (voice or text)
-  const [defaultJournalTab, setDefaultJournalTab] = useState<'text' | 'voice'>('voice');
-
   // Get journal count for progress bar
   const { journalCount, loadJournals } = useMirrorData();
 
@@ -39,23 +37,24 @@ export default function JournalScreen() {
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
   const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<'text' | 'voice'>('voice');
 
   // Handler for voice transcription from BOTTOM SHEET
   const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string) => {
     console.log('🎤 Voice transcription complete in bottom sheet');
-    
+
     // Save the journal with 'voice' entry type and the guided prompt if applicable
     const saved = await saveJournalToDatabase(
-      transcribedText, 
-      timestamp, 
+      transcribedText,
+      timestamp,
       'voice',
       sheetMode === 'guided' ? sheetPrompt : null
     );
-    
+
     if (saved) {
       // Close the bottom sheet
       setBottomSheetVisible(false);
-      
+
       // Navigate to mirror
       router.push({
         pathname: '/(tabs)/mirror',
@@ -64,7 +63,7 @@ export default function JournalScreen() {
           timestamp: timestamp
         }
       });
-      
+
       // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
         await loadJournals();
@@ -87,30 +86,6 @@ export default function JournalScreen() {
     handleDiscardRecording,
     formatDuration 
   } = useAudioRecording(handleBottomSheetVoiceComplete);
-
-  // Load user's last journal type for default tab selection
-  const loadLastJournalType = React.useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      console.log('⏭️ Skipping loadLastJournalType - user not authenticated');
-      return;
-    }
-
-    try {
-      const result = await getLastJournalType(user.id);
-
-      if (result.success) {
-        // Default to 'voice' for new users (journalType is null)
-        // Otherwise use their last journal type
-        const defaultTab = result.journalType || 'voice';
-        console.log('📖 Last journal type:', result.journalType, '→ Default tab:', defaultTab);
-        setDefaultJournalTab(defaultTab);
-      }
-    } catch (error) {
-      console.error('Error loading last journal type:', error);
-      // Fallback to voice on error
-      setDefaultJournalTab('voice');
-    }
-  }, [isAuthenticated, user]);
 
   // Load today's answered prompts
   const loadTodayAnsweredPrompts = React.useCallback(async () => {
@@ -147,12 +122,11 @@ export default function JournalScreen() {
     }
   }, [isAuthenticated, user]);
 
-  // Load journal count, answered prompts, and default tab on mount
+  // Load journal count and answered prompts on mount
   React.useEffect(() => {
     if (isAuthenticated && user) {
       loadJournals();
       loadTodayAnsweredPrompts();
-      loadLastJournalType();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
@@ -164,7 +138,6 @@ export default function JournalScreen() {
         console.log('📊 Journal screen focused - reloading journals');
         loadJournals();
         loadTodayAnsweredPrompts();
-        loadLastJournalType(); // Refresh default tab
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isAuthenticated, user])
@@ -275,10 +248,19 @@ export default function JournalScreen() {
   };
 
   // Handlers for opening bottom sheet
-  const handleFreeFormPress = () => {
-    console.log('🆓 Free Form card pressed - opening sheet');
+  const handleVoiceFormPress = () => {
+    console.log('🎤 Voice pressed - opening voice recording');
     setSheetMode('free');
     setSheetPrompt(null);
+    setSelectedTab('voice');
+    setBottomSheetVisible(true);
+  };
+
+  const handleTextFormPress = () => {
+    console.log('📝 Text pressed - opening text journal');
+    setSheetMode('free');
+    setSheetPrompt(null);
+    setSelectedTab('text');
     setBottomSheetVisible(true);
   };
 
@@ -286,6 +268,7 @@ export default function JournalScreen() {
     console.log('📝 Guided prompt selected:', prompt.text);
     setSheetMode('guided');
     setSheetPrompt(prompt.text);
+    setSelectedTab('voice');
     setBottomSheetVisible(true);
   };
 
@@ -299,17 +282,17 @@ export default function JournalScreen() {
 
   // Handle bottom sheet submission
   const handleBottomSheetSubmit = async (
-    text: string, 
-    timestamp: string, 
+    text: string,
+    timestamp: string,
     entryType: 'text' | 'voice'
   ) => {
     const saved = await saveJournalToDatabase(
-      text, 
-      timestamp, 
+      text,
+      timestamp,
       entryType,
       sheetMode === 'guided' ? sheetPrompt : null
     );
-    
+
     if (saved) {
       // Navigate to mirror
       router.push({
@@ -319,7 +302,7 @@ export default function JournalScreen() {
           timestamp: timestamp
         }
       });
-      
+
       // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
         await loadJournals();
@@ -375,9 +358,15 @@ export default function JournalScreen() {
           {/* Quick Start Section */}
           <View style={styles.quickStartSection}>
             <Text style={styles.sectionTitle}>Make a new journal</Text>
-            
-            <FreeFormCard onPress={handleFreeFormPress} />
-            
+
+            <FreeFormCard onPress={handleVoiceFormPress} />
+            <TextFormCard onPress={handleTextFormPress} />
+          </View>
+
+          {/* Daily Prompt Section */}
+          <View style={styles.dailyPromptSection}>
+            <Text style={styles.sectionTitle}>Daily prompt</Text>
+
             <GuidedPromptSingle
               userId={user.id}
               todayAnsweredPrompts={todayAnsweredPrompts}
@@ -394,7 +383,7 @@ export default function JournalScreen() {
         mode={sheetMode}
         promptText={sheetPrompt}
         onSubmit={handleBottomSheetSubmit}
-        defaultTab={defaultJournalTab}
+        defaultTab={selectedTab}
 
         isRecording={isRecording}
         isPaused={isPaused}
@@ -453,6 +442,10 @@ const styles = StyleSheet.create({
   },
   quickStartSection: {
     width: '100%',
+  },
+  dailyPromptSection: {
+    width: '100%',
+    marginTop: 8,
   },
   sectionTitle: {
     fontSize: 20,
