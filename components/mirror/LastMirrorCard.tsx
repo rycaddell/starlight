@@ -8,8 +8,10 @@ interface LastMirrorCardProps {
   biblicalCharacter?: string;
   reflectionFocus?: string;
   onViewMirror: () => void;
-  onSharePress: () => void;
+  onSharePress?: () => void;
   isCheckingFriends?: boolean;
+  hideShareButton?: boolean;
+  hideYourFocus?: boolean;
 }
 
 export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
@@ -19,6 +21,8 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
   onViewMirror,
   onSharePress,
   isCheckingFriends = false,
+  hideShareButton = false,
+  hideYourFocus = false,
 }) => {
   return (
     <View style={styles.card}>
@@ -39,7 +43,7 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
       )}
 
       {/* Your Focus */}
-      {reflectionFocus && (
+      {!hideYourFocus && reflectionFocus && (
         <View style={styles.focusSection}>
           <Text style={styles.focusLabel}>Your Focus</Text>
           <Text style={styles.focusText}>{reflectionFocus}</Text>
@@ -48,18 +52,20 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
 
       {/* Buttons */}
       <View style={styles.buttonRow}>
-        <TouchableOpacity
-          style={styles.shareButton}
-          onPress={onSharePress}
-          disabled={isCheckingFriends}
-        >
-          <Text style={styles.shareButtonText}>
-            {isCheckingFriends ? 'Loading...' : 'Share'}
-          </Text>
-        </TouchableOpacity>
+        {!hideShareButton && (
+          <TouchableOpacity
+            style={styles.shareButton}
+            onPress={onSharePress}
+            disabled={isCheckingFriends}
+          >
+            <Text style={styles.shareButtonText}>
+              {isCheckingFriends ? 'Loading...' : 'Share'}
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
-          style={styles.viewButton}
+          style={[styles.viewButton, hideShareButton && styles.viewButtonFullWidth]}
           onPress={onViewMirror}
         >
           <Text style={styles.viewButtonText}>View Mirror</Text>
@@ -140,6 +146,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  viewButtonFullWidth: {
+    flex: undefined,
+    width: '100%',
   },
   viewButtonText: {
     color: '#1e293b',

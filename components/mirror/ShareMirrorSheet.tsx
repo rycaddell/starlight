@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { fetchFriends } from '@/lib/supabase/friends';
 import { shareMirror } from '@/lib/supabase/mirrorShares';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface ShareMirrorSheetProps {
   visible: boolean;
@@ -138,11 +139,11 @@ export function ShareMirrorSheet({
         onPress={() => setSelectedFriendId(item.userId)}
       >
         <View style={styles.friendInfo}>
-          <View style={[styles.avatar, isSelected && styles.avatarSelected]}>
-            <Text style={styles.avatarText}>
-              {item.displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Avatar
+            profilePictureUrl={item.profilePictureUrl}
+            displayName={item.displayName}
+            size={40}
+          />
           <Text style={[styles.friendName, isSelected && styles.friendNameSelected]}>
             {item.displayName}
           </Text>
@@ -407,22 +408,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     flex: 1,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#d1d5db',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarSelected: {
-    backgroundColor: '#6366f1',
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
   },
   friendName: {
     fontSize: 16,

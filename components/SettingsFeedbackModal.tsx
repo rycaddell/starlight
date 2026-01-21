@@ -11,9 +11,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { saveFeedback } from '../lib/supabase';
+import { Avatar } from './ui/Avatar';
+import { useProfilePicture } from '../hooks/useProfilePicture';
 
 interface SettingsFeedbackModalProps {
   visible: boolean;
@@ -24,10 +27,14 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
   visible,
   onClose,
 }) => {
-  const { signOut, user } = useAuth();
+  const { signOut, user, refreshUser } = useAuth();
   const [feedbackType, setFeedbackType] = useState<'bug' | 'wish' | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { handleAddProfilePicture, uploading } = useProfilePicture(user?.id || '', async () => {
+    // Refresh user data to show updated profile picture
+    await refreshUser();
+  });
 
   const handleLogout = () => {
     Alert.alert(
@@ -178,9 +185,32 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          {/* Logout Section */}
+          {/* Account Section */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>👤 Account</Text>
+
+            {/* Profile Picture */}
+            <View style={styles.profilePicSection}>
+              <Avatar
+                profilePictureUrl={user?.profile_picture_url}
+                displayName={user?.display_name}
+                size={60}
+              />
+              <TouchableOpacity
+                style={[styles.changeProfilePicButton, uploading && styles.buttonDisabled]}
+                onPress={handleAddProfilePicture}
+                disabled={uploading}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="#6366f1" size="small" />
+                ) : (
+                  <Text style={styles.changeProfilePicText}>
+                    {user?.profile_picture_url ? 'Change profile pic' : 'Add profile pic'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
             <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
               <Text style={styles.logoutButtonText}>Logout</Text>
             </TouchableOpacity>
@@ -324,6 +354,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  profilePicSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 16,
+    marginBottom: 16,
+  },
+  changeProfilePicButton: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+  },
+  changeProfilePicText: {
+    color: '#6366f1',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
   logoutButton: {
     backgroundColor: '#ef4444',

@@ -16,7 +16,8 @@ export default {
         infoPlist: {
           ITSAppUsesNonExemptEncryption: false,
           NSMicrophoneUsageDescription: "Oxbow uses microphone access for voice journaling to enhance your spiritual reflection experience.",
-          NSUserNotificationUsageDescription: "Oxbow sends gentle reminders to help maintain your consistent journaling practice."
+          NSUserNotificationUsageDescription: "Oxbow sends gentle reminders to help maintain your consistent journaling practice.",
+          NSPhotoLibraryUsageDescription: "Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you."
         }
       },
       android: {
@@ -40,6 +41,12 @@ export default {
             imageWidth: 200,
             resizeMode: "contain",
             backgroundColor: "#ffffff"
+          }
+        ],
+        [
+          "expo-image-picker",
+          {
+            "photosPermission": "Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you."
           }
         ]
       ],

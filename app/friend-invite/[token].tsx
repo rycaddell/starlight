@@ -13,8 +13,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { acceptInvite } from '@/lib/supabase/friends';
-import { IconSymbol } from '@/components/ui/IconSymbol';
+import { acceptInvite, getInviterInfo } from '@/lib/supabase/friends';
+import { Avatar } from '@/components/ui/Avatar';
 
 export default function AcceptInviteScreen() {
   const { token, inviter, name } = useLocalSearchParams();
@@ -23,6 +23,7 @@ export default function AcceptInviteScreen() {
 
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [inviterProfilePicUrl, setInviterProfilePicUrl] = useState<string | null>(null);
 
   // Decode name from URL
   const inviterName = typeof name === 'string' ? decodeURIComponent(name) : 'A friend';
@@ -42,6 +43,20 @@ export default function AcceptInviteScreen() {
       );
     }
   }, [user, router]);
+
+  // Fetch inviter profile picture
+  useEffect(() => {
+    const loadInviterInfo = async () => {
+      if (typeof token !== 'string') return;
+
+      const result = await getInviterInfo(token);
+      if (result.success && result.inviterProfilePicUrl) {
+        setInviterProfilePicUrl(result.inviterProfilePicUrl);
+      }
+    };
+
+    loadInviterInfo();
+  }, [token]);
 
   const handleAccept = async () => {
     if (!user?.id || typeof token !== 'string') {
@@ -105,11 +120,11 @@ export default function AcceptInviteScreen() {
       <View style={styles.content}>
         {/* Inviter Info */}
         <View style={styles.inviterSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {inviterName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Avatar
+            profilePictureUrl={inviterProfilePicUrl}
+            displayName={inviterName}
+            size={80}
+          />
           <Text style={styles.inviterName}>{inviterName}</Text>
           <Text style={styles.invitedText}>wants to be friends in Oxbow</Text>
         </View>
@@ -159,20 +174,7 @@ const styles = StyleSheet.create({
   inviterSection: {
     alignItems: 'center',
     marginBottom: 64,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 32,
-    fontWeight: '600',
+    gap: 16,
   },
   inviterName: {
     fontSize: 24,

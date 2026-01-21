@@ -110,8 +110,12 @@ export const JournalEntryScreen: React.FC = () => {
                 const granted = permission.granted === true || permission.status === 'granted';
                 
                 if (granted) {
-                  console.log('✅ Permission granted, starting recording...');
-                  await handleStartRecording(true);
+                  console.log('✅ Permission granted, waiting for app to return to foreground...');
+                  // Wait for app to return to active state after permission dialog closes
+                  setTimeout(async () => {
+                    console.log('✅ Starting recording...');
+                    await handleStartRecording(true);
+                  }, 300);
                 } else {
                   console.log('❌ Permission denied, switching to text');
                   Alert.alert(

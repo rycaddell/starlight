@@ -27,22 +27,33 @@ import {
   getSharedMirrorDetails,
   markShareAsViewed,
 } from '@/lib/supabase/mirrorShares';
-import { FriendSlots } from '@/components/friends/FriendSlots';
 import { SharePromptCard } from '@/components/friends/SharePromptCard';
+import { FriendCard, FriendCardState } from '@/components/friends/FriendCard';
+import { FriendMirrorsModal } from '@/components/friends/FriendMirrorsModal';
 import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { NotificationPitchCard } from '@/components/friends/NotificationPitchCard';
+import { AddProfilePicCard } from '@/components/friends/AddProfilePicCard';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useNewFriendTracking } from '@/hooks/useNewFriendTracking';
+import { useProfilePicture } from '@/hooks/useProfilePicture';
 
 const FRIEND_EMPTY_STATE_BG = require('@/assets/friends/friend-empty-state.jpg');
 
 export default function FriendsScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { refreshUnreadCount } = useUnreadShares();
   const { markFriendsAsViewed, refreshNewFriendsCount } = useFriendBadge();
   const { permissionStatus, requestPermissionAndRegister } = usePushNotifications(user?.id || null);
+  const { loaded: newFriendsLoaded, isFriendNew, markFriendAsNew, dismissAllNewFriends } = useNewFriendTracking();
+  const { handleAddProfilePicture } = useProfilePicture(user?.id || '', async () => {
+    // Refresh user data to show updated profile picture
+    await refreshUser();
+    // Reload friends data
+    loadData();
+  });
   const [friends, setFriends] = useState([]);
   const [incomingShares, setIncomingShares] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -54,6 +65,11 @@ export default function FriendsScreen() {
   const [selectedMirror, setSelectedMirror] = useState(null);
   const [selectedMirrorId, setSelectedMirrorId] = useState(null);
   const [loadingMirror, setLoadingMirror] = useState(false);
+
+  // Friend mirrors modal state
+  const [friendMirrorsModalVisible, setFriendMirrorsModalVisible] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [selectedFriendName, setSelectedFriendName] = useState<string>('');
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -83,10 +99,16 @@ export default function FriendsScreen() {
   }, [loadData]);
 
   // Mark friends as viewed when screen is focused
+  // Dismiss all "new friend" statuses when user navigates away
   useFocusEffect(
     useCallback(() => {
       markFriendsAsViewed();
-    }, [markFriendsAsViewed])
+
+      return () => {
+        // Dismiss all new friends when leaving the screen
+        dismissAllNewFriends();
+      };
+    }, [markFriendsAsViewed, dismissAllNewFriends])
   );
 
   // Realtime subscription for incoming mirror shares
@@ -205,6 +227,39 @@ export default function FriendsScreen() {
     };
   }, [user?.id, loadData]);
 
+  // Track new friends - mark friends as "new" if they were linked within the last 5 seconds
+  const previousFriendIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!newFriendsLoaded || friends.length === 0) return;
+
+    const currentFriendIds = new Set(friends.map((f: any) => f.userId));
+    const previousFriendIds = previousFriendIdsRef.current;
+
+    // Find newly added friends (not in previous set)
+    const newlyAddedFriendIds = Array.from(currentFriendIds).filter(
+      (id) => !previousFriendIds.has(id)
+    );
+
+    // Only mark as "new" if they were linked very recently (within 5 seconds)
+    const now = new Date();
+    newlyAddedFriendIds.forEach((friendId) => {
+      const friend = friends.find((f: any) => f.userId === friendId);
+      if (friend && friend.linkedAt) {
+        const linkedTime = new Date(friend.linkedAt);
+        const secondsSinceLinked = (now.getTime() - linkedTime.getTime()) / 1000;
+
+        // Only mark as new if linked within last 5 seconds
+        if (secondsSinceLinked < 5) {
+          markFriendAsNew(friendId);
+        }
+      }
+    });
+
+    // Update previous friend IDs
+    previousFriendIdsRef.current = currentFriendIds;
+  }, [friends, newFriendsLoaded, markFriendAsNew]);
+
   const onRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -301,32 +356,131 @@ export default function FriendsScreen() {
     }
   };
 
-  const renderShareItem = (share) => {
-    const isNew = share.isNew;
-    const badgeColor = isNew ? '#f59e0b' : '#6366f1'; // Goldenrod vs Purple
-    const badgeText = isNew ? 'NEW' : 'VIEW';
+  // Group shares by friend and determine card state
+  const getFriendCards = React.useMemo(() => {
+    if (!newFriendsLoaded) return [];
 
-    return (
-      <TouchableOpacity
-        key={share.shareId}
-        style={styles.shareItem}
-        onPress={() => handleViewSharedMirror(share)}
-        disabled={loadingMirror}
-      >
-        <View style={styles.shareContent}>
-          <View style={styles.shareIcon}>
-            <IconSymbol name="sparkles" size={20} color="#6366f1" />
-          </View>
-          <View style={styles.shareInfo}>
-            <Text style={styles.shareSender}>{share.senderName}</Text>
-            <Text style={styles.shareDate}>{formatDate(share.mirror.created_at)}</Text>
-          </View>
-          <View style={[styles.badge, { backgroundColor: badgeColor }]}>
-            <Text style={styles.badgeText}>{badgeText}</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
+    // Group shares by sender (friend)
+    const sharesByFriend = incomingShares.reduce((acc: any, share: any) => {
+      const friendId = share.senderId; // Fixed: was senderUserId, should be senderId
+      if (!acc[friendId]) {
+        acc[friendId] = {
+          friendId,
+          friendName: share.senderName,
+          shares: [],
+        };
+      }
+      acc[friendId].shares.push(share);
+      return acc;
+    }, {});
+
+    // For each friend, determine card state
+    const friendCards = friends.map((friend: any) => {
+      const friendId = friend.userId; // Fixed: was user_id, should be userId
+      const friendName = friend.displayName; // Fixed: was display_name, should be displayName
+      const friendShares = sharesByFriend[friendId]?.shares || [];
+
+      // Determine card state
+      let state: FriendCardState;
+      let unreadCount = 0;
+      let mostRecentShare = null;
+
+      if (isFriendNew(friendId)) {
+        // State 1: New friend
+        state = 'new';
+      } else if (friendShares.length === 0) {
+        // State 2: No mirrors
+        state = 'no_mirrors';
+      } else {
+        // Check for unread mirrors
+        const unreadShares = friendShares.filter((s: any) => s.isNew);
+        unreadCount = unreadShares.length;
+
+        if (unreadCount > 0) {
+          // State 3: Has unread mirrors
+          state = 'unread';
+          // Find most recent unread share
+          mostRecentShare = unreadShares.sort(
+            (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
+          )[0];
+        } else {
+          // State 4: All mirrors read
+          state = 'read';
+          // Find most recent share for sorting
+          mostRecentShare = friendShares.sort(
+            (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
+          )[0];
+        }
+      }
+
+      return {
+        friendId,
+        friendName,
+        profilePictureUrl: friend.profilePictureUrl,
+        state,
+        mirrorCount: friendShares.length,
+        shares: friendShares,
+        mostRecentShare,
+      };
+    });
+
+    // Sort friend cards
+    // 1. New friends first
+    // 2. Then friends with unread mirrors
+    // 3. Then friends with mirrors (sorted by most recent mirror shared)
+    // 4. Then friends with no mirrors (sorted by most recently added)
+    return friendCards.sort((a: any, b: any) => {
+      // Priority 1: New friends first
+      if (a.state === 'new' && b.state !== 'new') return -1;
+      if (a.state !== 'new' && b.state === 'new') return 1;
+
+      // Priority 2: Unread mirrors
+      if (a.state === 'unread' && b.state !== 'unread') return -1;
+      if (a.state !== 'unread' && b.state === 'unread') return 1;
+
+      // Priority 3: Friends with mirrors come before friends without mirrors
+      const aHasMirrors = a.state === 'read' || a.state === 'unread';
+      const bHasMirrors = b.state === 'read' || b.state === 'unread';
+
+      if (aHasMirrors && !bHasMirrors) return -1;
+      if (!aHasMirrors && bHasMirrors) return 1;
+
+      // Priority 4: Among friends with mirrors, sort by most recent share
+      if (a.mostRecentShare && b.mostRecentShare) {
+        return new Date(b.mostRecentShare.mirror.created_at).getTime() - new Date(a.mostRecentShare.mirror.created_at).getTime();
+      }
+
+      // Priority 5: Among friends with no mirrors, sort by most recently added (linkedAt)
+      if (a.state === 'no_mirrors' && b.state === 'no_mirrors') {
+        const aFriend = friends.find((f: any) => f.userId === a.friendId);
+        const bFriend = friends.find((f: any) => f.userId === b.friendId);
+
+        if (aFriend?.linkedAt && bFriend?.linkedAt) {
+          return new Date(bFriend.linkedAt).getTime() - new Date(aFriend.linkedAt).getTime();
+        }
+      }
+
+      return 0;
+    });
+  }, [friends, incomingShares, newFriendsLoaded, isFriendNew]);
+
+  // Handle friend card press
+  const handleFriendCardPress = async (friendCard: any) => {
+    if (friendCard.state === 'unread') {
+      // Open most recent unread mirror
+      const mostRecentUnread = friendCard.shares
+        .filter((s: any) => s.isNew)
+        .sort((a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime())[0];
+
+      if (mostRecentUnread) {
+        await handleViewSharedMirror(mostRecentUnread);
+      }
+    } else if (friendCard.state === 'read') {
+      // Open friend mirrors modal
+      setSelectedFriendId(friendCard.friendId);
+      setSelectedFriendName(friendCard.friendName);
+      setFriendMirrorsModalVisible(true);
+    }
   };
 
   if (loading) {
@@ -342,42 +496,50 @@ export default function FriendsScreen() {
   const hasIncomingShares = incomingShares.length > 0;
   const hasFriends = friends.length > 0;
 
-  return (
-    <SafeAreaView style={styles.container}>
-      {!hasFriends ? (
-        /* No Friends State - Full screen background image */
+  if (!hasFriends) {
+    return (
+      <View style={styles.container}>
+        {/* No Friends State - Full screen background image */}
         <ImageBackground
           source={FRIEND_EMPTY_STATE_BG}
           style={styles.emptyStateBackground}
           resizeMode="cover"
         >
           <View style={styles.emptyStateOverlay} />
-          <View style={styles.emptyStateContent}>
-            {/* Heading */}
-            <Text style={styles.emptyStateHeading}>
-              Stay spiritually connected to friends
-            </Text>
+          <SafeAreaView style={styles.emptyStateSafeArea}>
+            <View style={styles.emptyStateContent}>
+              {/* Heading */}
+              <Text style={styles.emptyStateHeading}>
+                Stay spiritually connected to friends
+              </Text>
 
-            {/* Subheading */}
-            <Text style={styles.emptyStateSubheading}>
-              Shared exploration in Oxbow
-            </Text>
+              {/* Subheading */}
+              <Text style={styles.emptyStateSubheading}>
+                Shared exploration in Oxbow
+              </Text>
 
-            {/* Create Invite Button */}
-            <TouchableOpacity
-              style={[styles.emptyStateButton, creatingInvite && styles.buttonDisabled]}
-              onPress={handleCreateInvite}
-              disabled={creatingInvite}
-            >
-              {creatingInvite ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
-              )}
-            </TouchableOpacity>
-          </View>
+              {/* Create Invite Button */}
+              <TouchableOpacity
+                style={[styles.emptyStateButton, creatingInvite && styles.buttonDisabled]}
+                onPress={handleCreateInvite}
+                disabled={creatingInvite}
+              >
+                {creatingInvite ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </SafeAreaView>
         </ImageBackground>
-      ) : (
+      </View>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.container}>
+      {hasFriends && (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           refreshControl={
@@ -392,38 +554,61 @@ export default function FriendsScreen() {
 
             {/* Invites Section */}
             <View style={styles.invitesSection}>
-              <Text style={styles.h3Title}>Invites</Text>
-              <FriendSlots friends={friends} onCreateInvite={handleCreateInvite} />
+              <View style={styles.inviteContent}>
+                <Text style={styles.inviteText}>Invite a Friend</Text>
+                <TouchableOpacity
+                  style={[styles.generateLinkButton, creatingInvite && styles.buttonDisabled]}
+                  onPress={handleCreateInvite}
+                  disabled={creatingInvite}
+                >
+                  {creatingInvite ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.generateLinkButtonText}>Generate Link</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Divider */}
             <View style={styles.divider} />
 
-            {/* Getting Started or Shared Section */}
-            {!hasIncomingShares ? (
-              <View style={styles.gettingStartedSection}>
-                <Text style={styles.h3Title}>Getting started</Text>
-                <Text style={styles.gettingStartedBody}>
-                  Kick things off by sharing{' '}
-                  <Text
-                    style={styles.inlineLink}
-                    onPress={() => router.push('/(tabs)/mirror')}
-                  >
-                    your most recent mirror
-                  </Text>
-                  {' '}with your friend.
-                </Text>
-              </View>
-            ) : (
-              <View style={styles.sharedSection}>
-                <Text style={styles.sectionTitle}>Shared with you</Text>
-                {incomingShares.map(renderShareItem)}
-              </View>
-            )}
+            {/* Friends Section */}
+            <View style={styles.friendsSection}>
+              <Text style={styles.sectionTitle}>Friends</Text>
+              {getFriendCards.map((friendCard) => (
+                <FriendCard
+                  key={friendCard.friendId}
+                  friendId={friendCard.friendId}
+                  friendName={friendCard.friendName}
+                  profilePictureUrl={friendCard.profilePictureUrl}
+                  state={friendCard.state}
+                  mirrorCount={friendCard.mirrorCount}
+                  onPress={() => handleFriendCardPress(friendCard)}
+                />
+              ))}
+            </View>
 
-            {/* Notification Pitch - Show if notifications not enabled */}
-            {permissionStatus !== 'granted' && (
-              <NotificationPitchCard onEnablePress={handleEnableNotifications} />
+            {/* Setup Section - Only show if notifications not enabled or no profile pic */}
+            {(permissionStatus !== 'granted' || !user?.profile_picture_url) && (
+              <>
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                <View style={styles.setupSection}>
+                  <Text style={styles.sectionTitle}>Setup</Text>
+
+                  {/* Notification Pitch - Show if notifications not enabled */}
+                  {permissionStatus !== 'granted' && (
+                    <NotificationPitchCard onEnablePress={handleEnableNotifications} />
+                  )}
+
+                  {/* Add Profile Picture Pitch - Show if no profile picture */}
+                  {!user?.profile_picture_url && (
+                    <AddProfilePicCard onAddPress={handleAddProfilePicture} />
+                  )}
+                </View>
+              </>
             )}
         </ScrollView>
       )}
@@ -442,6 +627,31 @@ export default function FriendsScreen() {
             isSharedMirror={true}
           />
         </Modal>
+      )}
+
+      {/* Friend Mirrors Modal */}
+      {selectedFriendId && (
+        <FriendMirrorsModal
+          visible={friendMirrorsModalVisible}
+          onClose={() => {
+            setFriendMirrorsModalVisible(false);
+            setSelectedFriendId(null);
+            setSelectedFriendName('');
+          }}
+          friendName={selectedFriendName}
+          profilePictureUrl={
+            getFriendCards.find((fc) => fc.friendId === selectedFriendId)?.profilePictureUrl
+          }
+          mirrors={
+            getFriendCards.find((fc) => fc.friendId === selectedFriendId)?.shares || []
+          }
+          onMirrorPress={async (share) => {
+            // Close the modal first
+            setFriendMirrorsModalVisible(false);
+            // Then open the mirror viewer
+            await handleViewSharedMirror(share);
+          }}
+        />
       )}
     </SafeAreaView>
   );
@@ -490,6 +700,32 @@ const styles = StyleSheet.create({
   },
   invitesSection: {
     marginBottom: 0,
+  },
+  inviteContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+  },
+  inviteText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+    flex: 1,
+  },
+  generateLinkButton: {
+    backgroundColor: '#6366f1',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  generateLinkButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
   },
   gettingStartedSection: {
     marginTop: 8,
@@ -573,6 +809,12 @@ const styles = StyleSheet.create({
   sharedSection: {
     marginTop: 24,
   },
+  friendsSection: {
+    marginTop: 8,
+  },
+  setupSection: {
+    marginTop: 8,
+  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -633,6 +875,12 @@ const styles = StyleSheet.create({
   emptyStateOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  emptyStateSafeArea: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   emptyStateContent: {
     paddingHorizontal: 32,

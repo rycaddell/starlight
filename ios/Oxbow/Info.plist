@@ -61,6 +61,8 @@
     </array>
     <key>NSUserNotificationUsageDescription</key>
     <string>Oxbow sends gentle reminders to help maintain your consistent journaling practice.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>
