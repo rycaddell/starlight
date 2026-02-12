@@ -22,6 +22,8 @@ import { markMirrorAsViewed } from '../../lib/supabase/mirrors';
 import { deleteJournalEntry } from '../../lib/supabase/journals';
 import { fetchFriends } from '../../lib/supabase/friends';
 import { supabase } from '../../lib/supabase/client';
+import { getDay1Mirror } from '../../lib/supabase/day1';
+import { Day1MirrorViewer } from '../../components/day1/Day1MirrorViewer';
 
 export default function MirrorScreen() {
   const router = useRouter();
@@ -32,6 +34,8 @@ export default function MirrorScreen() {
   const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
   const [mirrorDates, setMirrorDates] = React.useState<Record<string, Date>>({});
   const [biblicalCharacters, setBiblicalCharacters] = React.useState<Record<string, string>>({});
+  const [day1Mirror, setDay1Mirror] = React.useState<any>(null);
+  const [day1Progress, setDay1Progress] = React.useState<any>(null);
 
   // Modal states
   const [pastMirrorsModalVisible, setPastMirrorsModalVisible] = React.useState(false);
@@ -41,6 +45,20 @@ export default function MirrorScreen() {
   const [checkingFriendsForMirror, setCheckingFriendsForMirror] = React.useState<Record<string, boolean>>({});
   const [shouldRestorePastMirrorsModal, setShouldRestorePastMirrorsModal] = React.useState(false);
   const [shouldRestorePastJournalsModal, setShouldRestorePastJournalsModal] = React.useState(false);
+  const [day1ViewerVisible, setDay1ViewerVisible] = React.useState(false);
+
+  // Debug logging for modal state changes
+  React.useEffect(() => {
+    console.log('📊 [STATE] pastMirrorsModalVisible changed to:', pastMirrorsModalVisible);
+  }, [pastMirrorsModalVisible]);
+
+  React.useEffect(() => {
+    console.log('📊 [STATE] shareSheetVisible changed to:', shareSheetVisible);
+  }, [shareSheetVisible]);
+
+  React.useEffect(() => {
+    console.log('📊 [STATE] selectedMirrorIdForShare changed to:', selectedMirrorIdForShare);
+  }, [selectedMirrorIdForShare]);
 
   const {
     journals,
@@ -85,6 +103,27 @@ export default function MirrorScreen() {
       }
     }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror])
   );
+
+  // Load Day 1 mirror
+  useEffect(() => {
+    const loadDay1Mirror = async () => {
+      if (!user) return;
+
+      try {
+        const result = await getDay1Mirror(user.id);
+
+        if (result.success && result.mirror) {
+          setDay1Mirror(result.mirror);
+          setDay1Progress(result.progress);
+          console.log('✅ Day 1 mirror loaded:', result.mirror.id);
+        }
+      } catch (error) {
+        console.error('❌ Error loading Day 1 mirror:', error);
+      }
+    };
+
+    loadDay1Mirror();
+  }, [user]);
 
   useEffect(() => {
     const loadMirrorData = async () => {
@@ -204,6 +243,26 @@ export default function MirrorScreen() {
   const handleOpenExistingMirror = async (mirrorId: string, fromModal: 'pastMirrors' | 'pastJournals' | 'none' = 'none') => {
     console.log('🔍 Opening existing Mirror:', mirrorId, 'from:', fromModal);
 
+    // Check if this is a Day 1 mirror
+    const isDay1Mirror = day1Mirror && day1Mirror.id === mirrorId;
+
+    if (isDay1Mirror) {
+      console.log('📋 Opening Day 1 mirror viewer');
+      // Close any open modals and mark for restoration
+      if (fromModal === 'pastMirrors') {
+        setPastMirrorsModalVisible(false);
+        setShouldRestorePastMirrorsModal(true);
+      } else if (fromModal === 'pastJournals') {
+        setPastJournalsModalVisible(false);
+        setShouldRestorePastJournalsModal(true);
+      }
+
+      // Open Day 1 viewer
+      setDay1ViewerVisible(true);
+      return;
+    }
+
+    // Regular mirror handling
     // If opening from a modal, hide it temporarily and mark for restoration
     if (fromModal === 'pastMirrors') {
       setPastMirrorsModalVisible(false);
@@ -243,28 +302,57 @@ export default function MirrorScreen() {
 
   // Handler for share button on last mirror card
   const handleShareLastMirror = async (mirrorId: string) => {
-    console.log('🔍 Share button pressed for last mirror:', mirrorId);
+    console.log('========================================');
+    console.log('🔍 [SHARE] Button pressed for mirror:', mirrorId);
+    console.log('🔍 [SHARE] Current state:', {
+      pastMirrorsModalVisible,
+      shareSheetVisible,
+      selectedMirrorIdForShare,
+    });
+
     setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: true }));
 
     try {
+      console.log('🔍 [SHARE] Fetching friends...');
       const result = await fetchFriends(user!.id);
-      console.log('👥 Friends check result:', result);
+      console.log('👥 [SHARE] Friends check result:', result);
 
       if (result.success && result.friends && result.friends.length > 0) {
         // Has friends - show share sheet
-        console.log('✅ Has friends, opening share sheet');
-        setSelectedMirrorIdForShare(mirrorId);
-        setShareSheetVisible(true);
+        console.log('✅ [SHARE] Has friends, opening share sheet');
+
+        // If Past Mirrors modal is open, close it temporarily
+        if (pastMirrorsModalVisible) {
+          console.log('📋 [SHARE] Closing Past Mirrors modal temporarily');
+          setPastMirrorsModalVisible(false);
+          setShouldRestorePastMirrorsModal(true);
+        }
+
+        console.log('✅ [SHARE] Setting selectedMirrorIdForShare to:', mirrorId);
+        console.log('✅ [SHARE] Setting shareSheetVisible to: true');
+
+        // Small delay to ensure modal closes before opening share sheet
+        setTimeout(() => {
+          setSelectedMirrorIdForShare(mirrorId);
+          setShareSheetVisible(true);
+          console.log('✅ [SHARE] State updates dispatched');
+        }, 300);
       } else {
         // No friends - navigate to Friends tab
-        console.log('⚠️ No friends, navigating to Friends tab');
+        console.log('⚠️ [SHARE] No friends, navigating to Friends tab');
+
+        if (pastMirrorsModalVisible) {
+          setPastMirrorsModalVisible(false);
+        }
+
         router.push('/(tabs)/friends');
       }
     } catch (error) {
-      console.error('❌ Error checking friends:', error);
+      console.error('❌ [SHARE] Error checking friends:', error);
       Alert.alert('Error', 'Failed to check friends. Please try again.');
     } finally {
       setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: false }));
+      console.log('========================================');
     }
   };
 
@@ -309,7 +397,7 @@ export default function MirrorScreen() {
     mirrorIds: Object.keys(mirrorGroups)
   });
 
-  // Get the last mirror (most recent)
+  // Get the last mirror (most recent) - consider both regular and Day 1 mirrors
   const lastMirror = React.useMemo(() => Object.entries(mirrorGroups)
     .sort(([, journalsA], [, journalsB]) => {
       const dateA = mirrorDates[journalsA[0].mirror_id!] || new Date(journalsA[0].created_at);
@@ -320,24 +408,96 @@ export default function MirrorScreen() {
   );
 
   const lastMirrorId = lastMirror?.[0];
-  const lastMirrorData = React.useMemo(() => lastMirrorId ? {
-    id: lastMirrorId,
-    date: mirrorDates[lastMirrorId] || new Date(lastMirror[1][0].created_at),
-    biblicalCharacter: biblicalCharacters[lastMirrorId],
-    reflectionFocus: mirrorReflections[lastMirrorId]?.focus,
-  } : null, [lastMirrorId, lastMirror, mirrorDates, biblicalCharacters, mirrorReflections]);
+  const lastMirrorData = React.useMemo(() => {
+    // Compare Day 1 mirror with last regular mirror
+    let lastRegularMirror = null;
+    if (lastMirrorId) {
+      lastRegularMirror = {
+        id: lastMirrorId,
+        date: mirrorDates[lastMirrorId] || new Date(lastMirror[1][0].created_at),
+        biblicalCharacter: biblicalCharacters[lastMirrorId],
+        reflectionFocus: mirrorReflections[lastMirrorId]?.focus,
+        isDay1: false,
+      };
+    }
+
+    // Check if Day 1 mirror exists and is more recent
+    if (day1Mirror) {
+      const day1Date = new Date(day1Mirror.created_at);
+
+      // Extract biblical character from Day 1 mirror
+      let day1Character = null;
+      if (day1Mirror.screen_2_biblical) {
+        try {
+          const biblical = typeof day1Mirror.screen_2_biblical === 'string'
+            ? JSON.parse(day1Mirror.screen_2_biblical)
+            : day1Mirror.screen_2_biblical;
+          day1Character = biblical?.parallel_story?.character || null;
+        } catch (e) {
+          console.error('Error parsing Day 1 biblical data:', e);
+        }
+      }
+
+      const day1MirrorData = {
+        id: day1Mirror.id,
+        date: day1Date,
+        biblicalCharacter: day1Character,
+        reflectionFocus: null,
+        isDay1: true,
+        spiritualPlace: day1Progress?.spiritualPlace,
+      };
+
+      // Return whichever is most recent
+      if (!lastRegularMirror || day1Date > lastRegularMirror.date) {
+        return day1MirrorData;
+      }
+    }
+
+    return lastRegularMirror;
+  }, [lastMirrorId, lastMirror, mirrorDates, biblicalCharacters, mirrorReflections, day1Mirror, day1Progress]);
 
   // Get all mirrors for the modal (sorted from most recent to oldest)
-  const allMirrors = React.useMemo(() => Object.entries(mirrorGroups)
-    .map(([mirrorId, journals]) => ({
-      id: mirrorId,
-      date: mirrorDates[mirrorId] || new Date(journals[0].created_at),
-      biblicalCharacter: biblicalCharacters[mirrorId],
-      reflectionFocus: mirrorReflections[mirrorId]?.focus,
-    }))
-    .sort((a, b) => b.date.getTime() - a.date.getTime()),
-    [mirrorGroups, mirrorDates, biblicalCharacters, mirrorReflections]
-  );
+  const allMirrors = React.useMemo(() => {
+    const regularMirrors = Object.entries(mirrorGroups)
+      .map(([mirrorId, journals]) => ({
+        id: mirrorId,
+        date: mirrorDates[mirrorId] || new Date(journals[0].created_at),
+        biblicalCharacter: biblicalCharacters[mirrorId],
+        reflectionFocus: mirrorReflections[mirrorId]?.focus,
+        isDay1: false,
+      }));
+
+    // Add Day 1 mirror if it exists
+    if (day1Mirror) {
+      // Extract biblical character from Day 1 mirror
+      let day1Character = null;
+      if (day1Mirror.screen_2_biblical) {
+        try {
+          const biblical = typeof day1Mirror.screen_2_biblical === 'string'
+            ? JSON.parse(day1Mirror.screen_2_biblical)
+            : day1Mirror.screen_2_biblical;
+          day1Character = biblical?.parallel_story?.character || null;
+        } catch (e) {
+          console.error('Error parsing Day 1 biblical data:', e);
+        }
+      }
+
+      const day1MirrorEntry = {
+        id: day1Mirror.id,
+        date: new Date(day1Mirror.created_at),
+        biblicalCharacter: day1Character,
+        reflectionFocus: null, // Day 1 mirrors use focus_areas instead
+        isDay1: true,
+        spiritualPlace: day1Progress?.spiritualPlace,
+        focusAreas: day1Mirror.focus_areas,
+      };
+
+      return [...regularMirrors, day1MirrorEntry]
+        .sort((a, b) => b.date.getTime() - a.date.getTime());
+    }
+
+    return regularMirrors.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [mirrorGroups, mirrorDates, biblicalCharacters, mirrorReflections, day1Mirror, day1Progress]);
 
   // Get the last journal (most recent) - include ALL journals
   const lastJournalEntry = React.useMemo(() => {
@@ -427,7 +587,14 @@ export default function MirrorScreen() {
               />
 
               {allMirrors.length > 1 && (
-                <TouchableOpacity onPress={() => setPastMirrorsModalVisible(true)}>
+                <TouchableOpacity onPress={() => {
+                  console.log('========================================');
+                  console.log('🔗 [MODAL] "View past Mirrors" link pressed');
+                  console.log('🔗 [MODAL] Current pastMirrorsModalVisible:', pastMirrorsModalVisible);
+                  console.log('🔗 [MODAL] Setting pastMirrorsModalVisible to: true');
+                  setPastMirrorsModalVisible(true);
+                  console.log('========================================');
+                }}>
                   <Text style={styles.viewAllLink}>View past Mirrors</Text>
                 </TouchableOpacity>
               )}
@@ -478,14 +645,60 @@ export default function MirrorScreen() {
         <ShareMirrorSheet
           visible={shareSheetVisible}
           onClose={() => {
+            console.log('========================================');
+            console.log('🔒 [SHARE_SHEET] Close handler called');
+            console.log('🔒 [SHARE_SHEET] Setting shareSheetVisible to: false');
+            console.log('🔒 [SHARE_SHEET] Clearing selectedMirrorIdForShare');
             setShareSheetVisible(false);
             setSelectedMirrorIdForShare(null);
+
+            // Restore Past Mirrors modal if it was open
+            if (shouldRestorePastMirrorsModal) {
+              console.log('📋 [SHARE_SHEET] Restoring Past Mirrors modal');
+              setTimeout(() => {
+                setPastMirrorsModalVisible(true);
+                setShouldRestorePastMirrorsModal(false);
+              }, 300);
+            }
+
+            console.log('========================================');
           }}
           userId={user.id}
           mirrorId={selectedMirrorIdForShare}
           onShareSuccess={() => {
-            console.log('✅ Mirror shared successfully');
+            console.log('✅ [SHARE_SHEET] Mirror shared successfully');
           }}
+        />
+      )}
+
+      {/* Day 1 Mirror Viewer */}
+      {day1Mirror && day1Progress && (
+        <Day1MirrorViewer
+          visible={day1ViewerVisible}
+          onClose={() => {
+            setDay1ViewerVisible(false);
+
+            // Restore Past Mirrors modal if it was open before
+            if (shouldRestorePastMirrorsModal) {
+              setTimeout(() => {
+                setPastMirrorsModalVisible(true);
+                setShouldRestorePastMirrorsModal(false);
+              }, 300);
+            }
+
+            // Restore Past Journals modal if it was open before
+            if (shouldRestorePastJournalsModal) {
+              setTimeout(() => {
+                setPastJournalsModalVisible(true);
+                setShouldRestorePastJournalsModal(false);
+              }, 300);
+            }
+          }}
+          mirrorId={day1Mirror.id}
+          userId={user.id}
+          userName={user.display_name || 'friend'}
+          spiritualPlace={day1Progress.spiritualPlace || 'Resting'}
+          isOwner={true}
         />
       )}
     </SafeAreaView>

@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Image } from 'react-native';
 import { useAuth } from './AuthContext';
 import { completeUserOnboarding } from '../lib/supabase/auth';
+import { preloadDay1Images } from '../utils/preloadImages';
 
 export type OnboardingStep =
   | 'name-input'          // Step 1
@@ -154,15 +155,20 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       console.error('❌ Cannot complete onboarding: missing user');
       return;
     }
-    
+
     try {
       console.log('✅ Completing onboarding for user:', user.id);
       const result = await completeUserOnboarding(user.id, null);
-      
+
       if (result.success) {
         setCurrentStep('complete');
         setIsOnboardingComplete(true);
         console.log('✅ Onboarding completed successfully');
+
+        // Preload Day 1 images in background for better UX when user starts Day 1
+        preloadDay1Images().catch(error => {
+          console.error('❌ Failed to preload Day 1 images:', error);
+        });
       } else {
         console.error('❌ Failed to complete onboarding:', result.error);
       }

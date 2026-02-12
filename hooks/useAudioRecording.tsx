@@ -89,23 +89,43 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   };
 
   const handleStartRecording = async (hasPermission: boolean) => {
+    console.log('🎙️ [HOOK] handleStartRecording called, hasPermission:', hasPermission);
+
     if (!hasPermission) {
+      console.error('❌ [HOOK] No permission, cannot start recording');
       Alert.alert('Permission Required', 'Microphone permission is required to record audio.');
       return;
     }
 
     try {
+      // If there's an existing recording in progress, discard it first
+      if (recording) {
+        console.log('⚠️ [HOOK] Discarding existing recording before starting new one');
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (e) {
+          console.warn('⚠️ [HOOK] Failed to stop existing recording:', e);
+        }
+        setRecording(null);
+        setIsRecording(false);
+        setIsPaused(false);
+      }
+
+      console.log('🔧 [HOOK] Configuring audio mode for recording...');
       // Configure audio mode for recording
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
+      console.log('✅ [HOOK] Audio mode configured successfully');
 
+      console.log('📱 [HOOK] Creating recording object...');
       // Create and start recording
       const { recording: newRecording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
-      
+      console.log('✅ [HOOK] Recording object created successfully');
+
       setRecording(newRecording);
       setIsRecording(true);
       setIsPaused(false);
@@ -116,9 +136,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       resumeTimeRef.current = 0;
       hasHitMaxDurationRef.current = false;
 
+      console.log('🔐 [HOOK] Activating wake lock...');
       await activateWakeLock();
+      console.log('✅ [HOOK] Recording started successfully!');
     } catch (error) {
-      console.error('Failed to start recording:', error);
+      console.error('❌ [HOOK] Failed to start recording:', error);
+      console.error('❌ [HOOK] Error details:', JSON.stringify(error, null, 2));
       Alert.alert('Recording Error', 'Unable to start recording. Please try again.');
     }
   };

@@ -31,6 +31,7 @@ import { SharePromptCard } from '@/components/friends/SharePromptCard';
 import { FriendCard, FriendCardState } from '@/components/friends/FriendCard';
 import { FriendMirrorsModal } from '@/components/friends/FriendMirrorsModal';
 import { MirrorViewer } from '@/components/mirror/MirrorViewer';
+import { Day1MirrorViewer } from '@/components/day1/Day1MirrorViewer';
 import { NotificationPitchCard } from '@/components/friends/NotificationPitchCard';
 import { AddProfilePicCard } from '@/components/friends/AddProfilePicCard';
 import { IconSymbol } from '@/components/ui/IconSymbol';
@@ -38,6 +39,7 @@ import { supabase } from '@/lib/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useNewFriendTracking } from '@/hooks/useNewFriendTracking';
 import { useProfilePicture } from '@/hooks/useProfilePicture';
+import { getDay1Mirror } from '@/lib/supabase/day1';
 
 const FRIEND_EMPTY_STATE_BG = require('@/assets/friends/friend-empty-state.jpg');
 
@@ -65,6 +67,12 @@ export default function FriendsScreen() {
   const [selectedMirror, setSelectedMirror] = useState(null);
   const [selectedMirrorId, setSelectedMirrorId] = useState(null);
   const [loadingMirror, setLoadingMirror] = useState(false);
+
+  // Day 1 mirror viewer state
+  const [viewingDay1Mirror, setViewingDay1Mirror] = useState(false);
+  const [day1MirrorData, setDay1MirrorData] = useState(null);
+  const [day1SpiritualPlace, setDay1SpiritualPlace] = useState('Resting');
+  const [day1SenderName, setDay1SenderName] = useState('friend');
 
   // Friend mirrors modal state
   const [friendMirrorsModalVisible, setFriendMirrorsModalVisible] = useState(false);
@@ -322,11 +330,33 @@ export default function FriendsScreen() {
         await markShareAsViewed(share.shareId, user.id);
       }
 
-      // Open mirror viewer
-      setSelectedMirror(result.mirror);
-      setSelectedMirrorId(result.mirror.id);
-      setViewingMirror(true);
-      setLoadingMirror(false);
+      // Check if this is a Day 1 mirror
+      const isDay1Mirror = result.mirror.mirror_type === 'day_1';
+
+      if (isDay1Mirror) {
+        console.log('📋 Opening shared Day 1 mirror');
+
+        // Fetch spiritual place from the owner's day_1_progress
+        let spiritualPlace = 'Resting'; // Default
+        if (result.mirror.custom_user_id) {
+          const day1Result = await getDay1Mirror(result.mirror.custom_user_id);
+          if (day1Result.success && day1Result.progress?.spiritualPlace) {
+            spiritualPlace = day1Result.progress.spiritualPlace;
+          }
+        }
+
+        setDay1MirrorData(result.mirror);
+        setDay1SpiritualPlace(spiritualPlace);
+        setDay1SenderName(result.senderName);
+        setViewingDay1Mirror(true);
+        setLoadingMirror(false);
+      } else {
+        // Regular mirror
+        setSelectedMirror(result.mirror);
+        setSelectedMirrorId(result.mirror.id);
+        setViewingMirror(true);
+        setLoadingMirror(false);
+      }
     } catch (error) {
       console.error('Error loading shared mirror:', error);
       Alert.alert('Error', 'Failed to load mirror');
@@ -338,6 +368,10 @@ export default function FriendsScreen() {
     setViewingMirror(false);
     setSelectedMirror(null);
     setSelectedMirrorId(null);
+    setViewingDay1Mirror(false);
+    setDay1MirrorData(null);
+    setDay1SpiritualPlace('Resting');
+    setDay1SenderName('friend');
     // Reload shares to update badges
     loadData();
     // Refresh tab badge counts
@@ -627,6 +661,19 @@ export default function FriendsScreen() {
             isSharedMirror={true}
           />
         </Modal>
+      )}
+
+      {/* Shared Day 1 Mirror Viewer */}
+      {viewingDay1Mirror && day1MirrorData && (
+        <Day1MirrorViewer
+          visible={viewingDay1Mirror}
+          onClose={handleCloseMirrorViewer}
+          mirrorId={day1MirrorData.id}
+          userId={user?.id || ''}
+          userName={day1SenderName}
+          spiritualPlace={day1SpiritualPlace}
+          isOwner={false}
+        />
       )}
 
       {/* Friend Mirrors Modal */}

@@ -4,9 +4,10 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface TextFormCardProps {
   onPress: () => void;
+  isPrimary?: boolean;
 }
 
-export const TextFormCard: React.FC<TextFormCardProps> = ({ onPress }) => {
+export const TextFormCard: React.FC<TextFormCardProps> = ({ onPress, isPrimary = false }) => {
   return (
     <TouchableOpacity
       style={styles.container}
@@ -18,8 +19,8 @@ export const TextFormCard: React.FC<TextFormCardProps> = ({ onPress }) => {
         <Text style={styles.subtitle}>Quick capture</Text>
       </View>
 
-      <View style={styles.actionButton}>
-        <Text style={styles.actionButtonText}>Start</Text>
+      <View style={[styles.actionButton, isPrimary && styles.actionButtonPrimary]}>
+        <Text style={[styles.actionButtonText, isPrimary && styles.actionButtonTextPrimary]}>Start</Text>
       </View>
     </TouchableOpacity>
   );
@@ -61,15 +62,29 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actionButton: {
-    backgroundColor: '#2563eb',
+    backgroundColor: '#f1f5f9',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
     marginLeft: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   actionButtonText: {
-    color: '#ffffff',
+    color: '#475569',
     fontSize: 16,
     fontWeight: '600',
+  },
+  actionButtonPrimary: {
+    backgroundColor: '#2563eb',
+    borderWidth: 0,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  actionButtonTextPrimary: {
+    color: '#ffffff',
   },
 });

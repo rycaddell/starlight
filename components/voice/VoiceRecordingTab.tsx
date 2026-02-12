@@ -15,6 +15,8 @@ interface VoiceRecordingTabProps {
   isPaused: boolean;
   recordingDuration: number;
   isProcessing: boolean;
+  isBuildingMirror?: boolean; // Optional: Day 1 specific state
+  hasRecorded?: boolean; // Optional: Show "Record again" if user already recorded (Day 1 only)
   formatDuration: (seconds: number) => string;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -27,6 +29,8 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
   isPaused,
   recordingDuration,
   isProcessing,
+  isBuildingMirror = false,
+  hasRecorded = false,
   formatDuration,
   onStartRecording,
   onStopRecording,
@@ -48,25 +52,35 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           </Text>
         )}
 
-        {isProcessing && (
+        {isProcessing && !isBuildingMirror && (
           <Text style={styles.processingStatus}>
             🤖 Transcribing audio...
           </Text>
         )}
 
+        {isBuildingMirror && (
+          <Text style={styles.processingStatus}>
+            🏗️ Building your mirror...
+          </Text>
+        )}
+
         {/* Recording Controls */}
-        {!isRecording && !isProcessing ? (
-          // Start Recording Button
+        {!isRecording && !isProcessing && !isBuildingMirror ? (
+          // Start Recording Button (or Record Again if already recorded)
           <TouchableOpacity
             style={styles.recordButton}
             onPress={onStartRecording}
           >
-            <Text style={styles.recordButtonText}>Start Recording 🎤</Text>
+            <Text style={styles.recordButtonText}>
+              {hasRecorded ? 'Record again 🎤' : 'Start Recording 🎤'}
+            </Text>
           </TouchableOpacity>
-        ) : isProcessing ? (
+        ) : isProcessing || isBuildingMirror ? (
           // Processing State
           <View style={[styles.recordButton, styles.processingButton]}>
-            <Text style={styles.recordButtonText}>Processing...</Text>
+            <Text style={styles.recordButtonText}>
+              {isBuildingMirror ? 'Building...' : 'Processing...'}
+            </Text>
           </View>
         ) : (
           // Recording Controls (Stop, Pause/Resume)

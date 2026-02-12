@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
@@ -16,13 +16,18 @@ import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet'
 import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { getMirrorThreshold } from '../../lib/config/constants';
+import { GetStartedCard } from '../../components/day1/GetStartedCard';
+import { Day1Modal } from '../../components/day1/Day1Modal';
 
 export default function JournalScreen() {
   const router = useRouter();
-  
+
   // Use AuthContext instead of manual user management
-  const { user, isAuthenticated, isLoading } = useAuth();
+  const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const { showSettings } = useGlobalSettings();
+
+  // Day 1 modal state
+  const [day1ModalVisible, setDay1ModalVisible] = useState(false);
 
   // State for today's answered prompts
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
@@ -179,70 +184,81 @@ export default function JournalScreen() {
   // Combined permission check and recording start
   const handleStartRecordingWithPermission = async () => {
     try {
-      console.log('🎤 Checking current microphone permission...');
-      
+      console.log('🎤 [MAIN-PERMISSION] Checking current microphone permission...');
+
       // Always check current device permission first
       const currentStatus = await Audio.getPermissionsAsync();
-      console.log('Current microphone status:', currentStatus);
-      
+      console.log('📊 [MAIN-PERMISSION] Current permission status:', JSON.stringify(currentStatus, null, 2));
+
       if (currentStatus.granted) {
-        console.log('✅ Permission already granted, starting recording...');
+        console.log('✅ [MAIN-PERMISSION] Permission already granted, starting recording...');
         await handleStartRecording(true);
         return;
       }
-      
-      // Only show prompt if permission not actually granted
-      console.log('🎤 No permission found, showing user prompt...');
-      Alert.alert(
-        'Enable Voice Journaling?',
-        'Voice journaling lets you speak your thoughts while walking or when typing isn\'t convenient. Would you like to enable it?',
-        [
-          { text: 'Not Now', style: 'cancel' },
-          { 
-            text: 'Enable Microphone', 
-            onPress: async () => {
-              try {
-                console.log('🎤 User chose to enable microphone...');
-                
-                // Set audio mode first
-                await Audio.setAudioModeAsync({
-                  allowsRecordingIOS: true,
-                  playsInSilentModeIOS: true,
-                });
-                
-                // Request permission
-                const permission = await Audio.requestPermissionsAsync();
-                const granted = permission.granted === true || permission.status === 'granted';
-                
-                if (granted) {
-                  console.log('✅ Permission granted, waiting for app to return to foreground...');
-                  // Wait for app to return to active state after permission dialog closes
-                  setTimeout(async () => {
-                    console.log('✅ Starting recording...');
-                    await handleStartRecording(true);
-                  }, 300);
-                } else {
-                  console.log('❌ Permission denied');
-                  Alert.alert(
-                    'Microphone Access Needed',
-                    'To use voice journaling, please enable microphone access in Settings > Oxbow > Microphone.',
-                    [{ text: 'OK' }]
-                  );
-                }
-              } catch (error) {
-                console.error('❌ Error in permission flow:', error);
-                Alert.alert(
-                  'Permission Error', 
-                  `Unable to enable microphone: ${error.message || 'Unknown error'}. You can enable it manually in Settings.`,
-                  [{ text: 'OK' }]
-                );
-              }
+
+      // Request permission directly (no app alert needed)
+      console.log('📝 [MAIN-PERMISSION] Permission not granted, requesting directly...');
+
+      try {
+        console.log('🔧 [MAIN-PERMISSION] Setting audio mode...');
+
+        // Set audio mode first
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        console.log('✅ [MAIN-PERMISSION] Audio mode set successfully');
+
+        console.log('🔐 [MAIN-PERMISSION] Requesting system permission...');
+        // Request permission
+        const permission = await Audio.requestPermissionsAsync();
+        console.log('📊 [MAIN-PERMISSION] Permission response:', JSON.stringify(permission, null, 2));
+
+        const granted = permission.granted === true || permission.status === 'granted';
+        console.log('🔍 [MAIN-PERMISSION] Permission granted:', granted);
+
+        if (granted) {
+          console.log('✅ [MAIN-PERMISSION] Permission granted, waiting for app to become active...');
+
+          // Wait for app to return to active state after permission dialog closes
+          const subscription = AppState.addEventListener('change', async (nextAppState) => {
+            if (nextAppState === 'active') {
+              console.log('📱 [MAIN-PERMISSION] App returned to active state');
+              subscription.remove();
+
+              // Small delay to ensure app is fully active
+              setTimeout(async () => {
+                console.log('🎙️ [MAIN-PERMISSION] Calling handleStartRecording...');
+                await handleStartRecording(true);
+              }, 50);
             }
-          }
-        ]
-      );
+          });
+
+          // Fallback timeout in case AppState doesn't fire
+          setTimeout(() => {
+            console.log('⚠️ [MAIN-PERMISSION] Fallback timeout reached, removing listener');
+            subscription.remove();
+          }, 3000);
+        } else {
+          console.error('❌ [MAIN-PERMISSION] Permission denied by user');
+          Alert.alert(
+            'Microphone Access Needed',
+            'To use voice journaling, please enable microphone access in Settings > Oxbow > Microphone.',
+            [{ text: 'OK' }]
+          );
+        }
+      } catch (error) {
+        console.error('❌ [MAIN-PERMISSION] Error requesting permission:', error);
+        console.error('❌ [MAIN-PERMISSION] Error details:', JSON.stringify(error, null, 2));
+        Alert.alert(
+          'Permission Error',
+          `Unable to enable microphone: ${error.message || 'Unknown error'}. You can enable it manually in Settings.`,
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
-      console.error('❌ Error checking microphone permission:', error);
+      console.error('❌ [MAIN-PERMISSION] Error in permission check:', error);
+      console.error('❌ [MAIN-PERMISSION] Error details:', JSON.stringify(error, null, 2));
       Alert.alert(
         'Permission Error',
         'Unable to check microphone permission. Please try again.',
@@ -315,6 +331,19 @@ export default function JournalScreen() {
     }
   };
 
+  // Handle Day 1 completion
+  const handleDay1Complete = async () => {
+    console.log('🎉 Day 1 flow completed');
+    setDay1ModalVisible(false);
+
+    // Reload user data and journals to reflect completion
+    if (isAuthenticated && user) {
+      await refreshUser(); // Refresh user to get updated day_1_completed_at
+      await loadJournals();
+      await loadTodayAnsweredPrompts();
+    }
+  };
+
   // Show loading while auth is initializing
   if (isLoading) {
     return (
@@ -359,24 +388,33 @@ export default function JournalScreen() {
             </Text>
           </View>
 
+          {/* Day 1 Get Started Section - only show if not completed */}
+          {!user.day_1_completed_at && (
+            <View style={styles.quickStartSection}>
+              <GetStartedCard onPress={() => setDay1ModalVisible(true)} />
+            </View>
+          )}
+
           {/* Quick Start Section */}
           <View style={styles.quickStartSection}>
             <Text style={styles.sectionTitle}>Make a new journal</Text>
 
-            <FreeFormCard onPress={handleVoiceFormPress} />
-            <TextFormCard onPress={handleTextFormPress} />
+            <FreeFormCard onPress={handleVoiceFormPress} isPrimary={!!user.day_1_completed_at} />
+            <TextFormCard onPress={handleTextFormPress} isPrimary={!!user.day_1_completed_at} />
           </View>
 
-          {/* Daily Prompt Section */}
-          <View style={styles.dailyPromptSection}>
-            <Text style={styles.sectionTitle}>Daily prompt</Text>
+          {/* Daily Prompt Section - only show if Day 1 completed */}
+          {user.day_1_completed_at && (
+            <View style={styles.dailyPromptSection}>
+              <Text style={styles.sectionTitle}>Daily prompt</Text>
 
-            <GuidedPromptSingle
-              userId={user.id}
-              todayAnsweredPrompts={todayAnsweredPrompts}
-              onPromptSelect={handleGuidedPromptSelect}
-            />
-          </View>
+              <GuidedPromptSingle
+                userId={user.id}
+                todayAnsweredPrompts={todayAnsweredPrompts}
+                onPromptSelect={handleGuidedPromptSelect}
+              />
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -399,6 +437,13 @@ export default function JournalScreen() {
         onPauseRecording={handlePauseRecording}
         onResumeRecording={handleResumeRecording}
         onDiscardRecording={handleDiscardRecording}
+      />
+
+      {/* Day 1 Modal */}
+      <Day1Modal
+        visible={day1ModalVisible}
+        onClose={() => setDay1ModalVisible(false)}
+        onComplete={handleDay1Complete}
       />
     </SafeAreaView>
   );

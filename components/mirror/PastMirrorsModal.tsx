@@ -27,6 +27,9 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
   onSharePress,
   checkingFriends = {},
 }) => {
+  console.log('📋 [PAST_MIRRORS_MODAL] Rendering with visible:', visible);
+  console.log('📋 [PAST_MIRRORS_MODAL] Mirrors count:', mirrors.length);
+
   return (
     <Modal
       visible={visible}
@@ -38,7 +41,10 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Past Mirrors</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <TouchableOpacity onPress={() => {
+            console.log('✕ [PAST_MIRRORS_MODAL] Close button pressed');
+            onClose();
+          }} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -52,8 +58,14 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
               mirrorDate={mirror.date}
               biblicalCharacter={mirror.biblicalCharacter}
               reflectionFocus={mirror.reflectionFocus}
-              onViewMirror={() => onViewMirror(mirror.id)}
-              onSharePress={() => onSharePress(mirror.id)}
+              onViewMirror={() => {
+                console.log('👁️ [PAST_MIRRORS_MODAL] View pressed for mirror:', mirror.id);
+                onViewMirror(mirror.id);
+              }}
+              onSharePress={() => {
+                console.log('📤 [PAST_MIRRORS_MODAL] Share pressed for mirror:', mirror.id);
+                onSharePress(mirror.id);
+              }}
               isCheckingFriends={checkingFriends[mirror.id] || false}
             />
           ))}

@@ -158,6 +158,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignSelf: 'flex-end',
     marginTop: 16,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
   },
   actionButtonText: {
     color: '#ffffff',
