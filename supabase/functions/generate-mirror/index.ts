@@ -356,29 +356,29 @@ serve(async (req) => {
 
     console.log(`👤 Generating Mirror for user: ${customUserId}`);
 
-    // Step 1: Check rate limit
-    console.log('🔍 Checking rate limit...');
-    const { data: rateLimitCheck, error: rateLimitError } = await supabase
-      .rpc('check_mirror_generation_rate_limit', { user_id: customUserId });
+    // Step 1: Check rate limit (DISABLED FOR TESTING)
+    // console.log('🔍 Checking rate limit...');
+    // const { data: rateLimitCheck, error: rateLimitError } = await supabase
+    //   .rpc('check_mirror_generation_rate_limit', { user_id: customUserId });
 
-    if (rateLimitError) {
-      console.error('❌ Rate limit check failed:', rateLimitError);
-      throw new Error('Failed to check rate limit');
-    }
+    // if (rateLimitError) {
+    //   console.error('❌ Rate limit check failed:', rateLimitError);
+    //   throw new Error('Failed to check rate limit');
+    // }
 
-    if (rateLimitCheck === true) {
-      console.log('⏸️ Rate limit exceeded');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'You can only generate one Mirror per 24 hours. Please try again later.',
-        }),
-        {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
-    }
+    // if (rateLimitCheck === true) {
+    //   console.log('⏸️ Rate limit exceeded');
+    //   return new Response(
+    //     JSON.stringify({
+    //       success: false,
+    //       error: 'You can only generate one Mirror per 24 hours. Please try again later.',
+    //     }),
+    //     {
+    //       status: 429,
+    //       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    //     }
+    //   );
+    // }
 
     // Step 2: Get user's group to determine threshold
     console.log('👥 Fetching user group...');
