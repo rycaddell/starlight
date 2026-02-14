@@ -423,13 +423,35 @@ serve(async (req) => {
 
     // Step 4: Save mini-mirror to database
     console.log('💾 Saving mini-mirror to database...');
+
+    // Sanitize content to remove null bytes (PostgreSQL can't store \u0000)
+    const sanitizeContent = (obj: any): any => {
+      if (typeof obj === 'string') {
+        return obj.replace(/\u0000/g, '');
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(sanitizeContent);
+      }
+      if (obj && typeof obj === 'object') {
+        const sanitized: any = {};
+        for (const key in obj) {
+          sanitized[key] = sanitizeContent(obj[key]);
+        }
+        return sanitized;
+      }
+      return obj;
+    };
+
+    const sanitizedBiblical = sanitizeContent(aiResult.content.screen2_biblical);
+    const sanitizedSummaries = sanitizeContent(aiResult.content.one_line_summaries);
+
     const { data: mirrorData, error: mirrorError } = await supabase
       .from('mirrors')
       .insert({
         custom_user_id: userId,
         mirror_type: 'day_1',
         screen_1_themes: null,
-        screen_2_biblical: aiResult.content.screen2_biblical,
+        screen_2_biblical: sanitizedBiblical,
         screen_3_observations: null,
         screen_4_suggestions: null,
         journal_count: 2,
@@ -470,7 +492,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         mirror: mirrorData,
-        summaries: aiResult.content.one_line_summaries,
+        summaries: sanitizedSummaries,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

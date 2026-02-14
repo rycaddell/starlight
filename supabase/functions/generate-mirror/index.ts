@@ -436,14 +436,33 @@ serve(async (req) => {
 
     // Step 5: Save Mirror to database (screen_4_suggestions set to null)
     console.log('💾 Saving Mirror to database...');
+
+    // Sanitize content to remove null bytes (PostgreSQL can't store \u0000)
+    const sanitizeContent = (obj: any): any => {
+      if (typeof obj === 'string') {
+        return obj.replace(/\u0000/g, '');
+      }
+      if (Array.isArray(obj)) {
+        return obj.map(sanitizeContent);
+      }
+      if (obj && typeof obj === 'object') {
+        const sanitized: any = {};
+        for (const key in obj) {
+          sanitized[key] = sanitizeContent(obj[key]);
+        }
+        return sanitized;
+      }
+      return obj;
+    };
+
     const { data: mirrorData, error: mirrorError } = await supabase
       .from('mirrors')
       .insert({
         custom_user_id: customUserId,
         user_id: null, // You can populate this if needed
-        screen_1_themes: aiResult.content.screen1_themes,
-        screen_2_biblical: aiResult.content.screen2_biblical,
-        screen_3_observations: aiResult.content.screen3_observations,
+        screen_1_themes: sanitizeContent(aiResult.content.screen1_themes),
+        screen_2_biblical: sanitizeContent(aiResult.content.screen2_biblical),
+        screen_3_observations: sanitizeContent(aiResult.content.screen3_observations),
         screen_4_suggestions: null, // ✅ No longer generating this
         journal_count: journals.length,
         status: 'completed',
