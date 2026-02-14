@@ -167,7 +167,32 @@ async function generateMirrorWithAI(
           model: 'gpt-5.1',
           messages: [{
             role: 'user',
-            content: `Complete this JSON response. It was cut off mid-generation. Return only valid, complete JSON with no explanation:\n\n${rawContent}`,
+            content: `The JSON response below was cut off mid-generation by a content filter. Complete it to match this EXACT structure:
+
+REQUIRED STRUCTURE:
+{
+  "screen1_themes": { "title": "...", "subtitle": "...", "themes": [...] },
+  "screen2_biblical": {
+    "title": "Biblical Mirror",
+    "subtitle": "Pattern matches in Scripture",
+    "parallel_story": { "character": "...", "story": "...", "connection": "..." },
+    "encouraging_verse": { "reference": "...", "text": "...", "application": "..." },
+    "challenging_verse": { "reference": "...", "text": "...", "invitation": "..." }
+  },
+  "screen3_observations": {
+    "title": "Observations",
+    "subtitle": "Patterns in your framing",
+    "self_perception": { "observation": "..." },
+    "god_perception": { "observation": "..." },
+    "others_perception": { "observation": "..." },
+    "blind_spots": { "observation": "..." }
+  }
+}
+
+INCOMPLETE JSON TO COMPLETE:
+${rawContent}
+
+Return ONLY the complete, valid JSON with all required fields. Use field names EXACTLY as shown in the structure above.`,
           }],
           max_completion_tokens: 10000,
           response_format: { type: "json_object" },

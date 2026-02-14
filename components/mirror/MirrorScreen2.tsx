@@ -20,20 +20,26 @@ export const MirrorScreen2: React.FC<MirrorScreen2Props> = ({ data }) => (
     </View>
     
     {/* Encouraging Verse */}
-    <View style={styles.verseCard}>
-      <Text style={styles.verseLabel}>Encouraging Word</Text>
-      <Text style={styles.verseReference}>{data.encouraging_verse.reference}</Text>
-      <Text style={styles.verseText}>&quot;{data.encouraging_verse.text}&quot;</Text>
-      <Text style={styles.verseApplication}>{data.encouraging_verse.application}</Text>
-    </View>
-    
+    {data.encouraging_verse && (
+      <View style={styles.verseCard}>
+        <Text style={styles.verseLabel}>Encouraging Word</Text>
+        <Text style={styles.verseReference}>{data.encouraging_verse.reference}</Text>
+        <Text style={styles.verseText}>&quot;{data.encouraging_verse.text}&quot;</Text>
+        <Text style={styles.verseApplication}>
+          {data.encouraging_verse.application || data.encouraging_verse.why_it_fits}
+        </Text>
+      </View>
+    )}
+
     {/* Challenging Verse */}
-    <View style={styles.verseCard}>
-      <Text style={styles.verseLabel}>Invitation to Growth</Text>
-      <Text style={styles.verseReference}>{data.challenging_verse.reference}</Text>
-      <Text style={styles.verseText}>&quot;{data.challenging_verse.text}&quot;</Text>
-      <Text style={styles.verseInvitation}>{data.challenging_verse.invitation}</Text>
-    </View>
+    {data.challenging_verse && (
+      <View style={styles.verseCard}>
+        <Text style={styles.verseLabel}>Invitation to Growth</Text>
+        <Text style={styles.verseReference}>{data.challenging_verse.reference}</Text>
+        <Text style={styles.verseText}>&quot;{data.challenging_verse.text}&quot;</Text>
+        <Text style={styles.verseInvitation}>{data.challenging_verse.invitation}</Text>
+      </View>
+    )}
   </View>
 );
 
