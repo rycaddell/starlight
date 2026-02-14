@@ -131,6 +131,7 @@ async function generateMirrorWithAI(
         model: 'gpt-5',
         messages: [{ role: 'user', content: prompt }],
         max_completion_tokens: 10000,
+        response_format: { type: "json_object" },
       }),
       signal: controller.signal,
     });
@@ -147,7 +148,41 @@ async function generateMirrorWithAI(
     console.log('✅ OpenAI response received');
     console.log('💰 Tokens used:', data.usage?.total_tokens || 'unknown');
 
-    const rawContent = data.choices[0].message.content;
+    let rawContent = data.choices[0].message.content;
+
+    // Check for content filter truncation
+    const finishReason = data.choices[0].finish_reason;
+    console.log('🏁 Finish reason:', finishReason);
+
+    if (finishReason === 'content_filter') {
+      console.warn('⚠️ Content filter triggered, attempting to complete response...');
+
+      const completionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-5',
+          messages: [{
+            role: 'user',
+            content: `Complete this JSON response. It was cut off mid-generation. Return only valid, complete JSON with no explanation:\n\n${rawContent}`,
+          }],
+          max_completion_tokens: 10000,
+          response_format: { type: "json_object" },
+        }),
+      });
+
+      if (completionResponse.ok) {
+        const completionData = await completionResponse.json();
+        rawContent = completionData.choices[0].message.content;
+        console.log('✅ Successfully completed filtered response');
+        console.log('📄 Completed response length:', rawContent.length);
+      } else {
+        console.warn('⚠️ Failed to complete filtered response, proceeding with partial content');
+      }
+    }
 
     // Clean and parse JSON with better error handling
     let cleanedContent = rawContent
@@ -158,26 +193,57 @@ async function generateMirrorWithAI(
     // Log the raw content for debugging
     console.log('📄 Raw AI response length:', cleanedContent.length);
 
+    // Multi-attempt JSON parsing with progressive sanitization
     let mirrorContent;
-    try {
-      mirrorContent = JSON.parse(cleanedContent);
-      console.log('✅ JSON parsed successfully');
-    } catch (parseError) {
-      console.error('❌ JSON parse error:', parseError.message);
-      console.error('📄 Failed content (first 500 chars):', cleanedContent.substring(0, 500));
-      console.error('📄 Failed content (last 500 chars):', cleanedContent.substring(Math.max(0, cleanedContent.length - 500)));
+    let parseAttempts = 0;
+    const maxParseAttempts = 3;
 
-      // Try to fix common JSON issues
-      // 1. Fix unescaped newlines in strings
-      cleanedContent = cleanedContent.replace(/\n(?=(?:[^"]*"[^"]*")*[^"]*"[^"]*$)/g, '\\n');
-
-      // 2. Try parsing again
+    while (parseAttempts < maxParseAttempts) {
       try {
-        mirrorContent = JSON.parse(cleanedContent);
-        console.log('✅ JSON parsed successfully after cleanup');
-      } catch (retryError) {
-        console.error('❌ Still failed after cleanup');
-        throw new Error(`AI generation failed: ${parseError.message}\nContent: ${cleanedContent.substring(0, 200)}...`);
+        if (parseAttempts === 0) {
+          // Attempt 1: Direct parse
+          mirrorContent = JSON.parse(cleanedContent);
+          console.log('✅ JSON parsed successfully');
+          break;
+        } else if (parseAttempts === 1) {
+          // Attempt 2: Basic fixes (escape newlines)
+          console.log('🔧 Attempting to fix JSON (attempt 1: basic fixes)...');
+          const fixedContent = cleanedContent
+            .replace(/\\n/g, '\\\\n')
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/\t/g, ' ');
+
+          mirrorContent = JSON.parse(fixedContent);
+          console.log('✅ JSON parsed after basic fixes');
+          break;
+        } else if (parseAttempts === 2) {
+          // Attempt 3: Aggressive sanitization
+          console.log('🔧 Attempting to fix JSON (attempt 2: aggressive sanitization)...');
+          const aggressivelyFixed = cleanedContent
+            .replace(/\\n/g, '\\\\n')
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/\t/g, ' ')
+            .replace(/: "([^"]*)"([^,}\]])/g, (match, p1, p2) => {
+              // Fix unescaped quotes within string values
+              return `: "${p1}\\"${p2}`;
+            });
+
+          mirrorContent = JSON.parse(aggressivelyFixed);
+          console.log('✅ JSON parsed after aggressive fixes');
+          break;
+        }
+      } catch (parseError) {
+        parseAttempts++;
+        if (parseAttempts >= maxParseAttempts) {
+          console.error('❌ All JSON parse attempts failed');
+          console.error('❌ JSON parse error:', parseError.message);
+          console.error('📄 Failed content (first 500 chars):', cleanedContent.substring(0, 500));
+          console.error('📄 Failed content (last 500 chars):', cleanedContent.substring(Math.max(0, cleanedContent.length - 500)));
+          throw new Error(`AI generation failed: ${parseError.message}\nContent: ${cleanedContent.substring(0, 200)}...`);
+        }
+        console.log(`⚠️ Parse attempt ${parseAttempts} failed, trying next strategy...`);
       }
     }
 
