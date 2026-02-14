@@ -17,11 +17,16 @@ export const MirrorStatusCard: React.FC<MirrorStatusCardProps> = ({
   generationStartTime,
 }) => {
   const [fakeProgress, setFakeProgress] = useState(0);
+  const [isStuck, setIsStuck] = useState(false);
+
+  // Check if generation is stuck (> 5 minutes)
+  const STUCK_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 
   // Fake progress bar animation (0% to 100% over 2 minutes)
   useEffect(() => {
     if (state !== 'generating' || !generationStartTime) {
       setFakeProgress(0);
+      setIsStuck(false);
       return;
     }
 
@@ -30,8 +35,23 @@ export const MirrorStatusCard: React.FC<MirrorStatusCardProps> = ({
     const initialProgress = Math.min((elapsed / 120000) * 100, 100); // 120000ms = 2 minutes
     setFakeProgress(initialProgress);
 
+    // Check if stuck (> 5 minutes)
+    if (elapsed > STUCK_THRESHOLD) {
+      setIsStuck(true);
+      return; // Don't start progress interval if already stuck
+    }
+
     // Update progress every 500ms
     const interval = setInterval(() => {
+      const currentElapsed = Date.now() - generationStartTime;
+
+      // Check if stuck
+      if (currentElapsed > STUCK_THRESHOLD) {
+        setIsStuck(true);
+        clearInterval(interval);
+        return;
+      }
+
       setFakeProgress((prev) => {
         const newProgress = prev + (100 / 240); // 120 seconds / 0.5 second intervals = 240 steps
         return Math.min(newProgress, 99); // Cap at 99% until actually complete
@@ -63,12 +83,32 @@ export const MirrorStatusCard: React.FC<MirrorStatusCardProps> = ({
 
   // State 2: Generating (In Progress)
   if (state === 'generating') {
+    // Show retry option if stuck for > 5 minutes
+    if (isStuck) {
+      return (
+        <View style={styles.card}>
+          <View style={styles.content}>
+            <Text style={styles.title}>Generation Timed Out</Text>
+            <Text style={styles.subtitle}>
+              This is taking longer than expected. Please try again.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.button}
+            onPress={onGeneratePress}
+          >
+            <Text style={styles.buttonText}>Retry Generation</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     return (
       <View style={styles.card}>
         <View style={styles.content}>
           <Text style={styles.title}>Mirror In Progress</Text>
           <Text style={styles.subtitle}>This can take up to 2 minutes</Text>
-          
+
           {/* Progress Bar */}
           <View style={styles.progressBarContainer}>
             <View style={[styles.progressBarFill, { width: `${fakeProgress}%` }]} />

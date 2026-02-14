@@ -508,13 +508,24 @@ serve(async (req) => {
     // Mark request as failed if it exists
     if (requestRecord?.id && supabase) {
       console.log('📝 Marking request as failed...');
-      await supabase
-        .from('mirror_generation_requests')
-        .update({
-          status: 'failed',
-          completed_at: new Date().toISOString(),
-        })
-        .eq('id', requestRecord.id);
+      try {
+        const { error: updateError } = await supabase
+          .from('mirror_generation_requests')
+          .update({
+            status: 'failed',
+            completed_at: new Date().toISOString(),
+          })
+          .eq('id', requestRecord.id);
+
+        if (updateError) {
+          console.error('⚠️ Failed to update request status:', updateError);
+        } else {
+          console.log('✅ Request marked as failed');
+        }
+      } catch (updateException) {
+        console.error('⚠️ Exception while updating request status:', updateException);
+        // Continue to return error response to user
+      }
     }
 
     return new Response(
