@@ -356,31 +356,10 @@ serve(async (req) => {
 
     console.log(`👤 Generating Mirror for user: ${customUserId}`);
 
-    // Step 1: Check rate limit (DISABLED FOR TESTING)
-    // console.log('🔍 Checking rate limit...');
-    // const { data: rateLimitCheck, error: rateLimitError } = await supabase
-    //   .rpc('check_mirror_generation_rate_limit', { user_id: customUserId });
+    // Rate limiting disabled - can be re-enabled later if needed by calling
+    // check_mirror_generation_rate_limit RPC function
 
-    // if (rateLimitError) {
-    //   console.error('❌ Rate limit check failed:', rateLimitError);
-    //   throw new Error('Failed to check rate limit');
-    // }
-
-    // if (rateLimitCheck === true) {
-    //   console.log('⏸️ Rate limit exceeded');
-    //   return new Response(
-    //     JSON.stringify({
-    //       success: false,
-    //       error: 'You can only generate one Mirror per 24 hours. Please try again later.',
-    //     }),
-    //     {
-    //       status: 429,
-    //       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    //     }
-    //   );
-    // }
-
-    // Step 2: Get user's group to determine threshold
+    // Step 1: Get user's group to determine threshold
     console.log('👥 Fetching user group...');
     const { data: userData, error: userError } = await supabase
       .from('users')
@@ -397,7 +376,7 @@ serve(async (req) => {
     const threshold = userData?.group_name === 'Mens Group' ? 6 : MIRROR_THRESHOLD;
     console.log(`✅ User group: ${userData?.group_name || 'none'}, Threshold: ${threshold}`);
 
-    // Step 3: Get unassigned journals
+    // Step 2: Get unassigned journals
     console.log('📚 Fetching unassigned journals...');
     const { data: journals, error: journalsError } = await supabase
       .from('journals')
