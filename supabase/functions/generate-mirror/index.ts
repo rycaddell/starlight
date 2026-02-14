@@ -128,7 +128,7 @@ async function generateMirrorWithAI(
         'Authorization': `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-5',
+        model: 'gpt-5.1',
         messages: [{ role: 'user', content: prompt }],
         max_completion_tokens: 10000,
         response_format: { type: "json_object" },
@@ -164,7 +164,7 @@ async function generateMirrorWithAI(
           'Authorization': `Bearer ${openaiApiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-5',
+          model: 'gpt-5.1',
           messages: [{
             role: 'user',
             content: `Complete this JSON response. It was cut off mid-generation. Return only valid, complete JSON with no explanation:\n\n${rawContent}`,

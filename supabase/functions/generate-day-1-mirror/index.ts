@@ -149,7 +149,7 @@ async function generateMiniMirrorWithAI(
         'Authorization': `Bearer ${openaiApiKey}`,
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
+        model: 'gpt-5.1',
         messages: [{ role: 'user', content: prompt }],
         max_completion_tokens: 10000, // Match regular mirror generation
         response_format: { type: "json_object" }, // Force valid JSON
@@ -191,7 +191,7 @@ async function generateMiniMirrorWithAI(
             'Authorization': `Bearer ${openaiApiKey}`,
           },
           body: JSON.stringify({
-            model: 'gpt-5-mini',
+            model: 'gpt-5.1',
             messages: [{
               role: 'user',
               content: `Complete this JSON response. It was cut off mid-generation. Add the missing content and ensure it's valid JSON:
