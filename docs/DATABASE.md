@@ -10,7 +10,8 @@ Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
 - `users` - User accounts (access code-based auth)
 - `journals` - Journal entries (text or voice transcriptions)
-- `mirrors` - AI-generated spiritual reflections
+- `mirrors` - AI-generated spiritual reflections (full mirrors + Day 1 mini-mirrors)
+- `day_1_progress` - Day 1 onboarding progress tracking
 - `mirror_reflections` - User responses to mirror prompts (deprecated)
 - `friend_invites` - Friend invite links and tracking
 - `friend_links` - Bi-directional friend relationships

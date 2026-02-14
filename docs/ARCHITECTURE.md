@@ -55,7 +55,16 @@ starlight/
 │   │   ├── PastJournalsModal.tsx # Full-sheet modal for all journals
 │   │   ├── ShareMirrorSheet.tsx # Friend picker for mirror sharing
 │   │   └── JournalHistory.tsx   # Legacy journal list component
-│   ├── onboarding/              # Onboarding flow screens
+│   ├── day1/                    # Day 1 onboarding (5-step spiritual formation)
+│   │   ├── Day1Modal.tsx        # Main modal orchestrating 5 steps
+│   │   ├── GetStartedCard.tsx   # Welcome screen with intro
+│   │   ├── Step1SpiritualPlace.tsx  # Spiritual place selection (8 options)
+│   │   ├── Step2VoiceJournal.tsx    # "What's going on?" voice prompt
+│   │   ├── Step3VoiceJournal.tsx    # "How are you relating to God?" prompt
+│   │   ├── Step4Loading.tsx     # Mirror generation loading screen
+│   │   ├── Step5MiniMirror.tsx  # View mini-mirror + set focus
+│   │   └── Day1MirrorViewer.tsx # Day 1 mirror viewer from Mirror tab
+│   ├── onboarding/              # Narrative onboarding flow screens
 │   ├── voice/                   # Voice recording UI
 │   ├── friends/                 # Friends & sharing components
 │   │   ├── FriendSlots.tsx     # Friend slot UI with invite button
@@ -82,17 +91,27 @@ starlight/
 │   │   ├── mirrors.js          # Mirror CRUD
 │   │   ├── friends.js          # Friend invite & linking
 │   │   ├── mirrorShares.js     # Mirror sharing operations
+│   │   ├── day1.js             # Day 1 onboarding operations
+│   │   ├── profilePicture.js   # Profile picture upload/delete
 │   │   └── feedback.js         # Feedback handling
 │   ├── whisperService.ts        # OpenAI Whisper integration
 │   └── guidedPrompts.ts         # Journal prompt management
 │
 ├── supabase/                     # Supabase Edge Functions
 │   └── functions/
-│       ├── generate-mirror/     # Full Mirror generation
+│       ├── generate-mirror/     # Full Mirror generation (10+ journals)
+│       │   └── index.ts
+│       ├── generate-day-1-mirror/  # Day 1 mini-mirror (2 voice journals)
+│       │   └── index.ts
+│       ├── extract-focus-theme/ # Extract 1-2 word theme from focus text
 │       │   └── index.ts
 │       ├── generate-onboarding-preview/  # Onboarding preview
 │       │   └── index.ts
-│       └── transcribe-audio/    # Whisper transcription
+│       ├── transcribe-audio/    # Whisper transcription
+│       │   └── index.ts
+│       ├── send-push-notification/  # Push notification delivery
+│       │   └── index.ts
+│       └── wednesday-journal-reminder/  # Weekly Mens Group reminder
 │           └── index.ts
 │
 ├── types/                        # TypeScript definitions
@@ -439,6 +458,71 @@ Shows 3 screens (themes, biblical, observations)
 Share marked as viewed (viewed_at timestamp)
     ↓
 Badge changes from "NEW" to "VIEW"
+```
+
+### Day 1 Onboarding Flow
+```
+New user signs in with access code
+    ↓
+OnboardingContext detects no Day 1 completion
+    ↓
+Day1Modal opens (full-screen modal)
+    ↓
+Step 1: User selects spiritual place (8 options)
+    ↓
+lib/supabase/day1.updateDay1Progress({ spiritual_place })
+    ↓
+Step 2: Voice journal - "What shaped your choice?"
+    ↓
+useAudioRecording → Whisper transcription
+    ↓
+lib/supabase/journals.saveJournalEntry (transcription_status: completed)
+    ↓
+lib/supabase/day1.saveStepJournal(userId, 2, journalId)
+    ↓
+Auto-progress to Step 3 (first time only)
+    ↓
+Step 3: Voice journal - "How are you relating to God?"
+    ↓
+useAudioRecording → Whisper transcription
+    ↓
+lib/supabase/journals.saveJournalEntry (transcription_status: completed)
+    ↓
+lib/supabase/day1.saveStepJournal(userId, 3, journalId)
+    ↓
+Auto-start mirror generation
+    ↓
+lib/supabase/day1.generateMiniMirror(userId)
+    ↓
+Edge Function: generate-day-1-mirror
+    ↓
+Fetch spiritual place + 2 journals
+    ↓
+Sanitize content (escape quotes, newlines)
+    ↓
+Call OpenAI gpt-5-mini with structured prompt
+    ↓
+Multi-attempt JSON parsing (3 strategies)
+    ↓
+Save to mirrors table (mirror_type: 'day_1', journal_count: 2)
+    ↓
+Update day_1_progress (mini_mirror_id, generation_status: completed)
+    ↓
+Step 5: View mini-mirror + focus area input
+    ↓
+User types focus response
+    ↓
+lib/supabase/day1.saveFocusAreas(userId, mirrorId, focusText)
+    ↓
+Edge Function: extract-focus-theme
+    ↓
+Extract 1-2 word theme with OpenAI
+    ↓
+Update day_1_progress (focus_theme, completed_at)
+    ↓
+Modal closes → User sees regular journal screen
+    ↓
+Day 1 mirror appears in Mirror tab
 ```
 
 ---
