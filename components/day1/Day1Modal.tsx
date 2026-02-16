@@ -19,7 +19,7 @@ interface Day1ModalProps {
 }
 
 export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComplete }) => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -125,15 +125,19 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     setCurrentStep(3); // Go to Step 3 (prayer topics voice journal)
   };
 
-  const handleStep3Complete = (mirrorId: string, summaries: any) => {
+  const handleStep3Complete = async (mirrorId: string, summaries: any) => {
     setMiniMirrorId(mirrorId);
     setSummaries(summaries);
+    // Refresh user data to get updated display_name before showing Step 5
+    await refreshUser();
     setCurrentStep(5); // Go directly to Step 5 (skip loading screen)
   };
 
-  const handleStep4Complete = (mirrorId: string, generatedSummaries: any) => {
+  const handleStep4Complete = async (mirrorId: string, generatedSummaries: any) => {
     setMiniMirrorId(mirrorId);
     setSummaries(generatedSummaries);
+    // Refresh user data to get updated display_name before showing Step 5
+    await refreshUser();
     setCurrentStep(5);
   };
 
