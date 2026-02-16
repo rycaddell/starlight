@@ -57,6 +57,11 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
     const result = await getMirrorById(mirrorId);
 
     if (result.success && result.content) {
+      console.log('🪞 Day1MirrorViewer - Full mirror content:', JSON.stringify(result.content, null, 2));
+      console.log('🔍 screen_2_biblical check:', result.content.screen_2_biblical);
+      console.log('🔍 screen2_biblical check:', result.content.screen2_biblical);
+      console.log('🔍 invitation_to_growth:', result.content.screen_2_biblical?.invitation_to_growth || result.content.screen2_biblical?.invitation_to_growth);
+
       setMirrorContent(result.content);
       setMirrorMetadata(result.mirror);
       // Load existing focus areas if present
@@ -173,34 +178,64 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
               {/* Biblical Mirror Content */}
               <View style={styles.mirrorSection}>
                 {/* Parallel Story */}
-                {mirrorContent.screen2_biblical?.parallel_story && (
+                {(mirrorContent.screen_2_biblical?.parallel_story || mirrorContent.screen2_biblical?.parallel_story) && (
                   <View style={styles.card}>
                     <Text style={styles.cardLabel}>Biblical Parallel</Text>
-                    <Text style={styles.characterName}>{mirrorContent.screen2_biblical.parallel_story.character}</Text>
-                    <Text style={styles.storyText}>{mirrorContent.screen2_biblical.parallel_story.story}</Text>
-                    <Text style={styles.connectionText}>{mirrorContent.screen2_biblical.parallel_story.connection}</Text>
+                    <Text style={styles.characterName}>
+                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.character}
+                    </Text>
+                    <Text style={styles.storyText}>
+                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.story}
+                    </Text>
+                    <Text style={styles.connectionText}>
+                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.connection}
+                    </Text>
                   </View>
                 )}
 
                 {/* Encouraging Verse */}
-                {mirrorContent.screen2_biblical?.encouraging_verse && (
+                {(mirrorContent.screen_2_biblical?.encouraging_verse || mirrorContent.screen2_biblical?.encouraging_verse) && (
                   <View style={styles.card}>
                     <Text style={styles.cardLabel}>Encouragement</Text>
-                    <Text style={styles.verseReference}>{mirrorContent.screen2_biblical.encouraging_verse.reference}</Text>
-                    <Text style={styles.verseText}>"{mirrorContent.screen2_biblical.encouraging_verse.text}"</Text>
-                    <Text style={styles.applicationText}>{mirrorContent.screen2_biblical.encouraging_verse.application}</Text>
+                    <Text style={styles.verseReference}>
+                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.reference}
+                    </Text>
+                    <Text style={styles.verseText}>
+                      "{(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.text}"
+                    </Text>
+                    <Text style={styles.applicationText}>
+                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.application}
+                    </Text>
                   </View>
                 )}
 
-                {/* Challenging Verse */}
-                {mirrorContent.screen2_biblical?.challenging_verse && (
-                  <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Reflection</Text>
-                    <Text style={styles.verseReference}>{mirrorContent.screen2_biblical.challenging_verse.reference}</Text>
-                    <Text style={styles.verseText}>"{mirrorContent.screen2_biblical.challenging_verse.text}"</Text>
-                    <Text style={styles.invitationText}>{mirrorContent.screen2_biblical.challenging_verse.invitation}</Text>
-                  </View>
-                )}
+                {/* Invitation to Growth (supports both old 'challenging_verse' and new 'invitation_to_growth' field names) */}
+                {(() => {
+                  const biblical = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
+                  const invitationVerse = biblical?.invitation_to_growth || biblical?.challenging_verse;
+
+                  console.log('🎯 Invitation render check:', {
+                    hasBiblical: !!biblical,
+                    hasInvitation: !!invitationVerse,
+                    biblical: biblical,
+                    invitationVerse: invitationVerse
+                  });
+
+                  if (!invitationVerse) {
+                    console.log('⚠️ No invitation verse found - not rendering');
+                    return null;
+                  }
+
+                  console.log('✅ Rendering invitation verse');
+                  return (
+                    <View style={styles.card}>
+                      <Text style={styles.cardLabel}>Reflection</Text>
+                      <Text style={styles.verseReference}>{invitationVerse.reference}</Text>
+                      <Text style={styles.verseText}>"{invitationVerse.text}"</Text>
+                      <Text style={styles.invitationText}>{invitationVerse.invitation}</Text>
+                    </View>
+                  );
+                })()}
               </View>
 
               {/* Focus Areas Section */}

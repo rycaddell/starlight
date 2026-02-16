@@ -1,6 +1,7 @@
 // supabase/functions/generate-mirror/index.ts
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+import { generateCorePrompt, generateEncouragingVersePrompt, generateInvitationToGrowthPrompt } from './prompts.ts'
 
 const MIRROR_THRESHOLD = 10; // Minimum journals needed for Mirror generation
 const GENERATION_TIMEOUT_MS = 240000; // 4 minutes
@@ -19,105 +20,15 @@ interface JournalEntry {
   prompt_text?: string;
 }
 
-// Generate Mirror prompt (updated to 3 screens)
-function generateMirrorPrompt(journalEntries: JournalEntry[]): string {
-  const journalText = journalEntries.map((entry, index) => {
-    const date = new Date(entry.created_at).toLocaleDateString();
-    if (entry.prompt_text) {
-      // Format guided journal entries with prompt context
-      return `Entry ${index + 1} (${date}): In response to '${entry.prompt_text}', the user wrote: ${entry.content}`;
-    }
-    // Format free-form journal entries
-    return `Entry ${index + 1} (${date}): ${entry.content}`;
-  }).join('\n\n');
-
-  return `You are a wise, compassionate spiritual director analyzing someone's journal entries to provide encouraging spiritual formation insights. 
-
-JOURNAL ENTRIES TO ANALYZE:
-${journalText}
-
-Please generate a "Mirror" - a 3-screen spiritual reflection in JSON format with exactly this structure:
-
-{
-  "screen1_themes": {
-    "title": "Themes",
-    "subtitle": "Patterns across your journals",
-    "themes": [
-      {
-        "name": "Theme Name",
-        "description": "Brief description of this theme",
-        "frequency": "Present in journals from March 15, March 22, and April 3"
-      }
-    ]
-  },
-  "screen2_biblical": {
-    "title": "Biblical Mirror", 
-    "subtitle": "Pattern matches in Scripture",
-    "parallel_story": {
-      "character": "Biblical character name",
-      "story": "Brief story summary that parallels their experience",
-      "connection": "How this connects to their journey"
-    },
-    "encouraging_verse": {
-      "reference": "Bible verse reference",
-      "text": "Verse text",
-      "application": "How this verse speaks to their situation"
-    },
-    "challenging_verse": {
-      "reference": "Bible verse reference", 
-      "text": "Verse text",
-      "invitation": "Gentle invitation for deeper reflection"
-    }
-  },
-  "screen3_observations": {
-    "title": "Observations",
-    "subtitle": "Patterns in your framing",
-    "self_perception": {
-      "observation": "How they tend to view themselves spiritually, with specific journal date references"
-    },
-    "god_perception": {
-      "observation": "How they tend to relate to or view God, with specific journal date references"
-    },
-    "others_perception": {
-      "observation": "How they tend to view or relate to others, with specific journal date references"
-    },
-    "blind_spots": {
-      "observation": "Pattern they may not be aware of that could benefit from attention, with journal date references"
-    }
-  }
-}
-
-IMPORTANT REQUIREMENTS:
-- For screen1_themes: Generate exactly 4 themes maximum, no more
-- For theme frequency references: Use actual journal dates (e.g., "Present in journals from March 15, March 22, and April 3") instead of entry numbers
-- Do NOT include an "insight" field in screen1_themes
-- For screen3_observations: Focus only on observations without recommendations. Each section should contain ONLY the observation field with specific journal date references. Do not include growth edges, invitations, challenges, or growth opportunities - just neutral observations of patterns. If no clear evidence exists in the journals for a particular area (self, God, others, blind spots), omit that section entirely rather than making generic observations.
-- Reference specific dates from the journal entries provided above
-- CRITICAL: Ensure all text in JSON strings is properly formatted. Do not use unescaped quotes or newline characters within strings. Keep text on single lines.
-
-TONE GUIDELINES:
-- Warm, encouraging, and non-judgmental
-- Acknowledge struggles without being dismissive
-- Find genuine hope and growth even in difficult seasons
-- Use accessible, modern language while remaining spiritually grounded
-- Be specific to their actual journal content, not generic
-- Balance affirmation with gentle invitations for growth
-
-Generate only the JSON response with no additional text.`;
-}
-
-// Generate Mirror with OpenAI
-async function generateMirrorWithAI(
-  journalEntries: JournalEntry[],
+// Make individual OpenAI API call with error handling
+async function makeOpenAICall(
+  prompt: string,
+  callType: string,
   openaiApiKey: string
 ): Promise<any> {
-  console.log(`🎯 Generating Mirror for ${journalEntries.length} journals`);
-  
-  const prompt = generateMirrorPrompt(journalEntries);
-  console.log(`📝 Prompt length: ${prompt.length} characters`);
+  console.log(`🎯 Making ${callType} API call (prompt length: ${prompt.length} chars)`);
 
   try {
-    // Call OpenAI with timeout handling
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
 
@@ -140,153 +51,188 @@ async function generateMirrorWithAI(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ OpenAI API error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      console.error(`❌ ${callType} API error:`, response.status, errorText);
+      return {
+        success: false,
+        contentFilterTriggered: false,
+        finishReason: 'api_error',
+        error: `API error: ${response.status}`,
+        usage: null,
+      };
     }
 
     const data = await response.json();
-    console.log('✅ OpenAI response received');
-    console.log('💰 Tokens used:', data.usage?.total_tokens || 'unknown');
-
-    let rawContent = data.choices[0].message.content;
-
-    // Check for content filter truncation
     const finishReason = data.choices[0].finish_reason;
-    console.log('🏁 Finish reason:', finishReason);
+    const rawContent = data.choices[0].message.content;
 
+    console.log(`🏁 ${callType} finish reason:`, finishReason);
+    console.log(`💰 ${callType} tokens:`, data.usage?.total_tokens || 'unknown');
+
+    // Check for content filter
     if (finishReason === 'content_filter') {
-      console.warn('⚠️ Content filter triggered, attempting to complete response...');
-
-      const completionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-5.1',
-          messages: [{
-            role: 'user',
-            content: `The JSON response below was cut off mid-generation by a content filter. Complete it to match this EXACT structure:
-
-REQUIRED STRUCTURE:
-{
-  "screen1_themes": { "title": "...", "subtitle": "...", "themes": [...] },
-  "screen2_biblical": {
-    "title": "Biblical Mirror",
-    "subtitle": "Pattern matches in Scripture",
-    "parallel_story": { "character": "...", "story": "...", "connection": "..." },
-    "encouraging_verse": { "reference": "...", "text": "...", "application": "..." },
-    "challenging_verse": { "reference": "...", "text": "...", "invitation": "..." }
-  },
-  "screen3_observations": {
-    "title": "Observations",
-    "subtitle": "Patterns in your framing",
-    "self_perception": { "observation": "..." },
-    "god_perception": { "observation": "..." },
-    "others_perception": { "observation": "..." },
-    "blind_spots": { "observation": "..." }
-  }
-}
-
-INCOMPLETE JSON TO COMPLETE:
-${rawContent}
-
-Return ONLY the complete, valid JSON with all required fields. Use field names EXACTLY as shown in the structure above.`,
-          }],
-          max_completion_tokens: 10000,
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (completionResponse.ok) {
-        const completionData = await completionResponse.json();
-        rawContent = completionData.choices[0].message.content;
-        console.log('✅ Successfully completed filtered response');
-        console.log('📄 Completed response length:', rawContent.length);
-      } else {
-        console.warn('⚠️ Failed to complete filtered response, proceeding with partial content');
-      }
+      console.warn(`⚠️ ${callType} triggered content filter`);
+      console.error(`🚨 ${callType} CONTENT FILTER DETAILS:`, JSON.stringify(data, null, 2));
+      return {
+        success: false,
+        contentFilterTriggered: true,
+        finishReason,
+        content: null,
+        usage: data.usage,
+      };
     }
 
-    // Clean and parse JSON with better error handling
+    // Parse JSON response
     let cleanedContent = rawContent
       .replace(/```json\n?/g, '')
       .replace(/```\n?/g, '')
       .trim();
 
-    // Log the raw content for debugging
-    console.log('📄 Raw AI response length:', cleanedContent.length);
-
-    // Multi-attempt JSON parsing with progressive sanitization
-    let mirrorContent;
+    let parsedContent;
     let parseAttempts = 0;
     const maxParseAttempts = 3;
 
     while (parseAttempts < maxParseAttempts) {
       try {
         if (parseAttempts === 0) {
-          // Attempt 1: Direct parse
-          mirrorContent = JSON.parse(cleanedContent);
-          console.log('✅ JSON parsed successfully');
+          parsedContent = JSON.parse(cleanedContent);
+          console.log(`✅ ${callType} JSON parsed successfully`);
           break;
         } else if (parseAttempts === 1) {
-          // Attempt 2: Basic fixes (escape newlines)
-          console.log('🔧 Attempting to fix JSON (attempt 1: basic fixes)...');
+          console.log(`🔧 ${callType} attempting basic JSON fixes...`);
           const fixedContent = cleanedContent
             .replace(/\\n/g, '\\\\n')
             .replace(/\n/g, ' ')
             .replace(/\r/g, '')
             .replace(/\t/g, ' ');
-
-          mirrorContent = JSON.parse(fixedContent);
-          console.log('✅ JSON parsed after basic fixes');
+          parsedContent = JSON.parse(fixedContent);
+          console.log(`✅ ${callType} JSON parsed after basic fixes`);
           break;
-        } else if (parseAttempts === 2) {
-          // Attempt 3: Aggressive sanitization
-          console.log('🔧 Attempting to fix JSON (attempt 2: aggressive sanitization)...');
+        } else {
+          console.log(`🔧 ${callType} attempting aggressive JSON fixes...`);
           const aggressivelyFixed = cleanedContent
             .replace(/\\n/g, '\\\\n')
             .replace(/\n/g, ' ')
             .replace(/\r/g, '')
-            .replace(/\t/g, ' ')
-            .replace(/: "([^"]*)"([^,}\]])/g, (match, p1, p2) => {
-              // Fix unescaped quotes within string values
-              return `: "${p1}\\"${p2}`;
-            });
-
-          mirrorContent = JSON.parse(aggressivelyFixed);
-          console.log('✅ JSON parsed after aggressive fixes');
+            .replace(/\t/g, ' ');
+          parsedContent = JSON.parse(aggressivelyFixed);
+          console.log(`✅ ${callType} JSON parsed after aggressive fixes`);
           break;
         }
       } catch (parseError) {
         parseAttempts++;
         if (parseAttempts >= maxParseAttempts) {
-          console.error('❌ All JSON parse attempts failed');
-          console.error('❌ JSON parse error:', parseError.message);
-          console.error('📄 Failed content (first 500 chars):', cleanedContent.substring(0, 500));
-          console.error('📄 Failed content (last 500 chars):', cleanedContent.substring(Math.max(0, cleanedContent.length - 500)));
-          throw new Error(`AI generation failed: ${parseError.message}\nContent: ${cleanedContent.substring(0, 200)}...`);
+          console.error(`❌ ${callType} JSON parse failed:`, parseError.message);
+          return {
+            success: false,
+            contentFilterTriggered: false,
+            finishReason: 'parse_error',
+            error: parseError.message,
+            usage: data.usage,
+          };
         }
-        console.log(`⚠️ Parse attempt ${parseAttempts} failed, trying next strategy...`);
       }
     }
 
     return {
       success: true,
-      content: mirrorContent,
+      contentFilterTriggered: false,
+      finishReason,
+      content: parsedContent,
       usage: data.usage,
     };
 
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.error('❌ Generation timeout after 4 minutes');
-      throw new Error('Mirror generation timeout - please try again');
+      console.error(`❌ ${callType} timeout after 4 minutes`);
+      return {
+        success: false,
+        contentFilterTriggered: false,
+        finishReason: 'timeout',
+        error: 'Request timeout',
+        usage: null,
+      };
     }
-    
-    console.error('❌ AI generation failed:', error.message);
-    throw error;
+
+    console.error(`❌ ${callType} call failed:`, error.message);
+    return {
+      success: false,
+      contentFilterTriggered: false,
+      finishReason: 'exception',
+      error: error.message,
+      usage: null,
+    };
   }
+}
+
+// Generate Mirror with 3 parallel OpenAI calls
+async function generateMirrorWithAI(
+  journalEntries: JournalEntry[],
+  openaiApiKey: string
+): Promise<any> {
+  console.log(`🎯 Generating Mirror with 3 parallel calls for ${journalEntries.length} journals`);
+
+  // Generate all 3 prompts
+  const corePrompt = generateCorePrompt(journalEntries);
+  const encouragingPrompt = generateEncouragingVersePrompt(journalEntries);
+  const invitationPrompt = generateInvitationToGrowthPrompt(journalEntries);
+
+  // Make all 3 API calls in parallel
+  console.log('🚀 Starting 3 parallel API calls...');
+  const [coreResult, encouragingResult, invitationResult] = await Promise.all([
+    makeOpenAICall(corePrompt, 'core', openaiApiKey),
+    makeOpenAICall(encouragingPrompt, 'encouraging_verse', openaiApiKey),
+    makeOpenAICall(invitationPrompt, 'invitation_to_growth', openaiApiKey),
+  ]);
+
+  // Log results
+  console.log('📊 Call Results:');
+  console.log(`  Core: ${coreResult.success ? '✅' : '❌'} (${coreResult.finishReason})`);
+  console.log(`  Encouraging: ${encouragingResult.success ? '✅' : '❌'} (${encouragingResult.finishReason})`);
+  console.log(`  Invitation: ${invitationResult.success ? '✅' : '❌'} (${invitationResult.finishReason})`);
+
+  // Core is REQUIRED - fail if it didn't succeed
+  if (!coreResult.success) {
+    console.error('❌ Core generation failed - cannot create Mirror');
+    const errorMsg = coreResult.contentFilterTriggered
+      ? 'Content filter triggered during core generation. The journal content may contain sensitive material that violates OpenAI content policy.'
+      : `Core generation failed: ${coreResult.error || coreResult.finishReason}`;
+    throw new Error(errorMsg);
+  }
+
+  // Build screen_2_biblical with potential nulls for verses
+  const screen2Biblical = {
+    title: "Biblical Mirror",
+    subtitle: "Pattern matches in Scripture",
+    parallel_story: coreResult.content?.screen2_biblical?.parallel_story || null,
+    encouraging_verse: encouragingResult.success ? encouragingResult.content?.encouraging_verse : null,
+    invitation_to_growth: invitationResult.success ? invitationResult.content?.invitation_to_growth : null,
+  };
+
+  // Log partial success warnings
+  if (!encouragingResult.success) {
+    console.warn('⚠️ Encouraging verse generation failed - will be omitted from Mirror');
+  }
+  if (!invitationResult.success) {
+    console.warn('⚠️ Invitation to growth generation failed - will be omitted from Mirror');
+  }
+
+  // Calculate total token usage
+  const totalTokens =
+    (coreResult.usage?.total_tokens || 0) +
+    (encouragingResult.usage?.total_tokens || 0) +
+    (invitationResult.usage?.total_tokens || 0);
+
+  console.log(`💰 Total tokens used: ${totalTokens}`);
+
+  return {
+    success: true,
+    content: {
+      screen1_themes: coreResult.content?.screen1_themes,
+      screen2_biblical: screen2Biblical,
+      screen3_observations: coreResult.content?.screen3_observations,
+    },
+    usage: { total_tokens: totalTokens },
+  };
 }
 
 // Retry wrapper for AI generation
@@ -528,6 +474,15 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ Error in generate-mirror function:', error);
 
+    // Capture detailed error information
+    const errorDetails = {
+      message: error.message || 'Mirror generation failed',
+      type: error.name || 'UnknownError',
+      timestamp: new Date().toISOString(),
+    };
+
+    console.error('🔍 Full error details:', JSON.stringify(errorDetails, null, 2));
+
     // Mark request as failed if it exists
     if (requestRecord?.id && supabase) {
       console.log('📝 Marking request as failed...');
@@ -537,13 +492,14 @@ serve(async (req) => {
           .update({
             status: 'failed',
             completed_at: new Date().toISOString(),
+            error_message: errorDetails.message,
           })
           .eq('id', requestRecord.id);
 
         if (updateError) {
           console.error('⚠️ Failed to update request status:', updateError);
         } else {
-          console.log('✅ Request marked as failed');
+          console.log('✅ Request marked as failed with error details');
         }
       } catch (updateException) {
         console.error('⚠️ Exception while updating request status:', updateException);
@@ -554,7 +510,9 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Mirror generation failed',
+        error: errorDetails.message,
+        errorType: errorDetails.type,
+        timestamp: errorDetails.timestamp,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -39,3 +39,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# test results
+scripts/test-results/
+scripts/test-results-day1/

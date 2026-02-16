@@ -31,13 +31,19 @@ export const MirrorScreen2: React.FC<MirrorScreen2Props> = ({ data }) => (
       </View>
     )}
 
-    {/* Challenging Verse */}
-    {data.challenging_verse && (
+    {/* Invitation to Growth (supports both old 'challenging_verse' and new 'invitation_to_growth' field names) */}
+    {(data.invitation_to_growth || data.challenging_verse) && (
       <View style={styles.verseCard}>
         <Text style={styles.verseLabel}>Invitation to Growth</Text>
-        <Text style={styles.verseReference}>{data.challenging_verse.reference}</Text>
-        <Text style={styles.verseText}>&quot;{data.challenging_verse.text}&quot;</Text>
-        <Text style={styles.verseInvitation}>{data.challenging_verse.invitation}</Text>
+        <Text style={styles.verseReference}>
+          {(data.invitation_to_growth || data.challenging_verse).reference}
+        </Text>
+        <Text style={styles.verseText}>
+          &quot;{(data.invitation_to_growth || data.challenging_verse).text}&quot;
+        </Text>
+        <Text style={styles.verseInvitation}>
+          {(data.invitation_to_growth || data.challenging_verse).invitation}
+        </Text>
       </View>
     )}
   </View>

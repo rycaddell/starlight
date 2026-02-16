@@ -181,14 +181,39 @@ export const useMirrorData = () => {
 
           case 'failed':
             console.error('❌ Mirror generation failed');
+            console.error('🔍 Error details:', statusResult.error);
             stopPolling();
             setMirrorState('ready');
             setGenerationStartTime(null);
-            Alert.alert(
-              'Generation Failed',
-              'Mirror generation encountered an error. Please try again.',
-              [{ text: 'OK' }]
-            );
+
+            const errorMsg = statusResult.error || 'Mirror generation encountered an error. Please try again.';
+            const isContentFilter = errorMsg.includes('Content filter');
+
+            if (isContentFilter) {
+              Alert.alert(
+                'Content Policy Issue',
+                errorMsg,
+                [
+                  { text: 'OK' },
+                  {
+                    text: 'More Info',
+                    onPress: () => {
+                      Alert.alert(
+                        'What This Means',
+                        'OpenAI flagged your journal content as potentially violating their content policy. This can happen if journals contain:\n\n• Explicit violence or graphic content\n• Self-harm references\n• Explicit sexual content\n• Hate speech or discrimination\n• Other sensitive topics\n\nYour journals are private and safe. This is just an AI safety filter.',
+                        [{ text: 'Close' }]
+                      );
+                    },
+                  },
+                ]
+              );
+            } else {
+              Alert.alert(
+                'Generation Failed',
+                errorMsg,
+                [{ text: 'OK' }]
+              );
+            }
             break;
 
           case 'processing':
@@ -427,6 +452,26 @@ export const useMirrorData = () => {
           Alert.alert('Rate Limit', msg, [{ text: 'OK' }]);
         } else if (msg.includes('journals')) {
           Alert.alert('Not Enough Journals', msg, [{ text: 'OK' }]);
+        } else if (msg.includes('Content filter')) {
+          // Enhanced error display for content filter issues
+          Alert.alert(
+            'Content Policy Issue',
+            msg,
+            [
+              { text: 'OK' },
+              {
+                text: 'View Details',
+                onPress: () => {
+                  console.log('🔍 Full error details:', result);
+                  Alert.alert(
+                    'Technical Details',
+                    `Error Type: ${result.errorType || 'Unknown'}\n\nTimestamp: ${result.timestamp || 'Unknown'}\n\nThis usually indicates that your journal content contains themes that OpenAI's content policy flags as sensitive.`,
+                    [{ text: 'Close' }]
+                  );
+                },
+              },
+            ]
+          );
         } else {
           Alert.alert('Mirror Generation Failed', msg || 'Please try again.', [{ text: 'OK' }]);
         }

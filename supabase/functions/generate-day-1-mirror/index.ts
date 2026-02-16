@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
+import { generateCorePrompt, generateEncouragingVersePrompt, generateInvitationToGrowthPrompt } from './prompts.ts'
 
 const GENERATION_TIMEOUT_MS = 240000; // 4 minutes (match regular mirrors)
 
@@ -18,71 +19,148 @@ interface Journal {
   created_at: string;
 }
 
-// Generate Day 1 mini-mirror prompt
-function generateDay1Prompt(spiritualPlace: string, journal2: Journal, journal3: Journal): string {
-  // Sanitize journal content to prevent prompt injection or malformed prompts
-  const sanitizeContent = (text: string) => {
-    return text
-      .replace(/\\/g, '\\\\')  // Escape backslashes first
-      .replace(/"/g, '\\"')    // Escape quotes
-      .replace(/\n/g, ' ')     // Replace newlines with spaces
-      .replace(/\r/g, '')      // Remove carriage returns
-      .replace(/\t/g, ' ')     // Replace tabs with spaces
-      .trim();
-  };
+// Make individual OpenAI API call with error handling
+async function makeOpenAICall(
+  prompt: string,
+  callType: string,
+  openaiApiKey: string
+): Promise<any> {
+  console.log(`🎯 Making ${callType} API call (prompt length: ${prompt.length} chars)`);
 
-  const sanitizedJournal2 = sanitizeContent(journal2.content);
-  const sanitizedJournal3 = sanitizeContent(journal3.content);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
 
-  return `You are a wise, compassionate spiritual director. A user just completed Day 1 onboarding.
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'gpt-5.1',
+        messages: [{ role: 'user', content: prompt }],
+        max_completion_tokens: 10000,
+        response_format: { type: "json_object" },
+      }),
+      signal: controller.signal,
+    });
 
-CRITICAL: You MUST respond with valid JSON. Escape all quotes in strings using \\" and ensure no unescaped newlines.
+    clearTimeout(timeoutId);
 
-SPIRITUAL PLACE: ${spiritualPlace}
-(User chose "${spiritualPlace}" from options: Adventuring, Battling, Hiding, Resting, Working, Wandering, Grieving, Celebrating)
-
-QUESTION 2: "What in your life and experience shaped your choice of place?"
-ANSWER 2: ${sanitizedJournal2}
-
-QUESTION 3: "When you pray, what do you talk to God about most often?"
-ANSWER 3: ${sanitizedJournal3}
-
-Generate a biblical mirror AND one-line summaries in JSON format:
-
-{
-  "screen2_biblical": {
-    "title": "Biblical Mirror",
-    "subtitle": "Your story reflected in Scripture",
-    "parallel_story": {
-      "character": "Biblical character name (e.g., David, Peter, Ruth)",
-      "story": "2-3 sentence story that parallels their experience. Reference their spiritual place (${spiritualPlace}) and their answers.",
-      "connection": "How this biblical story connects to their current journey"
-    },
-    "encouraging_verse": {
-      "reference": "Bible verse reference",
-      "text": "Full verse text",
-      "application": "How this verse speaks to their specific situation. Reference ${spiritualPlace} if relevant."
-    },
-    "challenging_verse": {
-      "reference": "Bible verse reference",
-      "text": "Full verse text",
-      "invitation": "Gentle invitation for deeper reflection. Not prescriptive, but exploratory."
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ ${callType} API error:`, response.status, errorText);
+      return {
+        success: false,
+        contentFilterTriggered: false,
+        finishReason: 'api_error',
+        error: `API error: ${response.status}`,
+        usage: null,
+      };
     }
-  },
-  "one_line_summaries": {
-    "spiritual_journey": "One concise sentence summarizing their answer to question 2 (about what shaped their choice)",
-    "prayer_focus": "One concise sentence summarizing their answer to question 3 (about prayer topics)"
+
+    const data = await response.json();
+    const finishReason = data.choices[0].finish_reason;
+    const rawContent = data.choices[0].message.content;
+
+    console.log(`🏁 ${callType} finish reason:`, finishReason);
+    console.log(`💰 ${callType} tokens:`, data.usage?.total_tokens || 'unknown');
+
+    // Check for content filter
+    if (finishReason === 'content_filter') {
+      console.warn(`⚠️ ${callType} triggered content filter`);
+      console.error(`🚨 ${callType} CONTENT FILTER DETAILS:`, JSON.stringify(data, null, 2));
+      return {
+        success: false,
+        contentFilterTriggered: true,
+        finishReason,
+        content: null,
+        usage: data.usage,
+      };
+    }
+
+    // Parse JSON response
+    let cleanedContent = rawContent
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .trim();
+
+    let parsedContent;
+    let parseAttempts = 0;
+    const maxParseAttempts = 3;
+
+    while (parseAttempts < maxParseAttempts) {
+      try {
+        if (parseAttempts === 0) {
+          parsedContent = JSON.parse(cleanedContent);
+          console.log(`✅ ${callType} JSON parsed successfully`);
+          break;
+        } else if (parseAttempts === 1) {
+          console.log(`🔧 ${callType} attempting basic JSON fixes...`);
+          const fixedContent = cleanedContent
+            .replace(/\\n/g, '\\\\n')
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/\t/g, ' ');
+          parsedContent = JSON.parse(fixedContent);
+          console.log(`✅ ${callType} JSON parsed after basic fixes`);
+          break;
+        } else {
+          console.log(`🔧 ${callType} attempting aggressive JSON fixes...`);
+          const aggressivelyFixed = cleanedContent
+            .replace(/\\n/g, '\\\\n')
+            .replace(/\n/g, ' ')
+            .replace(/\r/g, '')
+            .replace(/\t/g, ' ');
+          parsedContent = JSON.parse(aggressivelyFixed);
+          console.log(`✅ ${callType} JSON parsed after aggressive fixes`);
+          break;
+        }
+      } catch (parseError) {
+        parseAttempts++;
+        if (parseAttempts >= maxParseAttempts) {
+          console.error(`❌ ${callType} JSON parse failed:`, parseError.message);
+          return {
+            success: false,
+            contentFilterTriggered: false,
+            finishReason: 'parse_error',
+            error: parseError.message,
+            usage: data.usage,
+          };
+        }
+      }
+    }
+
+    return {
+      success: true,
+      contentFilterTriggered: false,
+      finishReason,
+      content: parsedContent,
+      usage: data.usage,
+    };
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.error(`❌ ${callType} timeout after 4 minutes`);
+      return {
+        success: false,
+        contentFilterTriggered: false,
+        finishReason: 'timeout',
+        error: 'Request timeout',
+        usage: null,
+      };
+    }
+
+    console.error(`❌ ${callType} call failed:`, error.message);
+    return {
+      success: false,
+      contentFilterTriggered: false,
+      finishReason: 'exception',
+      error: error.message,
+      usage: null,
+    };
   }
-}
-
-IMPORTANT REQUIREMENTS:
-- Reference their spiritual place (${spiritualPlace}) throughout the response
-- Be specific to their actual answers, not generic
-- Keep summaries to 10-12 words maximum each
-- Ensure all JSON strings are properly formatted (no unescaped quotes or newlines)
-- Tone: Warm, encouraging, personal, accessible
-
-Generate only the JSON response with no additional text.`;
 }
 
 // Extract 1-2 word theme from focus areas
@@ -123,205 +201,79 @@ Return ONLY the theme word(s), nothing else. Examples: "Trust", "Purpose", "Heal
   }
 }
 
-// Generate mini-mirror with OpenAI
+// Generate mini-mirror with 3 parallel OpenAI calls
 async function generateMiniMirrorWithAI(
   spiritualPlace: string,
   journal2: Journal,
   journal3: Journal,
   openaiApiKey: string
 ): Promise<any> {
-  console.log('🎯 Generating Day 1 mini-mirror');
+  console.log(`🎯 Generating Day 1 mini-mirror with 3 parallel calls`);
   console.log(`  Spiritual place: ${spiritualPlace}`);
   console.log(`  Journal 2 length: ${journal2.content.length} chars`);
   console.log(`  Journal 3 length: ${journal3.content.length} chars`);
 
-  const prompt = generateDay1Prompt(spiritualPlace, journal2, journal3);
+  // Generate all 3 prompts
+  const corePrompt = generateCorePrompt(spiritualPlace, journal2, journal3);
+  const encouragingPrompt = generateEncouragingVersePrompt(spiritualPlace, journal2, journal3);
+  const invitationPrompt = generateInvitationToGrowthPrompt(spiritualPlace, journal2, journal3);
 
-  try {
-    // Call OpenAI with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+  // Make all 3 API calls in parallel
+  console.log('🚀 Starting 3 parallel API calls...');
+  const [coreResult, encouragingResult, invitationResult] = await Promise.all([
+    makeOpenAICall(corePrompt, 'core', openaiApiKey),
+    makeOpenAICall(encouragingPrompt, 'encouraging_verse', openaiApiKey),
+    makeOpenAICall(invitationPrompt, 'invitation_to_growth', openaiApiKey),
+  ]);
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-5.1',
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: 10000, // Match regular mirror generation
-        response_format: { type: "json_object" }, // Force valid JSON
-      }),
-      signal: controller.signal,
-    });
+  // Log results
+  console.log('📊 Call Results:');
+  console.log(`  Core: ${coreResult.success ? '✅' : '❌'} (${coreResult.finishReason})`);
+  console.log(`  Encouraging: ${encouragingResult.success ? '✅' : '❌'} (${encouragingResult.finishReason})`);
+  console.log(`  Invitation: ${invitationResult.success ? '✅' : '❌'} (${invitationResult.finishReason})`);
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ OpenAI API error:', response.status, errorText);
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('✅ OpenAI response received');
-    console.log('💰 Tokens used:', data.usage?.total_tokens || 'unknown');
-    console.log('🔍 Finish reason:', data.choices[0].finish_reason);
-    console.log('📏 Content length:', data.choices[0].message.content?.length || 0, 'characters');
-
-    // Check if generation completed successfully
-    const finishReason = data.choices[0].finish_reason;
-    let rawContent = data.choices[0].message.content;
-
-    // Handle content_filter by making a completion request
-    if (finishReason === 'content_filter') {
-      console.warn('⚠️ Content filter triggered, attempting to complete response...');
-
-      try {
-        // Create new controller for completion request
-        const completionController = new AbortController();
-        const completionTimeoutId = setTimeout(() => completionController.abort(), GENERATION_TIMEOUT_MS);
-
-        const completionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${openaiApiKey}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-5.1',
-            messages: [{
-              role: 'user',
-              content: `Complete this JSON response. It was cut off mid-generation. Add the missing content and ensure it's valid JSON:
-
-${rawContent}
-
-Continue from where it stopped and complete the entire structure. The final JSON should have this structure:
-{
-  "screen2_biblical": {
-    "parallel_story": { "character": "...", "story": "...", "connection": "..." },
-    "encouraging_verse": { "reference": "...", "text": "...", "application": "..." },
-    "challenging_verse": { "reference": "...", "text": "...", "invitation": "..." }
-  },
-  "one_line_summaries": {
-    "spiritual_journey": "...",
-    "prayer_focus": "..."
+  // Core is REQUIRED - fail if it didn't succeed
+  if (!coreResult.success) {
+    console.error('❌ Core generation failed - cannot create Day 1 mirror');
+    const errorMsg = coreResult.contentFilterTriggered
+      ? 'Content filter triggered during core generation. The journal content may contain sensitive material that violates OpenAI content policy.'
+      : `Core generation failed: ${coreResult.error || coreResult.finishReason}`;
+    throw new Error(errorMsg);
   }
-}
 
-Return ONLY the complete, valid JSON.`
-            }],
-            max_completion_tokens: 5000,
-            response_format: { type: "json_object" },
-          }),
-          signal: completionController.signal,
-        });
+  // Build screen_2_biblical with potential nulls for verses
+  const screen2Biblical = {
+    title: "Biblical Mirror",
+    subtitle: "Your story reflected in Scripture",
+    parallel_story: coreResult.content?.screen2_biblical?.parallel_story || null,
+    encouraging_verse: encouragingResult.success ? encouragingResult.content?.encouraging_verse : null,
+    invitation_to_growth: invitationResult.success ? invitationResult.content?.invitation_to_growth : null,
+  };
 
-        clearTimeout(completionTimeoutId);
-
-        if (completionResponse.ok) {
-          const completionData = await completionResponse.json();
-          rawContent = completionData.choices[0].message.content;
-          console.log('✅ Successfully completed filtered response');
-          console.log('💰 Additional tokens used:', completionData.usage?.total_tokens || 'unknown');
-        } else {
-          console.warn('⚠️ Completion request failed, using partial response');
-        }
-      } catch (completionError) {
-        console.error('❌ Error completing filtered response:', completionError);
-        console.warn('⚠️ Falling back to partial response');
-      }
-    } else if (finishReason !== 'stop') {
-      console.error('⚠️ Generation did not complete normally. Finish reason:', finishReason);
-      if (finishReason === 'length') {
-        console.error('❌ Hit token limit - need to increase max_completion_tokens');
-      }
-    }
-
-    if (!rawContent) {
-      console.error('❌ No content in OpenAI response');
-      throw new Error('OpenAI returned empty content');
-    }
-
-    if (rawContent.length < 100) {
-      console.warn('⚠️ Very short response from OpenAI:', rawContent);
-    }
-
-    // Clean and parse JSON
-    let cleanedContent = rawContent
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .trim();
-
-    let mirrorContent;
-    let parseAttempts = 0;
-    const maxParseAttempts = 3;
-
-    while (parseAttempts < maxParseAttempts) {
-      try {
-        if (parseAttempts === 0) {
-          mirrorContent = JSON.parse(cleanedContent);
-          console.log('✅ JSON parsed successfully');
-          break;
-        } else if (parseAttempts === 1) {
-          console.log('🔧 Attempting to fix JSON (attempt 1: basic fixes)...');
-          const fixedContent = cleanedContent
-            .replace(/\\n/g, '\\\\n')  // Escape already-escaped newlines
-            .replace(/\n/g, ' ')        // Replace literal newlines with spaces
-            .replace(/\r/g, '')         // Remove carriage returns
-            .replace(/\t/g, ' ');       // Replace tabs with spaces
-
-          mirrorContent = JSON.parse(fixedContent);
-          console.log('✅ JSON parsed after basic fixes');
-          break;
-        } else if (parseAttempts === 2) {
-          console.log('🔧 Attempting to fix JSON (attempt 2: aggressive sanitization)...');
-          // More aggressive fix: handle unescaped quotes in strings
-          const aggressivelyFixed = cleanedContent
-            .replace(/\\n/g, '\\\\n')
-            .replace(/\n/g, ' ')
-            .replace(/\r/g, '')
-            .replace(/\t/g, ' ')
-            // Fix common issues with quotes in Bible verses
-            .replace(/: "([^"]*)"([^,}\]])/g, (match, p1, p2) => {
-              // If a quote ends but isn't followed by comma/brace, it's likely an unescaped quote
-              return `: "${p1}\\"${p2}`;
-            });
-
-          mirrorContent = JSON.parse(aggressivelyFixed);
-          console.log('✅ JSON parsed after aggressive fixes');
-          break;
-        }
-      } catch (parseError) {
-        parseAttempts++;
-        if (parseAttempts === 1) {
-          console.error('❌ JSON parse error on first attempt:', parseError.message);
-          console.error('📄 Failed content (first 1000 chars):', cleanedContent.substring(0, 1000));
-          console.error('📄 Failed content (last 500 chars):', cleanedContent.substring(Math.max(0, cleanedContent.length - 500)));
-        } else if (parseAttempts >= maxParseAttempts) {
-          console.error('❌ All JSON parse attempts failed');
-          throw new Error(`AI generation failed: ${parseError.message}`);
-        }
-      }
-    }
-
-    return {
-      success: true,
-      content: mirrorContent,
-      usage: data.usage,
-    };
-
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.error('❌ Generation timeout after 30 seconds');
-      throw new Error('Mini-mirror generation timeout - please try again');
-    }
-
-    console.error('❌ AI generation failed:', error.message);
-    throw error;
+  // Log partial success warnings
+  if (!encouragingResult.success) {
+    console.warn('⚠️ Encouraging verse generation failed - will be omitted from Day 1 mirror');
   }
+  if (!invitationResult.success) {
+    console.warn('⚠️ Invitation to growth generation failed - will be omitted from Day 1 mirror');
+  }
+
+  // Calculate total token usage
+  const totalTokens =
+    (coreResult.usage?.total_tokens || 0) +
+    (encouragingResult.usage?.total_tokens || 0) +
+    (invitationResult.usage?.total_tokens || 0);
+
+  console.log(`💰 Total tokens used: ${totalTokens}`);
+
+  return {
+    success: true,
+    content: {
+      screen2_biblical: screen2Biblical,
+      one_line_summaries: coreResult.content?.one_line_summaries,
+    },
+    usage: { total_tokens: totalTokens },
+  };
 }
 
 // Main request handler

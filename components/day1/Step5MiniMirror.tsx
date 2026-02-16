@@ -154,7 +154,12 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
     );
   }
 
-  const biblical = mirrorContent.screen2_biblical;
+  // Support both screen_2_biblical (with underscore) and screen2_biblical (without)
+  const biblical = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
+
+  console.log('🔍 Step5MiniMirror - biblical data:', biblical);
+  console.log('🔍 Has invitation_to_growth?', !!biblical?.invitation_to_growth);
+  console.log('🔍 Has challenging_verse?', !!biblical?.challenging_verse);
 
   return (
     <KeyboardAvoidingView
@@ -194,7 +199,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
         <View style={styles.mirrorSection}>
 
         {/* Parallel Story */}
-        {biblical.parallel_story && (
+        {biblical?.parallel_story && (
           <View style={styles.card}>
             <Text style={styles.cardLabel}>Biblical Parallel</Text>
             <Text style={styles.characterName}>{biblical.parallel_story.character}</Text>
@@ -204,7 +209,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
         )}
 
         {/* Encouraging Verse */}
-        {biblical.encouraging_verse && (
+        {biblical?.encouraging_verse && (
           <View style={styles.card}>
             <Text style={styles.cardLabel}>Encouragement</Text>
             <Text style={styles.verseReference}>{biblical.encouraging_verse.reference}</Text>
@@ -213,13 +218,19 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
           </View>
         )}
 
-        {/* Challenging Verse */}
-        {biblical.challenging_verse && (
+        {/* Invitation to Growth (supports both old 'challenging_verse' and new 'invitation_to_growth' field names) */}
+        {(biblical?.invitation_to_growth || biblical?.challenging_verse) && (
           <View style={styles.card}>
             <Text style={styles.cardLabel}>Reflection</Text>
-            <Text style={styles.verseReference}>{biblical.challenging_verse.reference}</Text>
-            <Text style={styles.verseText}>"{biblical.challenging_verse.text}"</Text>
-            <Text style={styles.invitationText}>{biblical.challenging_verse.invitation}</Text>
+            <Text style={styles.verseReference}>
+              {(biblical.invitation_to_growth || biblical.challenging_verse).reference}
+            </Text>
+            <Text style={styles.verseText}>
+              "{(biblical.invitation_to_growth || biblical.challenging_verse).text}"
+            </Text>
+            <Text style={styles.invitationText}>
+              {(biblical.invitation_to_growth || biblical.challenging_verse).invitation}
+            </Text>
           </View>
         )}
       </View>
