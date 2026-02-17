@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderRadius: borderRadius.journalOption,
-    width: 180,
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.m,

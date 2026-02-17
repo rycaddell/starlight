@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, ScrollView, StyleSheet, Alert, TouchableOpacity, AppState } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, ScrollView, StyleSheet, Alert, Image, TouchableOpacity, AppState, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
@@ -8,47 +8,40 @@ import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { saveJournalEntry, getUserJournals } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
-import { MirrorProgress } from '../../components/journal/MirrorProgress';
-import { FreeFormCard } from '../../components/journal/FreeFormCard';
-import { TextFormCard } from '../../components/journal/TextFormCard';
-import { GuidedPromptSingle } from '../../components/journal/GuidedPromptSingle';
+import { MirrorStatus } from '../../components/ui/MirrorStatus';
+import { GuidedPromptSingle, GuidedPromptSingleHandle } from '../../components/journal/GuidedPromptSingle';
+import { JournalOption } from '../../components/ui/JournalOption';
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
 import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { getMirrorThreshold } from '../../lib/config/constants';
 import { GetStartedCard } from '../../components/day1/GetStartedCard';
 import { Day1Modal } from '../../components/day1/Day1Modal';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
+
+const screenWidth = Dimensions.get('window').width;
 
 export default function JournalScreen() {
   const router = useRouter();
+  const promptRef = useRef<GuidedPromptSingleHandle>(null);
 
-  // Use AuthContext instead of manual user management
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
   const { showSettings } = useGlobalSettings();
 
-  // Day 1 modal state
   const [day1ModalVisible, setDay1ModalVisible] = useState(false);
-
-  // State for today's answered prompts
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
 
-  // Get journal count for progress bar
-  const { journalCount, loadJournals } = useMirrorData();
-
-  // Calculate mirror threshold based on user's group
+  const { journalCount, loadJournals, mirrorState, generateMirror } = useMirrorData();
   const mirrorThreshold = getMirrorThreshold(user);
 
-  // Bottom sheet state
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
   const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<'text' | 'voice'>('voice');
 
-  // Handler for voice transcription from BOTTOM SHEET
   const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string) => {
     console.log('🎤 Voice transcription complete in bottom sheet');
 
-    // Save the journal with 'voice' entry type and the guided prompt if applicable
     const saved = await saveJournalToDatabase(
       transcribedText,
       timestamp,
@@ -57,10 +50,8 @@ export default function JournalScreen() {
     );
 
     if (saved) {
-      // Close the bottom sheet
       setBottomSheetVisible(false);
 
-      // Navigate to mirror
       router.push({
         pathname: '/(tabs)/mirror',
         params: {
@@ -69,7 +60,6 @@ export default function JournalScreen() {
         }
       });
 
-      // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
         await loadJournals();
         await loadTodayAnsweredPrompts();
@@ -77,11 +67,10 @@ export default function JournalScreen() {
     }
   };
 
-  // Hooks - Use bottom sheet handler for voice recording
   const { hasAudioPermission, checkPermissionAndRequest } = useAudioPermissions();
-  const { 
-    isRecording, 
-    isPaused, 
+  const {
+    isRecording,
+    isPaused,
     recordingDuration,
     isProcessing,
     handleStartRecording,
@@ -89,10 +78,9 @@ export default function JournalScreen() {
     handlePauseRecording,
     handleResumeRecording,
     handleDiscardRecording,
-    formatDuration 
+    formatDuration
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
-  // Load today's answered prompts
   const loadTodayAnsweredPrompts = React.useCallback(async () => {
     if (!isAuthenticated || !user) {
       console.log('⏭️ Skipping loadTodayAnsweredPrompts - user not authenticated');
@@ -107,17 +95,15 @@ export default function JournalScreen() {
       const result = await getUserJournals(user.id);
 
       if (result.success && result.data) {
-        // Filter journals from today that have a prompt_text
         const todayJournals = result.data.filter(journal => {
           const journalDate = new Date(journal.created_at);
           journalDate.setHours(0, 0, 0, 0);
           return journalDate.toISOString() === todayISO && journal.prompt_text;
         });
 
-        // Extract the prompt texts
         const promptTexts = todayJournals
           .map(journal => journal.prompt_text)
-          .filter(text => text); // Remove any null/undefined
+          .filter(text => text);
 
         console.log('📝 Today answered prompts:', promptTexts.length);
         setTodayAnsweredPrompts(promptTexts);
@@ -127,7 +113,6 @@ export default function JournalScreen() {
     }
   }, [isAuthenticated, user]);
 
-  // Load journal count and answered prompts on mount
   React.useEffect(() => {
     if (isAuthenticated && user) {
       loadJournals();
@@ -136,7 +121,6 @@ export default function JournalScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
-  // Reload journals when screen comes into focus (e.g., when returning from mirror tab)
   useFocusEffect(
     React.useCallback(() => {
       if (isAuthenticated && user) {
@@ -148,10 +132,9 @@ export default function JournalScreen() {
     }, [isAuthenticated, user])
   );
 
-  // Save journal to database
   const saveJournalToDatabase = async (
-    content: string, 
-    timestamp: string, 
+    content: string,
+    timestamp: string,
     entryType: 'text' | 'voice',
     promptText: string | null = null
   ) => {
@@ -163,14 +146,14 @@ export default function JournalScreen() {
     console.log('💾 Saving journal for custom user:', user.id);
     console.log('📝 Entry type:', entryType);
     console.log('💬 Prompt text:', promptText);
-    
+
     const result = await saveJournalEntry(
-      content, 
-      user.id, 
+      content,
+      user.id,
       entryType,
       promptText
     );
-    
+
     if (result.success) {
       console.log('✅ Journal saved successfully');
       return true;
@@ -181,12 +164,10 @@ export default function JournalScreen() {
     }
   };
 
-  // Combined permission check and recording start
   const handleStartRecordingWithPermission = async () => {
     try {
       console.log('🎤 [MAIN-PERMISSION] Checking current microphone permission...');
 
-      // Always check current device permission first
       const currentStatus = await Audio.getPermissionsAsync();
       console.log('📊 [MAIN-PERMISSION] Current permission status:', JSON.stringify(currentStatus, null, 2));
 
@@ -196,13 +177,11 @@ export default function JournalScreen() {
         return;
       }
 
-      // Request permission directly (no app alert needed)
       console.log('📝 [MAIN-PERMISSION] Permission not granted, requesting directly...');
 
       try {
         console.log('🔧 [MAIN-PERMISSION] Setting audio mode...');
 
-        // Set audio mode first
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
@@ -210,7 +189,6 @@ export default function JournalScreen() {
         console.log('✅ [MAIN-PERMISSION] Audio mode set successfully');
 
         console.log('🔐 [MAIN-PERMISSION] Requesting system permission...');
-        // Request permission
         const permission = await Audio.requestPermissionsAsync();
         console.log('📊 [MAIN-PERMISSION] Permission response:', JSON.stringify(permission, null, 2));
 
@@ -220,13 +198,11 @@ export default function JournalScreen() {
         if (granted) {
           console.log('✅ [MAIN-PERMISSION] Permission granted, waiting for app to become active...');
 
-          // Wait for app to return to active state after permission dialog closes
           const subscription = AppState.addEventListener('change', async (nextAppState) => {
             if (nextAppState === 'active') {
               console.log('📱 [MAIN-PERMISSION] App returned to active state');
               subscription.remove();
 
-              // Small delay to ensure app is fully active
               setTimeout(async () => {
                 console.log('🎙️ [MAIN-PERMISSION] Calling handleStartRecording...');
                 await handleStartRecording(true);
@@ -234,7 +210,6 @@ export default function JournalScreen() {
             }
           });
 
-          // Fallback timeout in case AppState doesn't fire
           setTimeout(() => {
             console.log('⚠️ [MAIN-PERMISSION] Fallback timeout reached, removing listener');
             subscription.remove();
@@ -249,7 +224,6 @@ export default function JournalScreen() {
         }
       } catch (error) {
         console.error('❌ [MAIN-PERMISSION] Error requesting permission:', error);
-        console.error('❌ [MAIN-PERMISSION] Error details:', JSON.stringify(error, null, 2));
         Alert.alert(
           'Permission Error',
           `Unable to enable microphone: ${error.message || 'Unknown error'}. You can enable it manually in Settings.`,
@@ -258,7 +232,6 @@ export default function JournalScreen() {
       }
     } catch (error) {
       console.error('❌ [MAIN-PERMISSION] Error in permission check:', error);
-      console.error('❌ [MAIN-PERMISSION] Error details:', JSON.stringify(error, null, 2));
       Alert.alert(
         'Permission Error',
         'Unable to check microphone permission. Please try again.',
@@ -267,7 +240,6 @@ export default function JournalScreen() {
     }
   };
 
-  // Handlers for opening bottom sheet
   const handleVoiceFormPress = () => {
     console.log('🎤 Voice pressed - opening voice recording');
     setSheetMode('free');
@@ -294,13 +266,11 @@ export default function JournalScreen() {
 
   const handleBottomSheetClose = () => {
     setBottomSheetVisible(false);
-    // Small delay before clearing context to avoid visual glitch
     setTimeout(() => {
       setSheetPrompt(null);
     }, 300);
   };
 
-  // Handle bottom sheet submission
   const handleBottomSheetSubmit = async (
     text: string,
     timestamp: string,
@@ -314,7 +284,6 @@ export default function JournalScreen() {
     );
 
     if (saved) {
-      // Navigate to mirror
       router.push({
         pathname: '/(tabs)/mirror',
         params: {
@@ -323,7 +292,6 @@ export default function JournalScreen() {
         }
       });
 
-      // Reload journals to update progress bar and answered prompts
       if (isAuthenticated && user) {
         await loadJournals();
         await loadTodayAnsweredPrompts();
@@ -331,20 +299,17 @@ export default function JournalScreen() {
     }
   };
 
-  // Handle Day 1 completion
   const handleDay1Complete = async () => {
     console.log('🎉 Day 1 flow completed');
     setDay1ModalVisible(false);
 
-    // Reload user data and journals to reflect completion
     if (isAuthenticated && user) {
-      await refreshUser(); // Refresh user to get updated day_1_completed_at
+      await refreshUser();
       await loadJournals();
       await loadTodayAnsweredPrompts();
     }
   };
 
-  // Show loading while auth is initializing
   if (isLoading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -355,7 +320,6 @@ export default function JournalScreen() {
     );
   }
 
-  // Show error if not authenticated (shouldn't happen with AuthNavigator)
   if (!isAuthenticated || !user) {
     return (
       <SafeAreaView style={styles.container}>
@@ -368,60 +332,74 @@ export default function JournalScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
         scrollEnabled={true}
       >
-        <View style={styles.newUIContainer}>
-          {/* Header */}
-          <View style={styles.headerSection}>
-            <Text style={styles.title}>Journal</Text>
-            <TouchableOpacity
-              onPress={() => router.push('/design-test')}
-              style={styles.designTestButton}
-            >
-              <Text style={styles.designTestButtonText}>🎨 Design Test</Text>
-            </TouchableOpacity>
+        {/* Mirror Status Countdown */}
+        <MirrorStatus
+          state={
+            mirrorState === 'ready' ? 'ready'
+            : mirrorState === 'generating' ? 'generating'
+            : mirrorState === 'completed' || mirrorState === 'viewing' ? 'complete'
+            : 'countdown'
+          }
+          journalsNeeded={Math.max(0, mirrorThreshold - journalCount)}
+          journalsReady={journalCount}
+          onGenerate={generateMirror}
+        />
+
+        {/* River Illustration — bleeds edge to edge */}
+        <Image
+          source={require('@/assets/images/journal-river-illustration.png')}
+          style={styles.riverImage}
+          resizeMode="stretch"
+        />
+
+        {/* Day 1 Get Started Section */}
+        {!user.day_1_completed_at && (
+          <View style={styles.section}>
+            <GetStartedCard onPress={() => setDay1ModalVisible(true)} />
           </View>
+        )}
 
-          {/* Progress Bar */}
-          <View style={styles.progressSection}>
-            <MirrorProgress currentCount={journalCount} targetCount={mirrorThreshold} />
-            <Text style={styles.progressSubtext}>
-              {journalCount} / {mirrorThreshold} journals for the next Mirror
-            </Text>
+        {/* Start a New Journal */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Start a New Journal</Text>
+          <View style={styles.journalOptionRow}>
+            <JournalOption mode="voice" onPress={handleVoiceFormPress} />
+            <JournalOption mode="text" onPress={handleTextFormPress} />
           </View>
-
-          {/* Day 1 Get Started Section - only show if not completed */}
-          {!user.day_1_completed_at && (
-            <View style={styles.quickStartSection}>
-              <GetStartedCard onPress={() => setDay1ModalVisible(true)} />
-            </View>
-          )}
-
-          {/* Quick Start Section */}
-          <View style={styles.quickStartSection}>
-            <Text style={styles.sectionTitle}>Make a new journal</Text>
-
-            <FreeFormCard onPress={handleVoiceFormPress} isPrimary={!!user.day_1_completed_at} />
-            <TextFormCard onPress={handleTextFormPress} isPrimary={!!user.day_1_completed_at} />
-          </View>
-
-          {/* Daily Prompt Section - only show if Day 1 completed */}
-          {user.day_1_completed_at && (
-            <View style={styles.dailyPromptSection}>
-              <Text style={styles.sectionTitle}>Daily prompt</Text>
-
-              <GuidedPromptSingle
-                userId={user.id}
-                todayAnsweredPrompts={todayAnsweredPrompts}
-                onPromptSelect={handleGuidedPromptSelect}
-              />
-            </View>
-          )}
         </View>
+
+        {/* Daily Prompt — only show after Day 1 */}
+        {user.day_1_completed_at && (
+          <View style={styles.section}>
+            <View style={styles.dailyPromptHeader}>
+              <Text style={styles.sectionTitle}>Daily Prompt</Text>
+              <TouchableOpacity
+                onPress={() => promptRef.current?.nextPrompt()}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Image
+                  source={require('@/assets/images/icons/Refresh.png')}
+                  style={styles.refreshIcon}
+                  resizeMode="contain"
+                />
+              </TouchableOpacity>
+            </View>
+
+            <GuidedPromptSingle
+              ref={promptRef}
+              userId={user.id}
+              todayAnsweredPrompts={todayAnsweredPrompts}
+              onPromptSelect={handleGuidedPromptSelect}
+            />
+          </View>
+        )}
       </ScrollView>
 
       {/* Bottom Sheet with Voice Support */}
@@ -458,90 +436,63 @@ export default function JournalScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.screen,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    padding: 16,
-    paddingTop: 24,
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingTop: 36,
+    paddingBottom: 100,
+    gap: spacing.xxxl,
   },
-  newUIContainer: {
-    width: '100%',
+  riverImage: {
+    width: screenWidth * 1.1,
+    height: (screenWidth * 1.1) / (443 / 135),
+    marginLeft: -spacing.screen.horizontalPadding,
   },
-  headerSection: {
-    alignItems: 'center',
-    marginBottom: 24,
-    width: '100%',
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  designTestButton: {
-    backgroundColor: '#0866E2',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginTop: 8,
-  },
-  designTestButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  progressSection: {
-    marginBottom: 32,
-    width: '100%',
-  },
-  progressSubtext: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  quickStartSection: {
-    width: '100%',
-  },
-  dailyPromptSection: {
-    width: '100%',
-    marginTop: 8,
+  section: {
+    gap: spacing.l,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1e293b',
-    marginBottom: 16,
+    ...typography.heading.default,
+    color: colors.text.body,
+  },
+  journalOptionRow: {
+    flexDirection: 'row',
+    gap: spacing.m,
+  },
+  dailyPromptHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  refreshIcon: {
+    width: 24,
+    height: 24,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xxxxl,
   },
   loadingText: {
-    fontSize: 18,
-    fontWeight: '400',
-    color: '#64748b',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
     textAlign: 'center',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xxxxl,
   },
   errorText: {
-    fontSize: 18,
+    ...typography.body.default,
     color: '#dc2626',
     textAlign: 'center',
-    fontWeight: '500',
   },
 });

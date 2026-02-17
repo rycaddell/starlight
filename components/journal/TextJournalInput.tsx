@@ -1,7 +1,7 @@
 // components/journal/TextJournalInput.tsx
-// UPDATED - Shorter fixed height for better submit button visibility
 import React from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface TextJournalInputProps {
   journalText: string;
@@ -21,13 +21,13 @@ export const TextJournalInput: React.FC<TextJournalInputProps> = ({
       <TextInput
         style={styles.textInput}
         multiline={true}
-        placeholder={hidePlaceholder || contextPrompt ? "" : "What did you learn or hear today?"}
-        placeholderTextColor="#64748b"
+        placeholder={hidePlaceholder || contextPrompt ? '' : 'What did you learn or hear today?'}
+        placeholderTextColor={colors.text.bodyLight}
         value={journalText}
         onChangeText={setJournalText}
         returnKeyType="default"
         scrollEnabled={true}
-        showsVerticalScrollIndicator={true}
+        showsVerticalScrollIndicator={false}
         textAlignVertical="top"
       />
     </View>
@@ -39,14 +39,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   textInput: {
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    color: '#1e293b',
-    height: 120, // Fixed height for ~4 lines (16px font * 1.25 line height * 4 lines + 32px padding)
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.card,
+    padding: spacing.l,
+    fontFamily: typography.body.default.fontFamily,
+    fontSize: typography.body.default.fontSize,
+    fontWeight: '400',
+    color: colors.text.body,
+    minHeight: 240,
     textAlignVertical: 'top',
-    borderWidth: 2,
-    borderColor: '#94a3b8',
+    borderWidth: 1,
+    borderColor: colors.border.divider,
   },
 });

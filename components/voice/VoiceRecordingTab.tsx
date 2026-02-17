@@ -1,22 +1,15 @@
-/**
- * VoiceRecordingTab Component - UPDATED
- * 
- * Improved UX with:
- * - Timer and button grouped as one visual unit
- * - Brand primary color instead of red
- * - Cleaner layout with soft background
- */
-
+// components/voice/VoiceRecordingTab.tsx
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface VoiceRecordingTabProps {
   isRecording: boolean;
   isPaused: boolean;
   recordingDuration: number;
   isProcessing: boolean;
-  isBuildingMirror?: boolean; // Optional: Day 1 specific state
-  hasRecorded?: boolean; // Optional: Show "Record again" if user already recorded (Day 1 only)
+  isBuildingMirror?: boolean;
+  hasRecorded?: boolean;
   formatDuration: (seconds: number) => string;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -35,72 +28,54 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
   onStartRecording,
   onStopRecording,
   onPauseRecording,
-  onResumeRecording
+  onResumeRecording,
 }) => {
   return (
-    <View style={styles.voiceContainer}>
-      {/* Recording Unit - Grouped timer and controls */}
+    <View style={styles.container}>
       <View style={styles.recordingUnit}>
-        {/* Timer Display */}
+        {/* Timer */}
         <Text style={styles.durationText}>
           {formatDuration(recordingDuration)}
         </Text>
-        
+
+        {/* Status */}
         {isRecording && !isProcessing && (
-          <Text style={styles.recordingStatus}>
-            {isPaused ? '⏸️ Paused' : '🔴 Recording'}
+          <Text style={styles.statusText}>
+            {isPaused ? 'Paused' : 'Recording'}
           </Text>
         )}
 
         {isProcessing && !isBuildingMirror && (
-          <Text style={styles.processingStatus}>
-            🤖 Transcribing audio...
-          </Text>
+          <Text style={styles.statusText}>Transcribing...</Text>
         )}
 
         {isBuildingMirror && (
-          <Text style={styles.processingStatus}>
-            🏗️ Building your mirror...
-          </Text>
+          <Text style={styles.statusText}>Building your mirror...</Text>
         )}
 
-        {/* Recording Controls */}
+        {/* Controls */}
         {!isRecording && !isProcessing && !isBuildingMirror ? (
-          // Start Recording Button (or Record Again if already recorded)
-          <TouchableOpacity
-            style={styles.recordButton}
-            onPress={onStartRecording}
-          >
-            <Text style={styles.recordButtonText}>
-              {hasRecorded ? 'Record again 🎤' : 'Start Recording 🎤'}
+          <TouchableOpacity style={styles.startButton} onPress={onStartRecording}>
+            <Text style={styles.startButtonText}>
+              {hasRecorded ? 'Record Again' : 'Start Recording'}
             </Text>
           </TouchableOpacity>
         ) : isProcessing || isBuildingMirror ? (
-          // Processing State
-          <View style={[styles.recordButton, styles.processingButton]}>
-            <Text style={styles.recordButtonText}>
+          <View style={[styles.startButton, styles.processingButton]}>
+            <Text style={styles.startButtonText}>
               {isBuildingMirror ? 'Building...' : 'Processing...'}
             </Text>
           </View>
         ) : (
-          // Recording Controls (Stop, Pause/Resume)
           <View style={styles.recordingControls}>
-            <TouchableOpacity
-              style={styles.controlButton}
-              onPress={onStopRecording}
-            >
-              <Text style={styles.controlButtonIcon}>⏹️</Text>
+            <TouchableOpacity style={styles.controlButton} onPress={onStopRecording}>
               <Text style={styles.controlButtonText}>Stop</Text>
             </TouchableOpacity>
-            
             <TouchableOpacity
-              style={styles.controlButton}
+              style={[styles.controlButton, styles.controlButtonPrimary]}
               onPress={isPaused ? onResumeRecording : onPauseRecording}
             >
-              <Text style={styles.controlButtonIcon}>
-                {isPaused ? '▶️' : '⏸️'}
-              </Text>
-              <Text style={styles.controlButtonText}>
+              <Text style={[styles.controlButtonText, styles.controlButtonTextPrimary]}>
                 {isPaused ? 'Resume' : 'Pause'}
               </Text>
             </TouchableOpacity>
@@ -108,101 +83,79 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
         )}
       </View>
 
-      {/* Recording Limit Info */}
-      <Text style={styles.limitText}>
-        Maximum recording length: 8 minutes
-      </Text>
+      <Text style={styles.limitText}>Maximum recording length: 8 minutes</Text>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  voiceContainer: {
+  container: {
     width: '100%',
     alignItems: 'center',
-    paddingVertical: 16,
+    gap: spacing.l,
   },
   recordingUnit: {
-    backgroundColor: '#f1f5f9', // Soft neutral background
-    borderRadius: 16,
-    padding: 24,
+    backgroundColor: colors.background.defaultLight,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xxxxl,
     width: '100%',
     alignItems: 'center',
-    minHeight: 180,
+    minHeight: 200,
     justifyContent: 'center',
+    gap: spacing.l,
   },
   durationText: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    color: '#1e293b',
     fontFamily: 'monospace',
-    marginBottom: 12,
+    fontSize: 48,
+    fontWeight: '700',
+    color: colors.text.body,
   },
-  recordingStatus: {
-    fontSize: 16,
-    color: '#ef4444',
-    marginBottom: 24,
-    fontWeight: '600',
+  statusText: {
+    ...typography.heading.s,
+    color: colors.text.bodyLight,
   },
-  processingStatus: {
-    fontSize: 16,
-    color: '#2563eb',
-    marginBottom: 24,
-    fontWeight: '600',
-  },
-  recordButton: {
-    backgroundColor: '#059669', // Brand primary green
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 12,
+  startButton: {
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.xxxxl,
+    borderRadius: borderRadius.button,
     minWidth: 200,
     alignItems: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  recordButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
   },
   processingButton: {
-    backgroundColor: '#2563eb',
-    shadowColor: '#2563eb',
+    backgroundColor: colors.background.disabled,
+  },
+  startButtonText: {
+    ...typography.heading.s,
+    color: colors.text.white,
   },
   recordingControls: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 8,
+    gap: spacing.m,
   },
   controlButton: {
-    backgroundColor: '#64748b',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 10,
+    paddingVertical: spacing.m,
+    paddingHorizontal: spacing.xxl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
     minWidth: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: colors.border.divider,
+    backgroundColor: colors.background.card,
   },
-  controlButtonIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+  controlButtonPrimary: {
+    backgroundColor: colors.text.primary,
+    borderColor: colors.text.primary,
   },
   controlButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.body,
+  },
+  controlButtonTextPrimary: {
+    color: colors.text.white,
   },
   limitText: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 12,
-    fontStyle: 'italic',
+    ...typography.body.s,
+    color: colors.text.bodyLight,
   },
 });

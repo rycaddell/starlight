@@ -2,7 +2,9 @@
 // Card that appears on journal screen for users who haven't completed Day 1
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { Button } from '@/components/ui/Button';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface GetStartedCardProps {
   onPress: () => void;
@@ -14,70 +16,46 @@ export const GetStartedCard: React.FC<GetStartedCardProps> = ({ onPress }) => {
       <View style={styles.leftContent}>
         <Text style={styles.title}>Get Started</Text>
         <Text style={styles.subtitle}>3 mins • Voice</Text>
-        <Text style={styles.description}>
-          Where are you now?
-        </Text>
+        <Text style={styles.description}>Where are you now?</Text>
       </View>
 
-      <TouchableOpacity style={styles.buttonContainer} onPress={onPress} activeOpacity={0.8}>
-        <Text style={styles.buttonText}>Begin</Text>
-      </TouchableOpacity>
+      <Button
+        variant="accent"
+        label="Begin"
+        onPress={onPress}
+        fullWidth={false}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xxl,
+    padding: spacing.xxl,
     borderWidth: 2,
-    borderColor: '#2563eb',
+    borderColor: colors.border.outline,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   leftContent: {
     flex: 1,
-    marginRight: 16,
+    marginRight: spacing.l,
+    gap: spacing.xs,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 4,
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginBottom: 8,
+    ...typography.body.s,
+    color: colors.text.bodyLight,
   },
   description: {
-    fontSize: 16,
-    color: '#475569',
-    textAlign: 'left',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
     lineHeight: 22,
-  },
-  buttonContainer: {
-    backgroundColor: '#2563eb',
-    paddingHorizontal: 32,
-    paddingVertical: 12,
-    borderRadius: 10,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
   },
 });

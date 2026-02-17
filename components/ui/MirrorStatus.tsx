@@ -80,9 +80,10 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
 const styles = StyleSheet.create({
   // Countdown state
   countdownContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.m,
-    paddingVertical: spacing.xxxl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.m,
   },
   countdownTitle: {
     ...typography.heading.l,

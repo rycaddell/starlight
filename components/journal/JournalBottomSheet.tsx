@@ -1,5 +1,4 @@
 // components/journal/JournalBottomSheet.tsx
-// REVISED VERSION - Proper recording cleanup on close
 import React, { useState, useEffect } from 'react';
 import {
   Modal,
@@ -11,9 +10,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { TextJournalInput } from './TextJournalInput';
 import { VoiceRecordingTab } from '../voice/VoiceRecordingTab';
+import { Button } from '@/components/ui/Button';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 type TabType = 'text' | 'voice';
 
@@ -23,7 +25,7 @@ interface JournalBottomSheetProps {
   mode: 'free' | 'guided';
   promptText: string | null;
   onSubmit: (text: string, timestamp: string, entryType: 'text' | 'voice') => void;
-  defaultTab: 'text' | 'voice'; // Default tab based on which card was pressed
+  defaultTab: 'text' | 'voice';
 
   // Voice recording props
   isRecording: boolean;
@@ -35,7 +37,7 @@ interface JournalBottomSheetProps {
   onStopRecording: () => void;
   onPauseRecording: () => void;
   onResumeRecording: () => void;
-  onDiscardRecording: () => void; // NEW: Discard without saving
+  onDiscardRecording: () => void;
 }
 
 export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
@@ -59,7 +61,6 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   const [journalText, setJournalText] = useState('');
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
 
-  // Set active tab based on which card was pressed
   useEffect(() => {
     if (visible) {
       setActiveTab(defaultTab);
@@ -74,7 +75,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
         day: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true
+        hour12: true,
       });
 
       await onSubmit(journalText.trim(), timestamp, 'text');
@@ -84,35 +85,31 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   };
 
   const handleClose = () => {
-    // If recording is active, show confirmation
     if (isRecording) {
       Alert.alert(
         'Discard Recording?',
         'You have an active recording. Closing will discard it.',
         [
           { text: 'Continue Recording', style: 'cancel' },
-          { 
-            text: 'Discard', 
+          {
+            text: 'Discard',
             style: 'destructive',
             onPress: () => {
-              onDiscardRecording(); // Discard without saving
+              onDiscardRecording();
               setJournalText('');
               setActiveTab(defaultTab);
               onClose();
-            }
-          }
+            },
+          },
         ]
       );
       return;
     }
-    
-    // Normal close
+
     setJournalText('');
     setActiveTab(defaultTab);
     onClose();
   };
-
-  const isSubmitDisabled = !journalText.trim();
 
   return (
     <Modal
@@ -128,41 +125,36 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>New Journal</Text>
-          <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+          <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Image
+              source={require('@/assets/images/icons/Close.png')}
+              style={styles.closeIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Guided Prompt - Show for both tabs */}
+        {/* Guided Prompt */}
         {mode === 'guided' && promptText && (
           <View style={styles.promptContainer}>
-            <Text style={styles.promptLabel}>GUIDED</Text>
+            <Text style={styles.promptLabel}>GUIDED PROMPT</Text>
             <Text style={styles.promptText}>{promptText}</Text>
           </View>
         )}
 
-        {/* Simple Tab Switcher - Voice first (left), Text second (right) */}
+        {/* Tab Switcher */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'voice' && styles.tabActive
-            ]}
+            style={[styles.tab, activeTab === 'voice' && styles.tabActive]}
             onPress={() => setActiveTab('voice')}
           >
-            <Text style={[
-              styles.tabText,
-              activeTab === 'voice' && styles.tabTextActive
-            ]}>
+            <Text style={[styles.tabText, activeTab === 'voice' && styles.tabTextActive]}>
               Voice
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'text' && styles.tabActive
-            ]}
+            style={[styles.tab, activeTab === 'text' && styles.tabActive]}
             onPress={() => {
               if (isRecording) {
                 Alert.alert(
@@ -175,10 +167,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
               setActiveTab('text');
             }}
           >
-            <Text style={[
-              styles.tabText,
-              activeTab === 'text' && styles.tabTextActive
-            ]}>
+            <Text style={[styles.tabText, activeTab === 'text' && styles.tabTextActive]}>
               Text
             </Text>
           </TouchableOpacity>
@@ -197,22 +186,14 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
               contextPrompt={mode === 'guided' ? promptText : null}
             />
 
-            {/* Submit Button - Only for text tab */}
-            <TouchableOpacity
-              onPress={handleSubmit}
-              disabled={isSubmitDisabled}
-              style={[
-                styles.submitButton,
-                isSubmitDisabled ? styles.submitButtonDisabled : styles.submitButtonActive
-              ]}
-            >
-              <Text style={[
-                styles.submitButtonText,
-                isSubmitDisabled ? styles.submitButtonTextDisabled : styles.submitButtonTextActive
-              ]}>
-                Submit
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.submitWrapper}>
+              <Button
+                variant="primaryFilled"
+                label="Submit"
+                onPress={handleSubmit}
+                disabled={!journalText.trim()}
+              />
+            </View>
           </ScrollView>
         ) : (
           <ScrollView
@@ -240,115 +221,84 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background.screen,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.l,
+    backgroundColor: colors.background.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border.divider,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
   },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#f1f5f9',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: 'bold',
+  closeIcon: {
+    width: 16,
+    height: 16,
   },
   promptContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: '#eff6ff',
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.l,
+    backgroundColor: colors.background.messageButton,
     borderBottomWidth: 1,
-    borderBottomColor: '#bfdbfe',
+    borderBottomColor: colors.border.divider,
+    gap: spacing.xs,
   },
   promptLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2563eb',
-    marginBottom: 8,
-    letterSpacing: 0.5,
+    ...typography.heading.xs,
+    color: colors.text.primary,
+    letterSpacing: 1,
   },
   promptText: {
-    fontSize: 16,
-    color: '#1e293b',
+    ...typography.body.default,
+    color: colors.text.body,
     lineHeight: 24,
-    fontWeight: '500',
   },
   tabContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    gap: 12,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.l,
+    gap: spacing.m,
+    backgroundColor: colors.background.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: colors.border.divider,
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    paddingVertical: spacing.m,
+    borderRadius: borderRadius.button,
+    backgroundColor: colors.background.defaultLight,
     alignItems: 'center',
   },
   tabActive: {
-    backgroundColor: '#2563eb',
+    backgroundColor: colors.text.primary,
   },
   tabText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#64748b',
+    ...typography.heading.s,
+    color: colors.text.bodyLight,
   },
   tabTextActive: {
-    color: '#ffffff',
+    color: colors.text.white,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
+    padding: spacing.xxl,
     paddingBottom: Platform.OS === 'ios' ? 54 : 40,
+    gap: spacing.l,
   },
   voiceContentContainer: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 20,
+    padding: spacing.xxl,
   },
-  submitButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  submitButtonActive: {
-    backgroundColor: '#2563eb',
-  },
-  submitButtonDisabled: {
-    backgroundColor: '#cbd5e1',
-  },
-  submitButtonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  submitButtonTextActive: {
-    color: '#ffffff',
-  },
-  submitButtonTextDisabled: {
-    color: '#64748b',
+  submitWrapper: {
+    marginTop: spacing.xs,
   },
 });
