@@ -1,6 +1,7 @@
 // components/mirror/LastJournalCard.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, Alert } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface LastJournalCardProps {
   journalId: string;
@@ -57,7 +58,11 @@ export const LastJournalCard: React.FC<LastJournalCardProps> = ({
           onPress={handleDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.deleteButtonText}>✕</Text>
+          <Image
+            source={require('@/assets/images/icons/Close.png')}
+            style={styles.deleteIcon}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
       )}
 
@@ -89,55 +94,41 @@ export const LastJournalCard: React.FC<LastJournalCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.card,
+    padding: spacing.xxl,
+    gap: spacing.m,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: colors.border.divider,
   },
   deleteButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 19,
-    height: 19,
-    borderRadius: 9.5,
-    backgroundColor: '#e5e7eb',
+    top: spacing.l,
+    right: spacing.l,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.background.disabled,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
   },
-  deleteButtonText: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: 'bold',
+  deleteIcon: {
+    width: 12,
+    height: 12,
   },
   timestamp: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748b',
-    marginBottom: 12,
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   content: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#1e293b',
+    ...typography.body.default,
+    color: colors.text.body,
     lineHeight: 24,
-    marginBottom: 12,
   },
   readMoreLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366f1',
-    fontStyle: 'italic',
+    ...typography.body.s,
+    color: colors.text.primary,
+    lineHeight: 18,
   },
 });

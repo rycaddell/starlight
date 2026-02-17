@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button } from '@/components/ui/Button';
+import { colors, typography, spacing } from '@/theme/designTokens';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMirrorData } from '../../hooks/useMirrorData';
@@ -541,6 +543,7 @@ export default function MirrorScreen() {
     );
   }
 
+
   if (isViewing) {
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
@@ -558,9 +561,8 @@ export default function MirrorScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
-          <Text style={styles.title}>Mirror</Text>
-          
-          {/* ✅ UPDATED - Only show "Complete" card if not yet viewed */}
+
+          {/* Mirror generation status (ready / generating / completed-unviewed) */}
           {(isReady || isGenerating || (isCompleted && !hasViewedCurrentMirror)) && (
             <View style={styles.mirrorReadySection}>
               <MirrorStatusCard
@@ -587,24 +589,19 @@ export default function MirrorScreen() {
               />
 
               {allMirrors.length > 1 && (
-                <TouchableOpacity onPress={() => {
-                  console.log('========================================');
-                  console.log('🔗 [MODAL] "View past Mirrors" link pressed');
-                  console.log('🔗 [MODAL] Current pastMirrorsModalVisible:', pastMirrorsModalVisible);
-                  console.log('🔗 [MODAL] Setting pastMirrorsModalVisible to: true');
-                  setPastMirrorsModalVisible(true);
-                  console.log('========================================');
-                }}>
-                  <Text style={styles.viewAllLink}>View past Mirrors</Text>
-                </TouchableOpacity>
+                <Button
+                  variant="outline"
+                  label="View past Mirrors"
+                  onPress={() => setPastMirrorsModalVisible(true)}
+                />
               )}
             </View>
           )}
 
-          {/* Last Journal Section */}
+          {/* Latest Journal Section */}
           {lastJournalEntry && (
             <View style={styles.section}>
-              <Text style={styles.h2Title}>Last journal</Text>
+              <Text style={styles.sectionHeading}>Latest Journal</Text>
 
               <LastJournalCard
                 journalId={lastJournalEntry.id}
@@ -614,9 +611,11 @@ export default function MirrorScreen() {
               />
 
               {allJournals.length > 1 && (
-                <TouchableOpacity onPress={() => setPastJournalsModalVisible(true)}>
-                  <Text style={styles.viewAllLink}>View past Journals</Text>
-                </TouchableOpacity>
+                <Button
+                  variant="outline"
+                  label="View past Journals"
+                  onPress={() => setPastJournalsModalVisible(true)}
+                />
               )}
             </View>
           )}
@@ -882,73 +881,38 @@ const MirrorCard: React.FC<MirrorCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.default,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  progressSection: {
-    marginBottom: 32,
-  },
-  tightProgressSection: {
-    marginTop: 8,
-    marginBottom: 16,
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingTop: 36,
+    paddingBottom: 100,
   },
   mirrorReadySection: {
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: spacing.xxxl,
+    gap: spacing.xl,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 16,
-  },
-  h2Title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1e293b',
-    marginBottom: 16,
-  },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  emptySubtext: {
-    fontSize: 16,
-    color: '#94a3b8',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    lineHeight: 24,
+  sectionHeading: {
+    ...typography.heading.default,
+    color: colors.text.body,
   },
   loadingContainer: {
-    padding: 32,
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: spacing.xxxxl,
   },
   loadingText: {
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.body.s,
+    color: colors.text.bodyLight,
     textAlign: 'center',
-    fontStyle: 'italic',
+    lineHeight: 18,
   },
   mirrorCard: {
     backgroundColor: '#ffffff',

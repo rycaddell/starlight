@@ -1,6 +1,7 @@
 // components/mirror/PastJournalsModal.tsx
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Alert } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, Image, ScrollView, StyleSheet, Alert } from 'react-native';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface Journal {
   id: string;
@@ -59,7 +60,11 @@ const ExpandableJournalCard: React.FC<{ journal: Journal; onDelete?: (journalId:
           onPress={handleDelete}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={styles.deleteButtonText}>✕</Text>
+          <Image
+            source={require('@/assets/images/icons/Close.png')}
+            style={styles.deleteIcon}
+            resizeMode="contain"
+          />
         </TouchableOpacity>
       )}
 
@@ -67,7 +72,7 @@ const ExpandableJournalCard: React.FC<{ journal: Journal; onDelete?: (journalId:
 
       <Text
         key={measuring ? 'measuring' : 'measured'}
-        style={expanded ? styles.contentExpanded : styles.content}
+        style={styles.content}
         numberOfLines={measuring || expanded ? undefined : 3}
         onTextLayout={(e) => {
           if (measuring) {
@@ -106,10 +111,16 @@ export const PastJournalsModal: React.FC<PastJournalsModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Past Journals</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>
+            <Image
+              source={require('@/assets/images/icons/Close.png')}
+              style={styles.closeIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </View>
+
+        <View style={styles.divider} />
 
         {/* Content */}
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
@@ -125,99 +136,81 @@ export const PastJournalsModal: React.FC<PastJournalsModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.card,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.background.card,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.background.defaultLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: 'bold',
+  closeIcon: {
+    width: 12,
+    height: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: colors.background.screen,
   },
   scrollContent: {
-    padding: 16,
+    padding: spacing.screen.horizontalPadding,
+    gap: spacing.xl,
+    paddingBottom: 40,
   },
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.card,
+    padding: spacing.xxl,
+    gap: spacing.m,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: colors.border.divider,
   },
   deleteButton: {
     position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 19,
-    height: 19,
-    borderRadius: 9.5,
-    backgroundColor: '#e5e7eb',
+    top: spacing.l,
+    right: spacing.l,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.background.disabled,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1,
   },
-  deleteButtonText: {
-    fontSize: 12,
-    color: '#6b7280',
-    fontWeight: 'bold',
+  deleteIcon: {
+    width: 12,
+    height: 12,
   },
   timestamp: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: '#64748b',
-    marginBottom: 12,
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   content: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#1e293b',
+    ...typography.body.default,
+    color: colors.text.body,
     lineHeight: 24,
-    marginBottom: 12,
-  },
-  contentExpanded: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#1e293b',
-    lineHeight: 24,
-    marginBottom: 12,
   },
   readMoreLink: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#6366f1',
-    fontStyle: 'italic',
+    ...typography.body.s,
+    color: colors.text.primary,
+    lineHeight: 18,
   },
 });

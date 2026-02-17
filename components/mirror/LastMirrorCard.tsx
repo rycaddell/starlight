@@ -1,6 +1,9 @@
 // components/mirror/LastMirrorCard.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { Button } from '@/components/ui/Button';
+import { Tag } from '@/components/ui/Tag';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface LastMirrorCardProps {
   mirrorId: string;
@@ -19,141 +22,108 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
   biblicalCharacter,
   reflectionFocus,
   onViewMirror,
-  onSharePress,
-  isCheckingFriends = false,
-  hideShareButton = false,
   hideYourFocus = false,
 }) => {
+  const formattedDate = mirrorDate.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
   return (
-    <View style={styles.card}>
-      {/* Date Title */}
-      <Text style={styles.dateTitle}>
-        {mirrorDate.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric'
-        })}
-      </Text>
+    <TouchableOpacity style={styles.card} onPress={onViewMirror} activeOpacity={0.9}>
+      {/* River illustration — absolute, fills full card */}
+      <Image
+        source={require('@/assets/images/river-illustration.png')}
+        style={styles.illustration}
+        resizeMode="stretch"
+      />
 
-      {/* Biblical Mirror */}
-      {biblicalCharacter && (
-        <Text style={styles.biblicalMirror}>
-          Biblical Mirror: <Text style={styles.characterName}>{biblicalCharacter}</Text>
-        </Text>
-      )}
-
-      {/* Your Focus */}
-      {!hideYourFocus && reflectionFocus && (
-        <View style={styles.focusSection}>
-          <Text style={styles.focusLabel}>Your Focus</Text>
-          <Text style={styles.focusText}>{reflectionFocus}</Text>
+      {/* Content panel — right of the river path */}
+      <View style={styles.contentPanel}>
+        {/* Name + date as a tight group */}
+        <View style={styles.nameGroup}>
+          <Text style={styles.name} numberOfLines={2}>
+            {biblicalCharacter || 'Mirror'}
+          </Text>
+          <Text style={styles.date}>{formattedDate}</Text>
         </View>
-      )}
 
-      {/* Buttons */}
-      <View style={styles.buttonRow}>
-        {!hideShareButton && (
-          <TouchableOpacity
-            style={styles.shareButton}
-            onPress={onSharePress}
-            disabled={isCheckingFriends}
-          >
-            <Text style={styles.shareButtonText}>
-              {isCheckingFriends ? 'Loading...' : 'Share'}
+        {/* State: with focus */}
+        {!hideYourFocus && reflectionFocus ? (
+          <View style={styles.focusSection}>
+            <Tag label="My Focus" variant="default" />
+            <Text style={styles.focusText} numberOfLines={4}>
+              {reflectionFocus}
             </Text>
-          </TouchableOpacity>
+          </View>
+        ) : (
+          /* State: without focus — tapping outside this button also opens mirror */
+          !hideYourFocus && (
+            <View style={styles.addReflectionWrapper}>
+              <Button
+                variant="accent"
+                label="Add Reflection"
+                onPress={onViewMirror}
+              />
+            </View>
+          )
         )}
-
-        <TouchableOpacity
-          style={[styles.viewButton, hideShareButton && styles.viewButtonFullWidth]}
-          onPress={onViewMirror}
-        >
-          <Text style={styles.viewButtonText}>View Mirror</Text>
-        </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.s,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    borderColor: colors.border.divider,
+    minHeight: 308,
   },
-  dateTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 12,
-  },
-  biblicalMirror: {
-    fontSize: 16,
-    fontWeight: '400',
-    color: '#64748b',
-    marginBottom: 16,
-  },
-  characterName: {
-    fontWeight: '600',
-    color: '#1e293b',
-  },
-  focusSection: {
-    marginBottom: 20,
-  },
-  focusLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#64748b',
-    marginBottom: 8,
-  },
-  focusText: {
-    fontSize: 15,
-    color: '#1e293b',
-    lineHeight: 22,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  shareButton: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-  },
-  shareButtonText: {
-    color: '#64748b',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  viewButton: {
-    flex: 1,
-    backgroundColor: '#fbbf24',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  viewButtonFullWidth: {
-    flex: undefined,
+  illustration: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
     width: '100%',
   },
-  viewButtonText: {
-    color: '#1e293b',
-    fontSize: 16,
-    fontWeight: '600',
+  contentPanel: {
+    marginLeft: '42%',
+    padding: spacing.l,
+    paddingRight: spacing.xxl,
+    paddingBottom: spacing.xxl,
+    gap: spacing.m,
+  },
+  nameGroup: {
+    gap: 2,
+  },
+  name: {
+    ...typography.heading.xl,
+    color: colors.text.body,
+    lineHeight: 44,
+  },
+  date: {
+    fontFamily: typography.body.default.fontFamily,
+    fontSize: 15,
+    fontWeight: '400',
+    color: colors.text.bodyLight,
+    lineHeight: 20,
+  },
+  focusSection: {
+    marginTop: spacing.m,
+    gap: spacing.m,
+  },
+  focusText: {
+    fontFamily: typography.body.default.fontFamily,
+    fontSize: 15,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 22,
+  },
+  addReflectionWrapper: {
+    marginTop: spacing.m,
   },
 });

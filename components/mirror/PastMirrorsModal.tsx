@@ -1,7 +1,8 @@
 // components/mirror/PastMirrorsModal.tsx
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { LastMirrorCard } from './LastMirrorCard';
+import { Modal, View, Text, TouchableOpacity, Image, ScrollView, StyleSheet } from 'react-native';
+import { Card } from '@/components/ui/Card';
+import { colors, typography, spacing } from '@/theme/designTokens';
 
 interface Mirror {
   id: string;
@@ -19,13 +20,19 @@ interface PastMirrorsModalProps {
   checkingFriends?: Record<string, boolean>;
 }
 
+const formatDate = (date: Date): string => {
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
+
 export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
   visible,
   onClose,
   mirrors,
   onViewMirror,
-  onSharePress,
-  checkingFriends = {},
 }) => {
   console.log('📋 [PAST_MIRRORS_MODAL] Rendering with visible:', visible);
   console.log('📋 [PAST_MIRRORS_MODAL] Mirrors count:', mirrors.length);
@@ -41,32 +48,37 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Past Mirrors</Text>
-          <TouchableOpacity onPress={() => {
-            console.log('✕ [PAST_MIRRORS_MODAL] Close button pressed');
-            onClose();
-          }} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+          <TouchableOpacity
+            onPress={() => {
+              console.log('✕ [PAST_MIRRORS_MODAL] Close button pressed');
+              onClose();
+            }}
+            style={styles.closeButton}
+            activeOpacity={0.7}
+          >
+            <Image
+              source={require('@/assets/images/icons/Close.png')}
+              style={styles.closeIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Content */}
+        <View style={styles.divider} />
+
+        {/* Mirror cards */}
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           {mirrors.map((mirror) => (
-            <LastMirrorCard
+            <Card
               key={mirror.id}
-              mirrorId={mirror.id}
-              mirrorDate={mirror.date}
-              biblicalCharacter={mirror.biblicalCharacter}
-              reflectionFocus={mirror.reflectionFocus}
-              onViewMirror={() => {
+              variant="mirror"
+              date={formatDate(mirror.date)}
+              isNew={false}
+              title={mirror.biblicalCharacter || 'Mirror'}
+              onViewPress={() => {
                 console.log('👁️ [PAST_MIRRORS_MODAL] View pressed for mirror:', mirror.id);
                 onViewMirror(mirror.id);
               }}
-              onSharePress={() => {
-                console.log('📤 [PAST_MIRRORS_MODAL] Share pressed for mirror:', mirror.id);
-                onSharePress(mirror.id);
-              }}
-              isCheckingFriends={checkingFriends[mirror.id] || false}
             />
           ))}
         </ScrollView>
@@ -78,40 +90,43 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.card,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.background.card,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.background.defaultLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: 'bold',
+  closeIcon: {
+    width: 12,
+    height: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
   },
   scrollView: {
     flex: 1,
+    backgroundColor: colors.background.screen,
   },
   scrollContent: {
-    padding: 16,
+    padding: spacing.screen.horizontalPadding,
+    gap: spacing.xl,
+    paddingBottom: 40,
   },
 });

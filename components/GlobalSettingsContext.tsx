@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { View, TouchableOpacity, StyleSheet, Text } from 'react-native';
+import { View, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { SettingsFeedbackModal } from './SettingsFeedbackModal';  // Same directory
 import { useAuth } from '../contexts/AuthContext';
 import { useOnboarding } from '../contexts/OnboardingContext';
@@ -41,14 +41,17 @@ export function GlobalSettingsProvider({ children }: GlobalSettingsProviderProps
         
         {/* Floating Settings Button - Only show when authenticated and onboarding complete */}
         {shouldShowSettings && (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.floatingButton}
             onPress={showSettings}
-            activeOpacity={0.8}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <View style={styles.buttonInner}>
-              <Text style={styles.buttonText}>⚙️</Text>
-            </View>
+            <Image
+              source={require('../assets/images/icons/Settings.png')}
+              style={styles.buttonIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         )}
 
@@ -76,28 +79,12 @@ const styles = StyleSheet.create({
   },
   floatingButton: {
     position: 'absolute',
-    top: 60, // Higher up, below status bar
+    top: 60,
     right: 20,
     zIndex: 9999,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-    elevation: 3,
   },
-  buttonInner: {
-    width: 36, // Smaller
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)', // Semi-transparent dark
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  buttonText: {
-    fontSize: 18, // Smaller icon
-    color: '#ffffff',
+  buttonIcon: {
+    width: 28,
+    height: 28,
   },
 });
