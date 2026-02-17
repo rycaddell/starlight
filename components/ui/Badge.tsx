@@ -43,7 +43,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.pill,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'flex-start', // Auto-width (hug content)
   },
   notificationText: {
     fontFamily: typography.body.s.fontFamily,
@@ -60,7 +59,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.pill,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'flex-start', // Auto-width (hug content)
   },
   newText: {
     fontFamily: typography.body.s.fontFamily,

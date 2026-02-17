@@ -16,7 +16,7 @@ export default function DesignTestScreen() {
         <Text style={styles.screenTitle}>Typography Test</Text>
 
         {/* Navigation Buttons */}
-        <View style={{ flexDirection: 'row', gap: 12, marginBottom: spacing.xl }}>
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: spacing.xl, flexWrap: 'wrap' }}>
           <TouchableOpacity
             onPress={() => router.push('/button-test')}
             style={styles.navButton}
@@ -29,6 +29,13 @@ export default function DesignTestScreen() {
             style={styles.navButton}
           >
             <Text style={styles.navButtonText}>→ Tag/Avatar/Badge</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/phase3-test')}
+            style={styles.navButton}
+          >
+            <Text style={styles.navButtonText}>→ Cards/Complex</Text>
           </TouchableOpacity>
         </View>
 

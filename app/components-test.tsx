@@ -113,7 +113,9 @@ export default function ComponentsTestScreen() {
             <Text style={[typography.body.s, { color: colors.text.bodyLight, marginBottom: 12 }]}>
               4pt vertical, 10pt horizontal padding, text.body color
             </Text>
-            <Badge variant="new" />
+            <View style={{ alignItems: 'flex-start' }}>
+              <Badge variant="new" />
+            </View>
           </View>
         </View>
 

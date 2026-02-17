@@ -79,7 +79,8 @@ export const Button: React.FC<ButtonProps> = ({
           paddingVertical: 10,
           paddingHorizontal: 30,
           borderRadius: borderRadius.button,
-          alignSelf: 'center',
+          alignSelf: shouldBeFullWidth ? undefined : 'center',
+          width: shouldBeFullWidth ? '100%' : 'auto',
         };
 
       case 'link':

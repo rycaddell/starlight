@@ -81,7 +81,7 @@ export const typography = {
       fontFamily: fontFamily.primary,
       fontWeight: '700' as TextStyle['fontWeight'],
       fontSize: 15,
-      lineHeight: 15,
+      lineHeight: 20,
       letterSpacing: 0.3, // 2% of 15pt
       // Button text, small bold labels
     },
@@ -150,7 +150,7 @@ export const typography = {
       fontFamily: fontFamily.primary,
       fontWeight: '700' as TextStyle['fontWeight'],
       fontSize: 19,
-      lineHeight: 19,
+      lineHeight: 26,
       letterSpacing: 0,
       // Date headers on friend detail mirror cards
     },

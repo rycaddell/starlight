@@ -18,7 +18,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   size,
   imageUri,
   initials,
-  backgroundColor = colors.background.primaryLight,
+  backgroundColor = colors.background.defaultLight,
 }) => {
   // Get dimensions based on size
   const getDimensions = () => {
@@ -78,7 +78,7 @@ export const Avatar: React.FC<AvatarProps> = ({
           resizeMode="cover"
         />
       ) : (
-        <Text style={[getInitialStyle(), { color: colors.text.white }]}>
+        <Text style={[getInitialStyle(), { color: colors.text.body }]}>
           {initials}
         </Text>
       )}
