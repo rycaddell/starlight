@@ -4,17 +4,14 @@ import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { TabIcon } from '@/components/navigation/TabIcon';
+import { colors, typography } from '@/theme/designTokens';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 import { useFriendBadge } from '@/contexts/FriendBadgeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase/client';
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
   const { unreadCount } = useUnreadShares();
   const { newFriendsCount } = useFriendBadge();
   const { user } = useAuth();
@@ -57,29 +54,43 @@ export default function TabLayout() {
   return (
       <Tabs
         screenOptions={{
-          tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+          tabBarActiveTintColor: colors.text.accent,
+          tabBarInactiveTintColor: colors.text.body,
           headerShown: false,
           tabBarButton: HapticTab,
-          tabBarBackground: TabBarBackground,
-          tabBarStyle: Platform.select({
-            ios: {
-              position: 'absolute',
-            },
-            default: {},
-          }),
+          tabBarStyle: {
+            backgroundColor: colors.background.white,
+            borderTopWidth: 0,
+            elevation: 0,
+            ...Platform.select({
+              ios: {
+                position: 'absolute',
+              },
+            }),
+          },
+          tabBarLabelStyle: {
+            fontFamily: typography.body.s.fontFamily,
+            fontWeight: '500',
+            fontSize: 13,
+            letterSpacing: 0.26,
+          },
+          tabBarIconStyle: {
+            marginTop: 8,
+            marginBottom: 0,
+          },
         }}>
         <Tabs.Screen
           name="index"
           options={{
             title: 'Journal',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="pencil" color={color} />,
+            tabBarIcon: ({ focused }) => <TabIcon name="journal" focused={focused} />,
           }}
         />
         <Tabs.Screen
           name="mirror"
           options={{
             title: 'Mirror',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="sparkles" color={color} />,
+            tabBarIcon: ({ focused }) => <TabIcon name="mirror" focused={focused} />,
             href: showMirrorTab ? '/mirror' : null,
           }}
         />
@@ -87,7 +98,7 @@ export default function TabLayout() {
           name="friends"
           options={{
             title: 'Friends',
-            tabBarIcon: ({ color }) => <IconSymbol size={28} name="person.2" color={color} />,
+            tabBarIcon: ({ focused }) => <TabIcon name="friends" focused={focused} />,
             tabBarBadge: totalBadgeCount > 0 ? totalBadgeCount : undefined,
           }}
         />
