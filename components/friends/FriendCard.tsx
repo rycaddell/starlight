@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 export type FriendCardState = 'new' | 'no_mirrors' | 'unread' | 'read';
 
@@ -13,6 +14,13 @@ interface FriendCardProps {
   mirrorCount?: number;
   onPress?: () => void;
 }
+
+// Derive 1-2 initials from a display name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 export const FriendCard: React.FC<FriendCardProps> = ({
   friendId,
@@ -34,7 +42,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
       case 'new':
         return 'you are now friends';
       case 'no_mirrors':
-        return null; // No subtitle
+        return null;
       case 'unread':
         return 'New, unread mirror';
       case 'read':
@@ -57,9 +65,9 @@ export const FriendCard: React.FC<FriendCardProps> = ({
       <View style={styles.content}>
         {/* Profile Picture */}
         <Avatar
-          profilePictureUrl={profilePictureUrl}
-          displayName={friendName}
-          size={40}
+          size="small"
+          imageUri={profilePictureUrl ?? undefined}
+          initials={getInitials(friendName)}
         />
 
         {/* Friend info */}
@@ -71,7 +79,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
         {/* VIEW button - only for unread and read states */}
         {showViewButton && (
           <View style={[styles.viewButton, state === 'unread' && styles.viewButtonUnread]}>
-            <Text style={styles.viewButtonText}>VIEW</Text>
+            <Text style={styles.viewButtonText}>View</Text>
           </View>
         )}
       </View>
@@ -81,17 +89,16 @@ export const FriendCard: React.FC<FriendCardProps> = ({
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    backgroundColor: colors.background.card,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.divider,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.xl,
   },
   info: {
     flex: 1,
@@ -101,27 +108,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   name: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+    ...typography.heading.default,
+    color: colors.text.body,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 2,
+    ...typography.body.s,
+    color: colors.text.bodyLight,
+    marginTop: spacing.xs,
+    lineHeight: 18,
   },
   viewButton: {
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.text.primary,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.m,
+    borderRadius: borderRadius.button,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 36,
   },
   viewButtonUnread: {
-    backgroundColor: '#f59e0b', // Goldenrod for unread mirrors
+    backgroundColor: colors.background.accent,
   },
   viewButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
+    ...typography.heading.xs,
+    color: colors.text.white,
+    lineHeight: 18,
   },
 });

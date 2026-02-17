@@ -14,6 +14,7 @@ import {
   Share as RNShare,
   ActivityIndicator,
   Modal,
+  Image,
   ImageBackground,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -34,8 +35,8 @@ import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { Day1MirrorViewer } from '@/components/day1/Day1MirrorViewer';
 import { NotificationPitchCard } from '@/components/friends/NotificationPitchCard';
 import { AddProfilePicCard } from '@/components/friends/AddProfilePicCard';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import { supabase } from '@/lib/supabase/client';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useNewFriendTracking } from '@/hooks/useNewFriendTracking';
 import { useProfilePicture } from '@/hooks/useProfilePicture';
@@ -521,7 +522,7 @@ export default function FriendsScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#6366f1" />
+          <ActivityIndicator size="large" color={colors.text.primary} />
         </View>
       </SafeAreaView>
     );
@@ -559,7 +560,7 @@ export default function FriendsScreen() {
                 disabled={creatingInvite}
               >
                 {creatingInvite ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.text.white} />
                 ) : (
                   <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
                 )}
@@ -580,70 +581,58 @@ export default function FriendsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* Has Friends State - Show full UI */}
-            {/* Header Section - Centered */}
-            <View style={styles.headerCentered}>
-              <Text style={styles.titleCentered}>Friends</Text>
-            </View>
-
-            {/* Invites Section */}
-            <View style={styles.invitesSection}>
-              <View style={styles.inviteContent}>
-                <Text style={styles.inviteText}>Invite a Friend</Text>
-                <TouchableOpacity
-                  style={[styles.generateLinkButton, creatingInvite && styles.buttonDisabled]}
-                  onPress={handleCreateInvite}
-                  disabled={creatingInvite}
-                >
-                  {creatingInvite ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.generateLinkButtonText}>Generate Link</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Friends Section */}
-            <View style={styles.friendsSection}>
-              <Text style={styles.sectionTitle}>Friends</Text>
-              {getFriendCards.map((friendCard) => (
-                <FriendCard
-                  key={friendCard.friendId}
-                  friendId={friendCard.friendId}
-                  friendName={friendCard.friendName}
-                  profilePictureUrl={friendCard.profilePictureUrl}
-                  state={friendCard.state}
-                  mirrorCount={friendCard.mirrorCount}
-                  onPress={() => handleFriendCardPress(friendCard)}
+          {/* Header row: "Friends" title left, "Invite a Friend +" link right */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Friends</Text>
+            <TouchableOpacity
+              onPress={handleCreateInvite}
+              disabled={creatingInvite}
+              style={[styles.inviteLinkRow, creatingInvite && styles.buttonDisabled]}
+            >
+              <Text style={styles.inviteLinkText}>
+                {creatingInvite ? 'Creating...' : 'Invite a Friend'}
+              </Text>
+              {!creatingInvite && (
+                <Image
+                  source={require('@/assets/images/icons/Add.png')}
+                  style={styles.inviteAddIcon}
+                  resizeMode="contain"
                 />
-              ))}
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Friend Cards - full width */}
+          <View style={styles.friendsList}>
+            {getFriendCards.map((friendCard) => (
+              <FriendCard
+                key={friendCard.friendId}
+                friendId={friendCard.friendId}
+                friendName={friendCard.friendName}
+                profilePictureUrl={friendCard.profilePictureUrl}
+                state={friendCard.state}
+                mirrorCount={friendCard.mirrorCount}
+                onPress={() => handleFriendCardPress(friendCard)}
+              />
+            ))}
+          </View>
+
+          {/* Setup Section - Only show if notifications not enabled or no profile pic */}
+          {(permissionStatus !== 'granted' || !user?.profile_picture_url) && (
+            <View style={styles.setupSection}>
+              <Text style={styles.setupHeading}>Setup</Text>
+
+              {/* Notification Pitch - Show if notifications not enabled */}
+              {permissionStatus !== 'granted' && (
+                <NotificationPitchCard onEnablePress={handleEnableNotifications} />
+              )}
+
+              {/* Add Profile Picture Pitch - Show if no profile picture */}
+              {!user?.profile_picture_url && (
+                <AddProfilePicCard onAddPress={handleAddProfilePicture} />
+              )}
             </View>
-
-            {/* Setup Section - Only show if notifications not enabled or no profile pic */}
-            {(permissionStatus !== 'granted' || !user?.profile_picture_url) && (
-              <>
-                {/* Divider */}
-                <View style={styles.divider} />
-
-                <View style={styles.setupSection}>
-                  <Text style={styles.sectionTitle}>Setup</Text>
-
-                  {/* Notification Pitch - Show if notifications not enabled */}
-                  {permissionStatus !== 'granted' && (
-                    <NotificationPitchCard onEnablePress={handleEnableNotifications} />
-                  )}
-
-                  {/* Add Profile Picture Pitch - Show if no profile picture */}
-                  {!user?.profile_picture_url && (
-                    <AddProfilePicCard onAddPress={handleAddProfilePicture} />
-                  )}
-                </View>
-              </>
-            )}
+          )}
         </ScrollView>
       )}
 
@@ -707,7 +696,7 @@ export default function FriendsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background.default,
   },
   loadingContainer: {
     flex: 1,
@@ -715,203 +704,58 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   scrollContent: {
-    padding: 20,
+    paddingTop: spacing.screen.topInset,
     paddingBottom: 100,
   },
-  centeredContent: {
-    alignItems: 'center',
-  },
+
+  // Header row
   header: {
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#000',
-  },
-  headerCentered: {
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  titleCentered: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#000',
-    textAlign: 'center',
-  },
-  h3Title: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 16,
-  },
-  invitesSection: {
-    marginBottom: 0,
-  },
-  inviteContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
-    marginBottom: 16,
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingBottom: spacing.xl,
   },
-  inviteText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    flex: 1,
+  title: {
+    ...typography.heading.xl,
+    color: colors.text.body,
   },
-  generateLinkButton: {
-    backgroundColor: '#6366f1',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  generateLinkButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  gettingStartedSection: {
-    marginTop: 8,
-  },
-  gettingStartedBody: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
-  },
-  inlineLink: {
-    color: '#6366f1',
-    fontWeight: '500',
-    textDecorationLine: 'underline',
-  },
-  pitchSection: {
-    alignItems: 'center',
-    marginBottom: 32,
-    marginTop: 40,
-  },
-  iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#f0f0ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  pitchTitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#000',
-    textAlign: 'center',
-  },
-  pitchDescription: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  guidedJournalSection: {
-    marginTop: 8,
-  },
-  guidedJournalPlaceholder: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    fontStyle: 'italic',
-    paddingVertical: 20,
-  },
-  createInviteButton: {
+  inviteLinkRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    gap: 8,
-    marginBottom: 8,
+    gap: spacing.s,
   },
-  createInviteButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  inviteLinkText: {
+    ...typography.body.s,
+    color: colors.text.primary,
   },
+  inviteAddIcon: {
+    width: 14,
+    height: 14,
+  },
+
+  setupHeading: {
+    ...typography.heading.default,
+    color: colors.text.body,
+    marginBottom: spacing.m,
+  },
+
+  // Friends list (full width — no horizontal padding)
+  friendsList: {
+    // FriendCard components handle their own horizontal layout
+  },
+
+  // Setup section
+  setupSection: {
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingTop: spacing.xxl,
+    gap: spacing.xl,
+  },
+
   buttonDisabled: {
     opacity: 0.6,
   },
-  expiryNote: {
-    fontSize: 12,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e5e7eb',
-    marginVertical: 20,
-  },
-  sharedSection: {
-    marginTop: 24,
-  },
-  friendsSection: {
-    marginTop: 8,
-  },
-  setupSection: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 16,
-  },
-  shareItem: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  shareContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  shareIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f0f0ff',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shareInfo: {
-    flex: 1,
-  },
-  shareSender: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 2,
-  },
-  shareDate: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
+
   // Empty state with background image
   emptyStateBackground: {
     flex: 1,
@@ -930,42 +774,34 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   emptyStateContent: {
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xxxxl,
     alignItems: 'flex-start',
     width: '100%',
-    maxWidth: 400,
   },
   emptyStateHeading: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 16,
+    ...typography.heading.xl,
+    color: colors.text.white,
+    marginBottom: spacing.xl,
     textAlign: 'left',
   },
   emptyStateSubheading: {
-    fontSize: 20,
+    ...typography.heading.l,
     fontWeight: '400',
-    color: '#FFFFFF',
-    marginBottom: 40,
+    color: colors.text.white,
+    marginBottom: spacing.xxxxl,
     textAlign: 'left',
   },
   emptyStateButton: {
     width: '100%',
-    backgroundColor: '#059669',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.xxxl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   emptyStateButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.white,
   },
 });

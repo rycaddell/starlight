@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface AddProfilePicCardProps {
   onAddPress: () => Promise<void>;
@@ -24,7 +25,7 @@ export function AddProfilePicCard({ onAddPress }: AddProfilePicCardProps) {
   return (
     <View style={styles.container}>
       <View style={styles.iconContainer}>
-        <IconSymbol name="person.circle" size={24} color="#6366f1" />
+        <IconSymbol name="person.circle" size={24} color={colors.text.primary} />
       </View>
 
       <View style={styles.content}>
@@ -40,7 +41,7 @@ export function AddProfilePicCard({ onAddPress }: AddProfilePicCardProps) {
         disabled={loading}
       >
         {loading ? (
-          <ActivityIndicator color="#fff" />
+          <ActivityIndicator color={colors.text.white} />
         ) : (
           <Text style={styles.buttonText}>Add</Text>
         )}
@@ -51,50 +52,48 @@ export function AddProfilePicCard({ onAddPress }: AddProfilePicCardProps) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 24,
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xxl,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border.divider,
   },
   iconContainer: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: '#eef2ff',
+    borderRadius: borderRadius.circle,
+    backgroundColor: colors.background.primaryLighter,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: spacing.xl,
   },
   content: {
-    marginBottom: 16,
+    marginBottom: spacing.xl,
   },
   heading: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 8,
+    ...typography.heading.default,
+    color: colors.text.body,
+    marginBottom: spacing.m,
   },
   description: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
+    ...typography.body.s,
+    color: colors.text.bodyLight,
+    lineHeight: 18,
   },
   button: {
-    backgroundColor: '#6366f1',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 8,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.xxxl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.white,
   },
 });

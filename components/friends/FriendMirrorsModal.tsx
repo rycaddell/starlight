@@ -1,8 +1,9 @@
 // components/friends/FriendMirrorsModal.tsx
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
-import { LastMirrorCard } from '@/components/mirror/LastMirrorCard';
+import { Modal, View, Text, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
+import { Card } from '@/components/ui/Card';
 import { Avatar } from '@/components/ui/Avatar';
+import { colors, typography, spacing } from '@/theme/designTokens';
 
 interface MirrorShare {
   shareId: string;
@@ -22,6 +23,21 @@ interface FriendMirrorsModalProps {
   mirrors: MirrorShare[];
   onMirrorPress: (share: MirrorShare) => void;
 }
+
+// Derive 1-2 initials from a display name
+const getInitials = (name: string): string => {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0]?.toUpperCase() ?? '?';
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const formatDate = (dateString: string): string => {
+  return new Date(dateString).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+};
 
 export const FriendMirrorsModal: React.FC<FriendMirrorsModalProps> = ({
   visible,
@@ -54,36 +70,49 @@ export const FriendMirrorsModal: React.FC<FriendMirrorsModalProps> = ({
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Avatar
-              profilePictureUrl={profilePictureUrl}
-              displayName={friendName}
-              size={44}
+              size="small"
+              imageUri={profilePictureUrl ?? undefined}
+              initials={getInitials(friendName)}
             />
             <Text style={styles.headerTitle}>{friendName}</Text>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>✕</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton} activeOpacity={0.7}>
+            <Image
+              source={require('@/assets/images/icons/Close.png')}
+              style={styles.closeIcon}
+              resizeMode="contain"
+            />
           </TouchableOpacity>
         </View>
 
-        {/* Instruction Text */}
+        {/* Instruction text */}
         <View style={styles.instructionContainer}>
           <Text style={styles.instructionText}>
-            Take a moment to pray for {friendName}. How is God leading you to be a friend to them?
+            Take a moment to pray for {friendName}.
+          </Text>
+          <Text style={styles.instructionText}>
+            How is God leading you to be a friend to them?
           </Text>
         </View>
 
-        {/* Content */}
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        {/* Divider — bg switches to screen color below */}
+        <View style={styles.divider} />
+
+        {/* Mirror cards */}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+        >
           {mirrors.map((share) => {
+            const character = getBiblicalCharacter(share);
             return (
-              <LastMirrorCard
+              <Card
                 key={share.shareId}
-                mirrorId={share.mirror.id}
-                mirrorDate={new Date(share.mirror.created_at)}
-                biblicalCharacter={getBiblicalCharacter(share)}
-                onViewMirror={() => onMirrorPress(share)}
-                hideShareButton={true}
-                hideYourFocus={true}
+                variant="mirror"
+                date={formatDate(share.mirror.created_at)}
+                isNew={share.isNew}
+                title={character || 'Mirror'}
+                onViewPress={() => onMirrorPress(share)}
               />
             );
           })}
@@ -96,58 +125,66 @@ export const FriendMirrorsModal: React.FC<FriendMirrorsModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.card,
   },
+
+  // Header — white background
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingVertical: spacing.xl,
+    backgroundColor: colors.background.card,
   },
   headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.xl,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: colors.background.defaultLight,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: 'bold',
+  closeIcon: {
+    width: 12,
+    height: 12,
   },
+
+  // Instruction — white background
   instructionContainer: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    backgroundColor: colors.background.card,
+    paddingHorizontal: spacing.screen.horizontalPadding,
+    paddingBottom: spacing.xl,
   },
   instructionText: {
-    fontSize: 15,
-    color: '#64748b',
-    lineHeight: 22,
-    textAlign: 'left',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
+    lineHeight: 24,
   },
+
+  // Divider
+  divider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
+  },
+
+  // Mirror list — screen background
   scrollView: {
     flex: 1,
+    backgroundColor: colors.background.screen,
   },
   scrollContent: {
-    padding: 16,
+    padding: spacing.screen.horizontalPadding,
+    gap: spacing.xl,
+    paddingBottom: 40,
   },
 });
