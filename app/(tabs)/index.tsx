@@ -378,6 +378,12 @@ export default function JournalScreen() {
           {/* Header */}
           <View style={styles.headerSection}>
             <Text style={styles.title}>Journal</Text>
+            <TouchableOpacity
+              onPress={() => router.push('/design-test')}
+              style={styles.designTestButton}
+            >
+              <Text style={styles.designTestButtonText}>🎨 Design Test</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Progress Bar */}
@@ -477,6 +483,18 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  designTestButton: {
+    backgroundColor: '#0866E2',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  designTestButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   progressSection: {
     marginBottom: 32,
