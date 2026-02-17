@@ -15,13 +15,22 @@ export default function DesignTestScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.screenTitle}>Typography Test</Text>
 
-        {/* Button Test Navigation */}
-        <TouchableOpacity
-          onPress={() => router.push('/button-test')}
-          style={styles.navButton}
-        >
-          <Text style={styles.navButtonText}>→ Test Button Component</Text>
-        </TouchableOpacity>
+        {/* Navigation Buttons */}
+        <View style={{ flexDirection: 'row', gap: 12, marginBottom: spacing.xl }}>
+          <TouchableOpacity
+            onPress={() => router.push('/button-test')}
+            style={styles.navButton}
+          >
+            <Text style={styles.navButtonText}>→ Buttons</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => router.push('/components-test')}
+            style={styles.navButton}
+          >
+            <Text style={styles.navButtonText}>→ Tag/Avatar/Badge</Text>
+          </TouchableOpacity>
+        </View>
 
         <Text style={styles.instruction}>
           Compare each sample with Figma to verify font, size, weight, and spacing
