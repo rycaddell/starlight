@@ -17,6 +17,7 @@ import { fetchFriends } from '@/lib/supabase/friends';
 import { shareMirror } from '@/lib/supabase/mirrorShares';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Avatar } from '@/components/ui/Avatar';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface ShareMirrorSheetProps {
   visible: boolean;
@@ -35,7 +36,7 @@ export function ShareMirrorSheet({
 }: ShareMirrorSheetProps) {
   const router = useRouter();
   const [friends, setFriends] = useState<any[]>([]);
-  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
 
@@ -48,9 +49,9 @@ export function ShareMirrorSheet({
   // Auto-select if only 1 friend
   useEffect(() => {
     if (friends.length === 1 && visible) {
-      setSelectedFriendId(friends[0].userId);
+      setSelectedFriendIds([friends[0].userId]);
     } else if (!visible) {
-      setSelectedFriendId(null);
+      setSelectedFriendIds([]);
     }
   }, [friends, visible]);
 
@@ -73,54 +74,44 @@ export function ShareMirrorSheet({
   };
 
   const handleShare = async () => {
-    if (!selectedFriendId) {
-      Alert.alert('Select a Friend', 'Please select a friend to share with');
+    if (selectedFriendIds.length === 0) {
+      Alert.alert('Select Friends', 'Please select at least one friend to share with');
       return;
     }
 
     setSharing(true);
 
     try {
-      // Handle "All Linked Friends" option
-      if (selectedFriendId === 'ALL') {
-        // Share with all friends sequentially
-        let successCount = 0;
-        let errorCount = 0;
+      // Determine which friends to share with
+      const friendIdsToShare = selectedFriendIds.includes('ALL')
+        ? friends.map(f => f.userId)
+        : selectedFriendIds;
 
-        for (const friend of friends) {
-          const result = await shareMirror(mirrorId, userId, friend.userId);
-          if (result.success) {
-            successCount++;
-          } else {
-            errorCount++;
-            console.warn(`Failed to share with ${friend.displayName}:`, result.error);
-          }
-        }
+      // Share with selected friends sequentially
+      let successCount = 0;
+      let errorCount = 0;
 
-        if (successCount > 0) {
-          Alert.alert(
-            'Mirror Shared',
-            `Shared with ${successCount} friend${successCount > 1 ? 's' : ''}` +
-              (errorCount > 0 ? ` (${errorCount} failed)` : '')
-          );
-          onShareSuccess?.();
-          onClose();
+      for (const friendId of friendIdsToShare) {
+        const result = await shareMirror(mirrorId, userId, friendId);
+        if (result.success) {
+          successCount++;
         } else {
-          Alert.alert('Unable to Share', 'Failed to share with any friends');
+          errorCount++;
+          const friend = friends.find(f => f.userId === friendId);
+          console.warn(`Failed to share with ${friend?.displayName || friendId}:`, result.error);
         }
-      } else {
-        // Share with single friend
-        const result = await shareMirror(mirrorId, userId, selectedFriendId);
+      }
 
-        if (!result.success) {
-          Alert.alert('Unable to Share', result.error || 'Failed to share mirror');
-          setSharing(false);
-          return;
-        }
-
-        Alert.alert('Mirror Shared', 'Your mirror has been shared successfully');
+      if (successCount > 0) {
+        Alert.alert(
+          'Mirror Shared',
+          `Shared with ${successCount} friend${successCount > 1 ? 's' : ''}` +
+            (errorCount > 0 ? ` (${errorCount} failed)` : '')
+        );
         onShareSuccess?.();
         onClose();
+      } else {
+        Alert.alert('Unable to Share', 'Failed to share with any friends');
       }
     } catch (error) {
       console.error('Error sharing mirror:', error);
@@ -130,19 +121,44 @@ export function ShareMirrorSheet({
     }
   };
 
+  // Generate initials from display name
+  const getInitials = (name: string) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  };
+
+  const toggleFriendSelection = (friendId: string) => {
+    setSelectedFriendIds(prev => {
+      if (prev.includes(friendId)) {
+        return prev.filter(id => id !== friendId);
+      } else {
+        // If selecting ALL, deselect individual friends
+        if (friendId === 'ALL') {
+          return ['ALL'];
+        }
+        // If selecting individual friend, deselect ALL
+        return prev.filter(id => id !== 'ALL').concat(friendId);
+      }
+    });
+  };
+
   const renderFriendItem = ({ item }: { item: any }) => {
-    const isSelected = selectedFriendId === item.userId;
+    const isSelected = selectedFriendIds.includes(item.userId);
 
     return (
       <TouchableOpacity
         style={[styles.friendItem, isSelected && styles.friendItemSelected]}
-        onPress={() => setSelectedFriendId(item.userId)}
+        onPress={() => toggleFriendSelection(item.userId)}
       >
         <View style={styles.friendInfo}>
           <Avatar
-            profilePictureUrl={item.profilePictureUrl}
-            displayName={item.displayName}
-            size={40}
+            imageUri={item.profilePictureUrl}
+            initials={getInitials(item.displayName)}
+            size="small"
           />
           <Text style={[styles.friendName, isSelected && styles.friendNameSelected]}>
             {item.displayName}
@@ -151,11 +167,11 @@ export function ShareMirrorSheet({
 
         <View
           style={[
-            styles.radioButton,
-            isSelected && styles.radioButtonSelected,
+            styles.checkbox,
+            isSelected && styles.checkboxSelected,
           ]}
         >
-          {isSelected && <View style={styles.radioButtonInner} />}
+          {isSelected && <IconSymbol name="checkmark" size={14} color={colors.text.white} />}
         </View>
       </TouchableOpacity>
     );
@@ -163,7 +179,7 @@ export function ShareMirrorSheet({
 
   const renderNoFriendsState = () => (
     <View style={styles.emptyState}>
-      <IconSymbol name="person.2" size={56} color="#6366f1" />
+      <IconSymbol name="person.2" size={56} color={colors.text.primary} />
       <Text style={styles.emptyText}>No linked friends yet</Text>
       <Text style={styles.emptySubtext}>
         Link with friends to share your mirrors
@@ -175,51 +191,55 @@ export function ShareMirrorSheet({
           router.push('/(tabs)/friends');
         }}
       >
-        <IconSymbol name="link" size={18} color="#fff" />
+        <IconSymbol name="link" size={18} color={colors.text.white} />
         <Text style={styles.inviteButtonText}>Invite a Friend</Text>
       </TouchableOpacity>
     </View>
   );
 
-  const renderAllFriendsOption = () => (
-    <TouchableOpacity
-      style={[
-        styles.friendItem,
-        styles.allFriendsItem,
-        selectedFriendId === 'ALL' && styles.friendItemSelected,
-      ]}
-      onPress={() => setSelectedFriendId('ALL')}
-    >
-      <View style={styles.friendInfo}>
+  const renderAllFriendsOption = () => {
+    const isSelected = selectedFriendIds.includes('ALL');
+
+    return (
+      <TouchableOpacity
+        style={[
+          styles.friendItem,
+          styles.allFriendsItem,
+          isSelected && styles.friendItemSelected,
+        ]}
+        onPress={() => toggleFriendSelection('ALL')}
+      >
+        <View style={styles.friendInfo}>
+          <View
+            style={[
+              styles.avatar,
+              styles.allFriendsAvatar,
+              isSelected && styles.avatarSelected,
+            ]}
+          >
+            <IconSymbol name="person.2.fill" size={20} color={colors.text.white} />
+          </View>
+          <Text
+            style={[
+              styles.friendName,
+              isSelected && styles.friendNameSelected,
+            ]}
+          >
+            All Linked Friends
+          </Text>
+        </View>
+
         <View
           style={[
-            styles.avatar,
-            styles.allFriendsAvatar,
-            selectedFriendId === 'ALL' && styles.avatarSelected,
+            styles.checkbox,
+            isSelected && styles.checkboxSelected,
           ]}
         >
-          <IconSymbol name="person.2.fill" size={20} color="#fff" />
+          {isSelected && <IconSymbol name="checkmark" size={14} color={colors.text.white} />}
         </View>
-        <Text
-          style={[
-            styles.friendName,
-            selectedFriendId === 'ALL' && styles.friendNameSelected,
-          ]}
-        >
-          All Linked Friends
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.radioButton,
-          selectedFriendId === 'ALL' && styles.radioButtonSelected,
-        ]}
-      >
-        {selectedFriendId === 'ALL' && <View style={styles.radioButtonInner} />}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <Modal
@@ -239,14 +259,14 @@ export function ShareMirrorSheet({
           <View style={styles.header}>
             <Text style={styles.title}>Share with a Friend</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <IconSymbol name="xmark" size={24} color="#666" />
+              <IconSymbol name="xmark" size={24} color={colors.text.bodyLight} />
             </TouchableOpacity>
           </View>
 
           {/* Friends List */}
           {loading ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#6366f1" />
+              <ActivityIndicator size="large" color={colors.background.primaryLight} />
             </View>
           ) : friends.length === 0 ? (
             renderNoFriendsState()
@@ -273,18 +293,15 @@ export function ShareMirrorSheet({
                 <TouchableOpacity
                   style={[
                     styles.shareButton,
-                    (!selectedFriendId || sharing) && styles.shareButtonDisabled,
+                    (selectedFriendIds.length === 0 || sharing) && styles.shareButtonDisabled,
                   ]}
                   onPress={handleShare}
-                  disabled={!selectedFriendId || sharing}
+                  disabled={selectedFriendIds.length === 0 || sharing}
                 >
                   {sharing ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={colors.text.body} />
                   ) : (
-                    <>
-                      <IconSymbol name="arrow.up.circle" size={20} color="#fff" />
-                      <Text style={styles.shareButtonText}>Share Mirror</Text>
-                    </>
+                    <Text style={styles.shareButtonText}>Share Mirror</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -306,9 +323,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.background.white,
+    borderTopLeftRadius: borderRadius.sheet,
+    borderTopRightRadius: borderRadius.sheet,
     maxHeight: '80%',
     paddingBottom: 34,
   },
@@ -316,16 +333,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxl,
+    paddingBottom: spacing.l,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: colors.background.defaultLight,
   },
   title: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#000',
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   closeButton: {
     width: 32,
@@ -342,121 +358,124 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#000',
-    marginTop: 20,
+    ...typography.heading.l,
+    color: colors.text.body,
+    marginTop: spacing.xxl,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#6b7280',
-    marginTop: 8,
-    marginBottom: 24,
+    ...typography.body.s,
+    color: colors.text.bodyLight,
+    marginTop: spacing.m,
+    marginBottom: spacing.xxxl,
     textAlign: 'center',
   },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#6366f1',
-    paddingHorizontal: 24,
+    gap: spacing.m,
+    backgroundColor: colors.background.primaryLight,
+    paddingHorizontal: spacing.xxxl,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: borderRadius.button,
   },
   inviteButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.white,
   },
   allFriendsContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.l,
+    paddingBottom: spacing.s,
   },
   allFriendsItem: {
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background.defaultLight,
     borderWidth: 2,
   },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: borderRadius.circle,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarSelected: {
+    borderWidth: 2,
+    borderColor: colors.border.outline,
+  },
   allFriendsAvatar: {
-    backgroundColor: '#6366f1',
+    backgroundColor: colors.background.primaryLight,
   },
   list: {
     maxHeight: 400,
   },
   listContent: {
-    padding: 16,
+    padding: spacing.xl,
   },
   friendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    backgroundColor: '#f9fafb',
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.button,
+    marginBottom: spacing.m,
+    backgroundColor: colors.background.defaultLight,
     borderWidth: 2,
     borderColor: 'transparent',
   },
   friendItemSelected: {
-    backgroundColor: '#f0f0ff',
-    borderColor: '#6366f1',
+    backgroundColor: colors.background.primaryLighter,
+    borderColor: colors.border.outline,
   },
   friendInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.l,
     flex: 1,
   },
   friendName: {
-    fontSize: 16,
+    ...typography.body.default,
     fontWeight: '500',
-    color: '#000',
+    color: colors.text.body,
   },
   friendNameSelected: {
-    fontWeight: '600',
-    color: '#6366f1',
+    fontWeight: '700',
+    color: colors.text.primary,
   },
-  radioButton: {
+  checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: '#d1d5db',
+    borderColor: colors.background.disabled,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  radioButtonSelected: {
-    borderColor: '#6366f1',
-  },
-  radioButtonInner: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#6366f1',
+  checkboxSelected: {
+    borderColor: colors.border.outline,
+    backgroundColor: colors.background.primaryLight,
   },
   footer: {
-    padding: 16,
+    padding: spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: colors.background.defaultLight,
   },
   shareButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 12,
-    gap: 8,
+    backgroundColor: colors.background.primaryLight,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
+    gap: spacing.m,
   },
   shareButtonDisabled: {
-    backgroundColor: '#d1d5db',
+    backgroundColor: colors.background.disabled,
     opacity: 0.6,
   },
   shareButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.body,
   },
 });

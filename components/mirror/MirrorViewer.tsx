@@ -1,13 +1,12 @@
 // components/mirror/MirrorViewer.tsx
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MirrorScreen1 } from './MirrorScreen1';
-import { MirrorScreen2 } from './MirrorScreen2';
-import { MirrorScreen3 } from './MirrorScreen3';
 import { ReflectionJournal } from './ReflectionJournal';
+import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
 interface MirrorViewerProps {
@@ -15,8 +14,10 @@ interface MirrorViewerProps {
   mirrorId: string;
   onClose: () => void;
   onClosedForFeedback?: () => void;
-  isSharedMirror?: boolean; // If true, hide Reflection step
+  isSharedMirror?: boolean;
 }
+
+type TabName = 'Mirror' | 'Themes' | 'Observations' | 'Reflection';
 
 export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   mirrorContent,
@@ -26,10 +27,27 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   isSharedMirror = false,
 }) => {
   const { user } = useAuth();
-  const [currentScreen, setCurrentScreen] = useState(0);
-  const totalScreens = isSharedMirror ? 3 : 4; // Shared mirrors: 3 screens, Own mirrors: 4 screens
+  const [activeTab, setActiveTab] = useState<TabName>('Mirror');
+  const [showShareSheet, setShowShareSheet] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const mirrorSectionRef = useRef<View>(null);
+  const themesSectionRef = useRef<View>(null);
+  const observationsSectionRef = useRef<View>(null);
+  const reflectionSectionRef = useRef<View>(null);
+
+  // Track section positions for scroll-based tab updates
+  const [sectionPositions, setSectionPositions] = useState<{
+    Mirror: number;
+    Themes: number;
+    Observations: number;
+    Reflection: number;
+  }>({
+    Mirror: 0,
+    Themes: 0,
+    Observations: 0,
+    Reflection: 0,
+  });
 
   // State for reflection data
   const [reflectionFocus, setReflectionFocus] = useState(
@@ -45,36 +63,14 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
     setReflectionAction(action);
   };
 
-  // Reset scroll position when screen changes
-  useEffect(() => {
-    scrollViewRef.current?.scrollTo({ y: 0, animated: false });
-  }, [currentScreen]);
-
-  console.log('🪞 MirrorViewer loaded with props:', {
-    hasOnClose: !!onClose,
-    hasOnClosedForFeedback: !!onClosedForFeedback
-  });
-
-  const handleNext = () => {
-    if (currentScreen < totalScreens - 1) {
-      setCurrentScreen(currentScreen + 1);
-    }
-  };
-
-  const handleBack = () => {
-    if (currentScreen > 0) {
-      setCurrentScreen(currentScreen - 1);
-    }
-  };
-
   // Handler for when user completes reflection journal
   const handleReflectionComplete = async (focus: string, action: string) => {
     console.log('💾 Saving reflection to Mirror ID:', mirrorId);
-    
+
     // 1. Update local state
     setReflectionFocus(focus);
     setReflectionAction(action);
-    
+
     // 2. Save to database
     const { error } = await supabase
       .from('mirrors')
@@ -87,205 +83,571 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
     if (error) {
       console.error('❌ Error saving reflection:', error);
-      // TODO: Show error toast to user
     } else {
       console.log('✅ Reflection saved successfully');
-      onClose(); // Close the mirror - reflection is the final step
     }
   };
 
-  const renderCurrentScreen = () => {
-    switch (currentScreen) {
-      case 0:
-        return <MirrorScreen1 data={mirrorContent.screen_1_themes || mirrorContent.screen1_themes} />;
-      case 1:
-        return <MirrorScreen2 data={mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical} />;
-      case 2:
-        return <MirrorScreen3 data={mirrorContent.screen_3_observations || mirrorContent.screen3_observations} />;
-      case 3: // Reflection Journal - FINAL SCREEN
-        const hasCompletedReflection = Boolean(mirrorContent.reflection_focus && mirrorContent.reflection_action);
-        return (
-          <ReflectionJournal
-            onComplete={handleReflectionComplete}
-            initialFocus={reflectionFocus}
-            initialAction={reflectionAction}
-            isReadOnly={hasCompletedReflection}
-            completedAt={mirrorContent.reflection_completed_at}
-            onFormChange={handleReflectionFormChange}
-          />
-        );
-      default:
-        return <MirrorScreen1 data={mirrorContent.screen_1_themes || mirrorContent.screen1_themes} />;
+  // Format date from mirrorContent
+  const formatDate = () => {
+    const createdAt = mirrorContent.created_at;
+    if (!createdAt) return '';
+
+    const date = new Date(createdAt);
+    const month = date.toLocaleString('en-US', { month: 'long' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+
+    return `${month} ${day} ${year}`;
+  };
+
+  // Extract title from biblical parallel character name
+  const getTitle = () => {
+    const screen2Data = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
+    return screen2Data?.parallel_story?.character || 'Mirror';
+  };
+
+  // Handle tab press - scroll to section
+  const handleTabPress = (tab: TabName) => {
+    setActiveTab(tab);
+
+    let targetRef;
+    switch (tab) {
+      case 'Mirror':
+        targetRef = mirrorSectionRef;
+        break;
+      case 'Themes':
+        targetRef = themesSectionRef;
+        break;
+      case 'Observations':
+        targetRef = observationsSectionRef;
+        break;
+      case 'Reflection':
+        targetRef = reflectionSectionRef;
+        break;
+    }
+
+    if (targetRef.current) {
+      targetRef.current.measureLayout(
+        scrollViewRef.current as any,
+        (x, y) => {
+          // Offset by 30pt to keep section tags below safe area
+          scrollViewRef.current?.scrollTo({ y: y - 30, animated: true });
+        },
+        () => {}
+      );
     }
   };
+
+  // Handle scroll event to update active tab based on scroll position
+  const handleScroll = (event: any) => {
+    const scrollY = event.nativeEvent.contentOffset.y;
+
+    // Determine which section is currently in view
+    // We use a threshold of 100px from the top to determine the active section
+    const threshold = 100;
+
+    if (scrollY >= sectionPositions.Reflection - threshold && !isSharedMirror) {
+      if (activeTab !== 'Reflection') setActiveTab('Reflection');
+    } else if (scrollY >= sectionPositions.Observations - threshold) {
+      if (activeTab !== 'Observations') setActiveTab('Observations');
+    } else if (scrollY >= sectionPositions.Themes - threshold) {
+      if (activeTab !== 'Themes') setActiveTab('Themes');
+    } else {
+      if (activeTab !== 'Mirror') setActiveTab('Mirror');
+    }
+  };
+
+  // Capture section positions on layout
+  const handleSectionLayout = (section: TabName) => (event: any) => {
+    const { y } = event.nativeEvent.layout;
+    setSectionPositions(prev => ({ ...prev, [section]: y }));
+  };
+
+  const screen1Data = mirrorContent.screen_1_themes || mirrorContent.screen1_themes;
+  const screen2Data = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
+  const screen3Data = mirrorContent.screen_3_observations || mirrorContent.screen3_observations;
+  const hasCompletedReflection = Boolean(mirrorContent.reflection_focus && mirrorContent.reflection_action);
+  const limitedThemes = screen1Data?.themes ? screen1Data.themes.slice(0, 4) : [];
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Top Right Close Button */}
-      <View style={styles.topRightButtons}>
-        <TouchableOpacity style={styles.closeIconButton} onPress={onClose}>
-          <Text style={styles.closeIconText}>✕</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Progress Dots */}
-      <View style={styles.progressContainer}>
-        {Array.from({ length: totalScreens }).map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.progressDot,
-              index === currentScreen ? styles.progressDotActive : styles.progressDotInactive
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* Screen Content */}
+    <>
       <ScrollView
         ref={scrollViewRef}
-        style={styles.screenContainer}
-        contentContainerStyle={styles.screenContentContainer}
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
-        {renderCurrentScreen()}
-      </ScrollView>
-
-      {/* Navigation - Fixed at bottom */}
-      <View style={styles.navigationContainer}>
-        <TouchableOpacity
-          style={[styles.navButton, currentScreen === 0 && styles.navButtonDisabled]}
-          onPress={handleBack}
-          disabled={currentScreen === 0}
+      {/* Hero Image Section with Overlays */}
+      <View style={styles.heroSection}>
+        <ImageBackground
+          source={require('@/assets/images/spiritual-places/default.jpg')}
+          style={styles.heroImage}
+          resizeMode="cover"
         >
-          <Text style={[styles.navButtonText, currentScreen === 0 && styles.navButtonTextDisabled]}>
-            ← Back
-          </Text>
-        </TouchableOpacity>
+          {/* Dark overlay for better text readability */}
+          <View style={styles.heroOverlay} />
 
-        {/* On final screen - show appropriate button */}
-        {currentScreen === totalScreens - 1 ? (
-          // If reflection already completed, show Close button
-          mirrorContent.reflection_focus && mirrorContent.reflection_action ? (
-            <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Text style={styles.closeButtonText}>Close</Text>
+          {/* Top Navigation Buttons */}
+          <View style={styles.topNav}>
+            <TouchableOpacity style={styles.backButton} onPress={onClose}>
+              <Image
+                source={require('@/assets/images/icons/Back.png')}
+                style={styles.backIcon}
+              />
             </TouchableOpacity>
-          ) : (
-            // If reflection not completed, show Skip button
-            <TouchableOpacity style={styles.skipButton} onPress={onClose}>
-              <Text style={styles.skipButtonText}>Skip</Text>
+            <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
+              <IconSymbol name="square.and.arrow.up" size={40} color={colors.text.white} />
             </TouchableOpacity>
-          )
-        ) : (
-          // On other screens, show Next button
-          <TouchableOpacity style={styles.navButton} onPress={handleNext}>
-            <Text style={styles.navButtonText}>Next →</Text>
-          </TouchableOpacity>
-        )}
+          </View>
+
+          {/* Title and Date Overlay */}
+          <View style={styles.titleOverlay}>
+            <Text style={styles.titleOverlayText}>{getTitle()}</Text>
+            <Text style={styles.subtitleOverlayText}>{formatDate()}</Text>
+          </View>
+
+          {/* Tab Bar at Bottom of Image */}
+          <View style={styles.tabBarOverlay}>
+            {(['Mirror', 'Themes', 'Observations', 'Reflection'] as TabName[]).map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                style={styles.tabButton}
+                onPress={() => handleTabPress(tab)}
+              >
+                <Text style={[
+                  styles.tabLabel,
+                  activeTab === tab && styles.tabLabelActive
+                ]}>
+                  {tab}
+                </Text>
+                {activeTab === tab && <View style={styles.tabIndicator} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </ImageBackground>
       </View>
-    </SafeAreaView>
+
+      {/* All Sections */}
+        {/* MIRROR SECTION */}
+        <View
+          ref={mirrorSectionRef}
+          style={[styles.section, styles.mirrorSection]}
+          onLayout={handleSectionLayout('Mirror')}
+        >
+          <View style={styles.sectionTagContainer}>
+            <Text style={styles.sectionTag}>Mirror</Text>
+          </View>
+
+          {/* Biblical Mirror Story */}
+          {screen2Data?.parallel_story && (
+            <View style={styles.subsection}>
+              <Text style={styles.mirrorTitle}>{screen2Data.parallel_story.character}</Text>
+              <Text style={styles.mirrorDescription}>
+                {screen2Data.parallel_story.story}
+                {'\n\n'}
+                {screen2Data.parallel_story.connection}
+              </Text>
+            </View>
+          )}
+
+          {/* Encouraging Word */}
+          {screen2Data?.encouraging_verse && (
+            <View style={styles.subsection}>
+              <Text style={styles.subsectionTitle}>Encouraging Word</Text>
+              <Text style={styles.verseReference}>
+                {screen2Data.encouraging_verse.reference}
+              </Text>
+              <View style={styles.verseContainer}>
+                <View style={styles.verseBar} />
+                <Text style={styles.verseText}>
+                  {screen2Data.encouraging_verse.text}
+                </Text>
+              </View>
+              <Text style={styles.applicationText}>
+                {screen2Data.encouraging_verse.application || screen2Data.encouraging_verse.why_it_fits}
+              </Text>
+            </View>
+          )}
+
+          {/* Invitation to Growth */}
+          {(screen2Data?.invitation_to_growth || screen2Data?.challenging_verse) && (
+            <View style={styles.subsection}>
+              <Text style={styles.subsectionTitle}>Invitation to Growth</Text>
+              <Text style={styles.verseReference}>
+                {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).reference}
+              </Text>
+              <View style={styles.verseContainer}>
+                <View style={styles.verseBar} />
+                <Text style={styles.verseText}>
+                  {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).text}
+                </Text>
+              </View>
+              <Text style={styles.applicationText}>
+                {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).invitation}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* THEMES SECTION */}
+        <View
+          ref={themesSectionRef}
+          style={[styles.section, styles.themesSection]}
+          onLayout={handleSectionLayout('Themes')}
+        >
+          <View style={[styles.sectionTagContainer, styles.themesTagContainer]}>
+            <Text style={[styles.sectionTag, styles.themesTag]}>Themes</Text>
+          </View>
+
+          <View style={styles.themesContainer}>
+            {limitedThemes.map((theme: any, index: number) => (
+              <View key={index} style={styles.themeCard}>
+                <Text style={styles.themeName}>{theme.name}</Text>
+                <Text style={styles.themeDescription}>{theme.description}</Text>
+                {theme.frequency && (() => {
+                  const frequencyText = theme.frequency;
+                  const parts = frequencyText.split(/Present in journals:\s*/i);
+
+                  if (parts.length > 1) {
+                    // "Present in journals:" exists in the string
+                    return (
+                      <Text style={styles.themeFrequency}>
+                        <Text style={styles.themeFrequencyLabel}>Present in journals: </Text>
+                        {parts[1]}
+                      </Text>
+                    );
+                  } else {
+                    // "Present in journals:" doesn't exist
+                    return (
+                      <Text style={styles.themeFrequency}>
+                        <Text style={styles.themeFrequencyLabel}>Present in journals: </Text>
+                        {frequencyText}
+                      </Text>
+                    );
+                  }
+                })()}
+              </View>
+            ))}
+          </View>
+
+          {screen1Data?.insight && screen1Data.insight.trim().length > 0 && (
+            <View style={styles.insightContainer}>
+              <Text style={styles.insightText}>{screen1Data.insight}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* OBSERVATIONS SECTION */}
+        <View
+          ref={observationsSectionRef}
+          style={styles.section}
+          onLayout={handleSectionLayout('Observations')}
+        >
+          <View style={styles.sectionTagContainer}>
+            <Text style={styles.sectionTag}>Observations</Text>
+          </View>
+
+          <View style={styles.observationsContainer}>
+            {screen3Data?.self_perception && (
+              <View style={styles.observationCard}>
+                <Text style={styles.observationTitle}>How You See Yourself</Text>
+                <Text style={styles.observationText}>{screen3Data.self_perception.observation}</Text>
+              </View>
+            )}
+
+            {screen3Data?.god_perception && (
+              <View style={styles.observationCard}>
+                <Text style={styles.observationTitle}>Your Relationship with God</Text>
+                <Text style={styles.observationText}>{screen3Data.god_perception.observation}</Text>
+              </View>
+            )}
+
+            {screen3Data?.others_perception && (
+              <View style={styles.observationCard}>
+                <Text style={styles.observationTitle}>How You View Others</Text>
+                <Text style={styles.observationText}>{screen3Data.others_perception.observation}</Text>
+              </View>
+            )}
+
+            {screen3Data?.blind_spots && (
+              <View style={styles.observationCard}>
+                <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
+                <Text style={styles.observationText}>{screen3Data.blind_spots.observation}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* REFLECTION SECTION */}
+        {!isSharedMirror && (
+          <View
+            ref={reflectionSectionRef}
+            style={styles.section}
+            onLayout={handleSectionLayout('Reflection')}
+          >
+            <View style={styles.sectionTagContainer}>
+              <Text style={styles.sectionTag}>Reflection</Text>
+            </View>
+            <View style={styles.subsection}>
+              <ReflectionJournal
+                onComplete={handleReflectionComplete}
+                initialFocus={reflectionFocus}
+                initialAction={reflectionAction}
+                isReadOnly={hasCompletedReflection}
+                completedAt={mirrorContent.reflection_completed_at}
+                onFormChange={handleReflectionFormChange}
+              />
+            </View>
+          </View>
+        )}
+    </ScrollView>
+
+      {/* Share Mirror Sheet */}
+      <ShareMirrorSheet
+        visible={showShareSheet}
+        onClose={() => setShowShareSheet(false)}
+        userId={user?.id || ''}
+        mirrorId={mirrorId}
+        onShareSuccess={() => {
+          setShowShareSheet(false);
+        }}
+      />
+    </>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: colors.background.white,
   },
-  topRightButtons: {
+  heroSection: {
+    width: 488,
+    height: 476,
+    overflow: 'hidden',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  topNav: {
     position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 10,
+    top: 114,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
-  closeIconButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#374151',
+  backButton: {
+    position: 'absolute',
+    left: 4,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeIconText: {
-    color: '#f8fafc',
-    fontSize: 18,
-    fontWeight: '300',
+  backIcon: {
+    width: 40,
+    height: 40,
+    tintColor: colors.text.white,
   },
-  progressContainer: {
-    flexDirection: 'row',
+  shareButton: {
+    position: 'absolute',
+    left: 346,
+    width: 40,
+    height: 40,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    gap: 8,
   },
-  progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  titleOverlay: {
+    position: 'absolute',
+    top: 172,
+    left: spacing.xl,
+    zIndex: 2,
   },
-  progressDotActive: {
-    backgroundColor: '#fbbf24',
+  titleOverlayText: {
+    ...typography.heading.xl,
+    fontWeight: '900',
+    color: colors.text.white,
+    marginBottom: spacing.s,
   },
-  progressDotInactive: {
-    backgroundColor: '#374151',
+  subtitleOverlayText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#F6F6F6',
   },
-  screenContainer: {
-    flex: 1,
-  },
-  screenContentContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    paddingBottom: 20,
-  },
-  navigationContainer: {
+  tabBarOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 20,
+    paddingHorizontal: spacing.xl,
+    zIndex: 2,
   },
-  navButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#374151',
-    borderWidth: 1,
-    borderColor: '#6b7280',
+  tabButton: {
+    marginRight: spacing.xxxl,
+    paddingBottom: spacing.m,
   },
-  navButtonDisabled: {
-    backgroundColor: '#1f2937',
-    borderColor: '#374151',
-  },
-  navButtonText: {
-    color: '#f8fafc',
-    fontSize: 16,
+  tabLabel: {
+    fontSize: 19,
     fontWeight: '500',
+    color: '#F2F4F7',
   },
-  navButtonTextDisabled: {
-    color: '#6b7280',
+  tabLabelActive: {
+    fontWeight: '700',
   },
-  closeButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#fbbf24',
-    borderWidth: 1,
-    borderColor: '#f59e0b',
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 6,
+    backgroundColor: colors.text.white,
+    borderRadius: borderRadius.tabHighlight,
   },
-  closeButtonText: {
-    color: '#1e293b',
-    fontSize: 16,
-    fontWeight: 'bold',
+  scrollContent: {
+    paddingBottom: 40,
   },
-  skipButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#374151',
-    borderWidth: 1,
-    borderColor: '#6b7280',
+  section: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    gap: spacing.xxxl,
   },
-  skipButtonText: {
-    color: '#f8fafc',
-    fontSize: 16,
+  mirrorSection: {
+    paddingBottom: spacing.xxxl,
+  },
+  themesSection: {
+    backgroundColor: colors.background.defaultLight,
+    paddingBottom: spacing.xxxl,
+  },
+  sectionTagContainer: {
+    backgroundColor: colors.background.tag,
+    borderRadius: borderRadius.tag,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
+    alignSelf: 'flex-start',
+  },
+  sectionTag: {
+    ...typography.heading.xs,
+    fontWeight: '700',
+    color: colors.text.body,
+  },
+  themesTagContainer: {
+    backgroundColor: '#FFFFFF',
+  },
+  themesTag: {
+    color: '#505970',
+  },
+  sectionDescription: {
+    ...typography.body.default,
+    color: colors.text.bodyLight,
+    fontStyle: 'italic',
+    marginTop: -spacing.xl,
+  },
+  subsection: {
+    gap: spacing.l,
+  },
+  mirrorTitle: {
+    ...typography.heading.xl,
+    color: colors.text.body,
+  },
+  mirrorDescription: {
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
+  },
+  subsectionTitle: {
+    ...typography.heading.l,
+    color: colors.text.body,
+  },
+  verseReference: {
+    ...typography.heading.s,
+    color: colors.text.accent,
+  },
+  verseContainer: {
+    flexDirection: 'row',
+    gap: spacing.l,
+  },
+  verseBar: {
+    width: 2,
+    backgroundColor: colors.text.accent,
+    borderRadius: 1,
+    alignSelf: 'stretch',
+  },
+  verseText: {
+    flex: 1,
+    fontSize: 17,
     fontWeight: '500',
+    fontStyle: 'italic',
+    color: '#273047',
+    lineHeight: 24,
+  },
+  applicationText: {
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
+  },
+  themesContainer: {
+    gap: 32,
+  },
+  themeCard: {
+    width: 370,
+    gap: spacing.l,
+  },
+  themeName: {
+    ...typography.heading.l,
+    lineHeight: 24,
+    color: colors.text.body,
+  },
+  themeDescription: {
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
+  },
+  themeFrequency: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: colors.text.bodyLight,
+  },
+  themeFrequencyLabel: {
+    fontWeight: '700',
+  },
+  insightContainer: {
+    backgroundColor: colors.background.tag,
+    padding: spacing.xl,
+    borderRadius: borderRadius.card,
+    borderWidth: 1,
+    borderColor: colors.text.accent,
+  },
+  insightText: {
+    ...typography.body.default,
+    color: colors.text.accent,
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  observationsContainer: {
+    gap: 24,
+  },
+  observationCard: {
+    gap: spacing.m,
+  },
+  observationTitle: {
+    ...typography.heading.l,
+    lineHeight: 24,
+    color: colors.text.body,
+  },
+  observationText: {
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
   },
 });
