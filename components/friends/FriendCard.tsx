@@ -1,6 +1,6 @@
 // components/friends/FriendCard.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { Avatar } from '@/components/ui/Avatar';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
@@ -73,14 +73,23 @@ export const FriendCard: React.FC<FriendCardProps> = ({
         {/* Friend info */}
         <View style={[styles.info, !hasSubtitle && styles.infoCentered]}>
           <Text style={styles.name}>{friendName}</Text>
-          {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
+          {subtitle && (
+            <Text style={[styles.subtitle, state === 'unread' && styles.subtitleUnread]}>
+              {subtitle}
+            </Text>
+          )}
         </View>
 
-        {/* VIEW button - only for unread and read states */}
+        {/* Forward chevron - only for unread and read states */}
         {showViewButton && (
-          <View style={[styles.viewButton, state === 'unread' && styles.viewButtonUnread]}>
-            <Text style={styles.viewButtonText}>View</Text>
-          </View>
+          <Image
+            source={require('@/assets/images/icons/Back.png')}
+            style={[
+              styles.chevronIcon,
+              state === 'unread' && styles.chevronIconUnread,
+            ]}
+            resizeMode="contain"
+          />
         )}
       </View>
     </TouchableOpacity>
@@ -117,21 +126,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
     lineHeight: 18,
   },
-  viewButton: {
-    backgroundColor: colors.text.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.m,
-    borderRadius: borderRadius.button,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 36,
+  subtitleUnread: {
+    color: colors.text.primary,
   },
-  viewButtonUnread: {
-    backgroundColor: colors.background.accent,
+  chevronIcon: {
+    width: 24,
+    height: 24,
+    transform: [{ rotate: '180deg' }],
+    tintColor: colors.text.bodyLight,
   },
-  viewButtonText: {
-    ...typography.heading.xs,
-    color: colors.text.white,
-    lineHeight: 18,
+  chevronIconUnread: {
+    // No additional styling needed for unread state
   },
 });

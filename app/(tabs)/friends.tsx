@@ -545,7 +545,7 @@ export default function FriendsScreen() {
             <View style={styles.emptyStateContent}>
               {/* Heading */}
               <Text style={styles.emptyStateHeading}>
-                Stay spiritually connected to friends
+                Grow together
               </Text>
 
               {/* Subheading */}
@@ -581,23 +581,18 @@ export default function FriendsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
         >
-          {/* Header row: "Friends" title left, "Invite a Friend +" link right */}
+          {/* Header: "Friends" title with Invite button on right */}
           <View style={styles.header}>
             <Text style={styles.title}>Friends</Text>
             <TouchableOpacity
               onPress={handleCreateInvite}
               disabled={creatingInvite}
-              style={[styles.inviteLinkRow, creatingInvite && styles.buttonDisabled]}
+              style={[styles.inviteButton, creatingInvite && styles.buttonDisabled]}
             >
-              <Text style={styles.inviteLinkText}>
-                {creatingInvite ? 'Creating...' : 'Invite a Friend'}
-              </Text>
-              {!creatingInvite && (
-                <Image
-                  source={require('@/assets/images/icons/Add.png')}
-                  style={styles.inviteAddIcon}
-                  resizeMode="contain"
-                />
+              {creatingInvite ? (
+                <ActivityIndicator color={colors.text.primary} />
+              ) : (
+                <Text style={styles.inviteButtonText}>Invite a Friend</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -708,10 +703,10 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 
-  // Header row
+  // Header
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.screen.horizontalPadding,
     paddingBottom: spacing.xl,
@@ -720,18 +715,22 @@ const styles = StyleSheet.create({
     ...typography.heading.xl,
     color: colors.text.body,
   },
-  inviteLinkRow: {
-    flexDirection: 'row',
+
+  // Invite Button
+  inviteButton: {
+    backgroundColor: colors.background.white,
+    borderWidth: 1,
+    borderColor: colors.text.primary,
+    borderRadius: borderRadius.button,
+    paddingVertical: spacing.ml,
+    paddingHorizontal: spacing.xxxl,
     alignItems: 'center',
-    gap: spacing.s,
+    justifyContent: 'center',
+    minHeight: 44,
   },
-  inviteLinkText: {
-    ...typography.body.s,
+  inviteButtonText: {
+    ...typography.heading.s,
     color: colors.text.primary,
-  },
-  inviteAddIcon: {
-    width: 14,
-    height: 14,
   },
 
   setupHeading: {
@@ -748,7 +747,7 @@ const styles = StyleSheet.create({
   // Setup section
   setupSection: {
     paddingHorizontal: spacing.screen.horizontalPadding,
-    paddingTop: spacing.xxl,
+    paddingTop: spacing.xxxxl,
     gap: spacing.xl,
   },
 
