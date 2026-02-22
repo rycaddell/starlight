@@ -717,20 +717,6 @@ export default function MirrorScreen() {
               )}
             </View>
           )}
-
-          {/* Sentry Test Button (remove after testing) */}
-          {__DEV__ && (
-            <View style={styles.section}>
-              <Button
-                variant="outline"
-                label="🧪 Test Sentry Error"
-                onPress={() => {
-                  Sentry.captureException(new Error('Test error from Mirror screen'));
-                  Alert.alert('Sent!', 'Check Sentry dashboard for test error');
-                }}
-              />
-            </View>
-          )}
         </View>
       </ScrollView>
 
