@@ -4,6 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/lib/supabase/client';
 
@@ -46,12 +47,30 @@ export function FriendBadgeProvider({ children }: { children: React.ReactNode })
 
       if (error) {
         console.error('Error fetching new friends count:', error);
+
+        // Capture error
+        Sentry.captureException(new Error('Failed to fetch new friends count'), {
+          tags: { component: 'FriendBadgeContext', action: 'refreshCount' },
+          contexts: {
+            friendBadge: {
+              userId: user.id,
+              error: error.message,
+            },
+          },
+        });
+
         return;
       }
 
       setNewFriendsCount(count || 0);
     } catch (error) {
       console.error('Error in refreshNewFriendsCount:', error);
+
+      // Capture unexpected error
+      Sentry.captureException(error, {
+        tags: { component: 'FriendBadgeContext', action: 'refreshCount', type: 'unexpected' },
+        contexts: { friendBadge: { userId: user.id } },
+      });
     }
   }, [user?.id]);
 
@@ -113,6 +132,19 @@ export function FriendBadgeProvider({ children }: { children: React.ReactNode })
             console.log('✅ [FriendBadge] Connected to Realtime (user_a subscription)');
           } else if (status === 'CHANNEL_ERROR') {
             console.error('❌ [FriendBadge] Realtime error (user_a):', err);
+
+            // Capture Realtime error
+            Sentry.captureException(new Error('Realtime subscription error (user_a)'), {
+              tags: { component: 'FriendBadgeContext', action: 'realtime' },
+              contexts: {
+                realtime: {
+                  userId: user.id,
+                  subscription: 'user_a',
+                  status,
+                  error: err?.message || String(err),
+                },
+              },
+            });
           }
         }
       });
@@ -145,6 +177,19 @@ export function FriendBadgeProvider({ children }: { children: React.ReactNode })
             console.log('✅ [FriendBadge] Connected to Realtime (user_b subscription)');
           } else if (status === 'CHANNEL_ERROR') {
             console.error('❌ [FriendBadge] Realtime error (user_b):', err);
+
+            // Capture Realtime error
+            Sentry.captureException(new Error('Realtime subscription error (user_b)'), {
+              tags: { component: 'FriendBadgeContext', action: 'realtime' },
+              contexts: {
+                realtime: {
+                  userId: user.id,
+                  subscription: 'user_b',
+                  status,
+                  error: err?.message || String(err),
+                },
+              },
+            });
           }
         }
       });

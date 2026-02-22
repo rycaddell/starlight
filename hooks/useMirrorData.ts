@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState, AppStateStatus } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useAuth } from '../contexts/AuthContext';
-import { 
-  getUserJournals, 
+import {
+  getUserJournals,
   getUserJournalCount,
   insertTestJournalData,
   requestMirrorGeneration,
@@ -388,9 +389,17 @@ export const useMirrorData = () => {
       return;
     }
 
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'mirror',
+      message: 'User initiated mirror generation',
+      data: { journalCount },
+      level: 'info',
+    });
+
     console.log('🔍 Checking for existing generation...');
     const statusCheck = await checkMirrorGenerationStatus(user.id);
-    
+
     if (statusCheck.success && (statusCheck.status === 'processing' || statusCheck.status === 'pending')) {
       console.log('⚠️ Generation already in progress!');
       setMirrorState('generating');
@@ -431,22 +440,34 @@ export const useMirrorData = () => {
         }
       } else {
         console.error('❌ Request failed:', result.error);
-    
+
         const msg = result.error || '';
-    
+
         // 🌐 Network errors: don't reset UI, let polling decide
         if (msg.includes('Network request failed') || msg.includes('Network request')) {
           console.log('🌐 Network issue while requesting Mirror. Keeping generating state and relying on polling.');
-    
+
           // Make sure polling is running, since the job may still be alive server-side
           if (!isPollingRef.current) {
             pollMirrorStatus();
           }
-    
+
           // 🔒 Do NOT set mirrorState back to ready, do NOT show an alert
           return;
         }
-    
+
+        // Capture non-network generation failures in Sentry
+        Sentry.captureException(new Error(`Mirror generation failed: ${msg}`), {
+          tags: { component: 'useMirrorData', action: 'generateMirror' },
+          contexts: {
+            mirror: {
+              journalCount,
+              error: msg,
+              errorType: result.errorType,
+            },
+          },
+        });
+
         // All other errors = real failures, keep existing behavior
         if (msg.includes('24 hours')) {
           Alert.alert('Rate Limit', msg, [{ text: 'OK' }]);
@@ -475,7 +496,7 @@ export const useMirrorData = () => {
         } else {
           Alert.alert('Mirror Generation Failed', msg || 'Please try again.', [{ text: 'OK' }]);
         }
-    
+
         setMirrorState('ready');
         setGenerationStartTime(null);
       }    

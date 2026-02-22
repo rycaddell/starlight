@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AppState } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useAuth } from './AuthContext';
 import { getUnviewedSharesCount } from '@/lib/supabase/mirrorShares';
 import { supabase } from '@/lib/supabase/client';
@@ -34,6 +35,16 @@ export function UnreadSharesProvider({ children }: { children: React.ReactNode }
       }
     } catch (error) {
       console.error('Error fetching unread shares count:', error);
+
+      // Capture refresh error
+      Sentry.captureException(error, {
+        tags: { component: 'UnreadSharesContext', action: 'refreshCount' },
+        contexts: {
+          unreadShares: {
+            userId: user.id,
+          },
+        },
+      });
     }
   }, [user?.id]);
 
@@ -81,8 +92,31 @@ export function UnreadSharesProvider({ children }: { children: React.ReactNode }
             if (isMounted) refreshUnreadCount();
           } else if (status === 'CHANNEL_ERROR') {
             console.error('❌ [UnreadShares] Realtime error:', err);
+
+            // Capture Realtime error
+            Sentry.captureException(new Error('Realtime subscription error'), {
+              tags: { component: 'UnreadSharesContext', action: 'realtime' },
+              contexts: {
+                realtime: {
+                  userId: user.id,
+                  status,
+                  error: err?.message || String(err),
+                },
+              },
+            });
           } else if (status === 'TIMED_OUT') {
             console.warn('⏱️ [UnreadShares] Realtime timeout');
+
+            // Capture timeout
+            Sentry.captureException(new Error('Realtime subscription timeout'), {
+              tags: { component: 'UnreadSharesContext', action: 'realtime' },
+              contexts: {
+                realtime: {
+                  userId: user.id,
+                  status,
+                },
+              },
+            });
           }
         }
       });

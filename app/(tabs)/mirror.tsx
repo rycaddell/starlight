@@ -26,6 +26,7 @@ import { fetchFriends } from '../../lib/supabase/friends';
 import { supabase } from '../../lib/supabase/client';
 import { getDay1Mirror } from '../../lib/supabase/day1';
 import { Day1MirrorViewer } from '../../components/day1/Day1MirrorViewer';
+import * as Sentry from '@sentry/react-native';
 
 export default function MirrorScreen() {
   const router = useRouter();
@@ -86,10 +87,32 @@ export default function MirrorScreen() {
 
   const [currentMirrorId, setCurrentMirrorId] = React.useState<string | null>(null);
 
+  // Set Sentry user context
+  useEffect(() => {
+    if (user) {
+      Sentry.setUser({
+        id: user.id,
+        username: user.display_name || undefined,
+        email: user.access_code || undefined,
+      });
+
+      Sentry.setTag('user_group', user.group_name || 'none');
+    } else {
+      Sentry.setUser(null);
+    }
+  }, [user]);
+
   // ✅ Load journals ONCE on mount
   useEffect(() => {
     if (isAuthenticated && user) {
       console.log('📚 Initial load of journals');
+
+      Sentry.addBreadcrumb({
+        category: 'lifecycle',
+        message: 'Mirror screen mounted',
+        level: 'info',
+      });
+
       loadJournals();
     }
   }, [isAuthenticated, user]);
@@ -189,6 +212,16 @@ export default function MirrorScreen() {
 
   const handleViewNewMirror = () => {
     if (generatedMirror) {
+      Sentry.addBreadcrumb({
+        category: 'mirror',
+        message: 'Viewing newly generated mirror',
+        data: {
+          mirrorId: generatedMirror.id,
+          mirror_type: generatedMirror.mirror_type,
+        },
+        level: 'info',
+      });
+
       setCurrentMirrorId(generatedMirror.id);
       viewMirror();
     }
@@ -245,12 +278,100 @@ export default function MirrorScreen() {
   const handleOpenExistingMirror = async (mirrorId: string, fromModal: 'pastMirrors' | 'pastJournals' | 'none' = 'none') => {
     console.log('🔍 Opening existing Mirror:', mirrorId, 'from:', fromModal);
 
-    // Check if this is a Day 1 mirror
-    const isDay1Mirror = day1Mirror && day1Mirror.id === mirrorId;
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'mirror',
+      message: 'Opening existing mirror',
+      data: { mirrorId, fromModal },
+      level: 'info',
+    });
 
-    if (isDay1Mirror) {
-      console.log('📋 Opening Day 1 mirror viewer');
-      // Close any open modals and mark for restoration
+    try {
+      // Fetch mirror to check its type from database (source of truth)
+      const result = await getMirrorById(mirrorId);
+
+      if (!result.success || !result.mirror) {
+        console.error('❌ Failed to load Mirror:', result.error);
+
+        // Capture error context
+        Sentry.captureException(new Error('Failed to load mirror'), {
+          tags: { component: 'MirrorScreen', action: 'openMirror' },
+          contexts: {
+            mirror: {
+              mirrorId,
+              error: result.error,
+            },
+          },
+        });
+
+        Alert.alert('Mirror Not Found', result.error || 'Could not load this Mirror. It may have been deleted.');
+        return;
+      }
+
+      // Check if this is a Day 1 mirror by mirror_type field
+      const isDay1Mirror = result.mirror.mirror_type === 'day_1';
+
+      // Add breadcrumb with mirror type
+      Sentry.addBreadcrumb({
+        category: 'mirror',
+        message: `Mirror type: ${result.mirror.mirror_type}`,
+        data: {
+          mirrorId,
+          mirror_type: result.mirror.mirror_type,
+          has_screen_1: !!result.mirror.screen_1_themes,
+          has_screen_2: !!result.mirror.screen_2_biblical,
+          has_screen_3: !!result.mirror.screen_3_observations,
+        },
+        level: 'info',
+      });
+
+      if (isDay1Mirror) {
+        console.log('📋 Opening Day 1 mirror viewer for mirror:', mirrorId);
+
+        // Add breadcrumb for Day 1 viewer
+        Sentry.addBreadcrumb({
+          category: 'navigation',
+          message: 'Opening Day1MirrorViewer',
+          data: { mirrorId },
+          level: 'info',
+        });
+
+        // Close any open modals and mark for restoration
+        if (fromModal === 'pastMirrors') {
+          setPastMirrorsModalVisible(false);
+          setShouldRestorePastMirrorsModal(true);
+        } else if (fromModal === 'pastJournals') {
+          setPastJournalsModalVisible(false);
+          setShouldRestorePastJournalsModal(true);
+        }
+
+        // Load Day 1 mirror data if needed
+        if (!day1Mirror || day1Mirror.id !== mirrorId) {
+          setDay1Mirror(result.mirror);
+          // Fetch Day 1 progress if needed
+          const progressResult = await getDay1Mirror(user!.id);
+          if (progressResult.success && progressResult.progress) {
+            setDay1Progress(progressResult.progress);
+          }
+        }
+
+        // Open Day 1 viewer
+        setDay1ViewerVisible(true);
+        return;
+      }
+
+      // Regular mirror handling
+      console.log('📋 Opening regular mirror viewer for mirror:', mirrorId);
+
+      // Add breadcrumb for regular viewer
+      Sentry.addBreadcrumb({
+        category: 'navigation',
+        message: 'Opening MirrorViewer',
+        data: { mirrorId },
+        level: 'info',
+      });
+
+      // If opening from a modal, hide it temporarily and mark for restoration
       if (fromModal === 'pastMirrors') {
         setPastMirrorsModalVisible(false);
         setShouldRestorePastMirrorsModal(true);
@@ -259,42 +380,19 @@ export default function MirrorScreen() {
         setShouldRestorePastJournalsModal(true);
       }
 
-      // Open Day 1 viewer
-      setDay1ViewerVisible(true);
-      return;
-    }
+      console.log('✅ Mirror loaded, opening viewer');
+      setCurrentMirrorId(mirrorId);
+      setGeneratedMirror(result.mirror);
+      setMirrorState('viewing');
 
-    // Regular mirror handling
-    // If opening from a modal, hide it temporarily and mark for restoration
-    if (fromModal === 'pastMirrors') {
-      setPastMirrorsModalVisible(false);
-      setShouldRestorePastMirrorsModal(true);
-    } else if (fromModal === 'pastJournals') {
-      setPastJournalsModalVisible(false);
-      setShouldRestorePastJournalsModal(true);
-    }
-
-    try {
-      const result = await getMirrorById(mirrorId);
-
-      if (result.success && result.mirror) {
-        console.log('✅ Mirror loaded, opening viewer');
-        setCurrentMirrorId(mirrorId);
-        setGeneratedMirror(result.mirror);
-        setMirrorState('viewing');
-
-        // ✅ Mark as viewed in database (if not already)
-        if (!result.mirror.has_been_viewed) {
-          console.log('👁️ Marking existing mirror as viewed in database');
-          const markResult = await markMirrorAsViewed(mirrorId);
-          if (!markResult.success) {
-            console.error('⚠️ Failed to mark mirror as viewed:', markResult.error);
-            // Don't block - user can still view the mirror
-          }
+      // ✅ Mark as viewed in database (if not already)
+      if (!result.mirror.has_been_viewed) {
+        console.log('👁️ Marking existing mirror as viewed in database');
+        const markResult = await markMirrorAsViewed(mirrorId);
+        if (!markResult.success) {
+          console.error('⚠️ Failed to mark mirror as viewed:', markResult.error);
+          // Don't block - user can still view the mirror
         }
-      } else {
-        console.error('❌ Failed to load Mirror:', result.error);
-        Alert.alert('Mirror Not Found', result.error || 'Could not load this Mirror. It may have been deleted.');
       }
     } catch (error) {
       console.error('❌ Error opening Mirror:', error);
@@ -617,6 +715,20 @@ export default function MirrorScreen() {
                   onPress={() => setPastJournalsModalVisible(true)}
                 />
               )}
+            </View>
+          )}
+
+          {/* Sentry Test Button (remove after testing) */}
+          {__DEV__ && (
+            <View style={styles.section}>
+              <Button
+                variant="outline"
+                label="🧪 Test Sentry Error"
+                onPress={() => {
+                  Sentry.captureException(new Error('Test error from Mirror screen'));
+                  Alert.alert('Sent!', 'Check Sentry dashboard for test error');
+                }}
+              />
             </View>
           )}
         </View>

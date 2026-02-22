@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { 
-  signInWithAccessCode, 
-  getCurrentUser, 
-  autoSignInWithStoredCode, 
-  clearStoredAccessCode 
+import * as Sentry from '@sentry/react-native';
+import {
+  signInWithAccessCode,
+  getCurrentUser,
+  autoSignInWithStoredCode,
+  clearStoredAccessCode
 } from '../lib/supabase';
 
 // Define custom user type
@@ -42,10 +43,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const initializeAuth = async () => {
     try {
       console.log('🔄 AuthContext: Initializing auth...');
-      
+
+      // Add Sentry breadcrumb
+      Sentry.addBreadcrumb({
+        category: 'auth',
+        message: 'Initializing authentication',
+        level: 'info',
+      });
+
       // Try to get current user from storage
       const currentUserResult = await getCurrentUser();
-      
+
       if (currentUserResult.success && currentUserResult.user) {
         console.log('✅ AuthContext: Found current user');
         setUser(currentUserResult.user);
@@ -53,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Try auto sign-in with stored code
         console.log('🔄 AuthContext: Trying auto sign-in...');
         const autoSignInResult = await autoSignInWithStoredCode();
-        
+
         if (autoSignInResult.success && autoSignInResult.user) {
           console.log('✅ AuthContext: Auto sign-in successful');
           setUser(autoSignInResult.user);
@@ -63,6 +71,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('❌ AuthContext: Error initializing auth:', error);
+
+      // Capture initialization error
+      Sentry.captureException(error, {
+        tags: { component: 'AuthContext', action: 'initialize' },
+      });
     } finally {
       setIsLoading(false);
     }
@@ -72,9 +85,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       console.log('🔑 AuthContext: Signing in...');
-      
+
       const result = await signInWithAccessCode(accessCode);
-      
+
       if (result.success && result.user) {
         console.log('✅ AuthContext: Sign-in successful');
         setUser(result.user);
@@ -85,6 +98,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } catch (error) {
       console.error('❌ AuthContext: Sign-in error:', error);
+
+      // Capture unexpected error
+      Sentry.captureException(error, {
+        tags: { component: 'AuthContext', action: 'signIn', type: 'unexpected' },
+      });
+
       return { success: false, error: 'An unexpected error occurred' };
     } finally {
       setIsLoading(false);
@@ -110,18 +129,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshUser = async () => {
     try {
       console.log('🔄 AuthContext: Refreshing user...');
-      
+
       const result = await getCurrentUser();
-      
+
       if (result.success && result.user) {
         console.log('✅ AuthContext: User refreshed');
         setUser(result.user);
       } else {
         console.log('⚠️ AuthContext: User refresh failed, signing out');
+
+        // Capture refresh failure
+        Sentry.captureException(new Error('User refresh failed'), {
+          tags: { component: 'AuthContext', action: 'refresh' },
+          contexts: {
+            auth: {
+              error: result.error,
+            },
+          },
+        });
+
         await signOut();
       }
     } catch (error) {
       console.error('❌ AuthContext: Error refreshing user:', error);
+
+      // Capture unexpected error
+      Sentry.captureException(error, {
+        tags: { component: 'AuthContext', action: 'refresh', type: 'unexpected' },
+      });
+
       await signOut();
     }
   };

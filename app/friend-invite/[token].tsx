@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptInvite, getInviterInfo } from '@/lib/supabase/friends';
@@ -65,16 +66,42 @@ export default function AcceptInviteScreen() {
 
     setAccepting(true);
 
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'friends',
+      message: 'User accepting friend invite',
+      data: { inviterName },
+      level: 'info',
+    });
+
     try {
       const result = await acceptInvite(token, user.id);
 
       if (!result.success) {
+        // Capture invite acceptance failure
+        Sentry.captureException(new Error(`Failed to accept invite: ${result.error}`), {
+          tags: { component: 'AcceptInviteScreen', action: 'accept' },
+          contexts: {
+            friends: {
+              inviterName,
+              error: result.error,
+            },
+          },
+        });
+
         Alert.alert('Unable to Accept', result.error || 'Failed to accept invite');
         setAccepting(false);
         return;
       }
 
       // Success!
+      Sentry.addBreadcrumb({
+        category: 'friends',
+        message: 'Friend invite accepted successfully',
+        data: { inviterName: result.inviterName },
+        level: 'info',
+      });
+
       Alert.alert(
         'Success!',
         `You're now friends with ${result.inviterName || inviterName}`,
@@ -87,6 +114,13 @@ export default function AcceptInviteScreen() {
       );
     } catch (error) {
       console.error('Error accepting invite:', error);
+
+      // Capture unexpected error
+      Sentry.captureException(error, {
+        tags: { component: 'AcceptInviteScreen', action: 'accept', type: 'unexpected' },
+        contexts: { friends: { inviterName } },
+      });
+
       Alert.alert('Error', 'Something went wrong. Please try again.');
       setAccepting(false);
     }

@@ -3,6 +3,7 @@ import { View, Text, ScrollView, StyleSheet, Alert, Image, TouchableOpacity, App
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
+import * as Sentry from '@sentry/react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
@@ -41,6 +42,18 @@ export default function JournalScreen() {
 
   const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string) => {
     console.log('🎤 Voice transcription complete in bottom sheet');
+
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'journal',
+      message: 'Voice transcription completed',
+      data: {
+        transcribedLength: transcribedText.length,
+        mode: sheetMode,
+        hasPrompt: !!sheetPrompt,
+      },
+      level: 'info',
+    });
 
     const saved = await saveJournalToDatabase(
       transcribedText,
@@ -140,12 +153,30 @@ export default function JournalScreen() {
   ) => {
     if (!isAuthenticated || !user) {
       Alert.alert('Error', 'Please sign in to save journal entries.');
+
+      // Capture unauthorized save attempt
+      Sentry.captureException(new Error('Attempted to save journal without authentication'), {
+        tags: { component: 'JournalScreen', action: 'save' },
+      });
+
       return false;
     }
 
     console.log('💾 Saving journal for custom user:', user.id);
     console.log('📝 Entry type:', entryType);
     console.log('💬 Prompt text:', promptText);
+
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'journal',
+      message: 'Saving journal to database',
+      data: {
+        entryType,
+        hasPromptText: !!promptText,
+        contentLength: content.length,
+      },
+      level: 'info',
+    });
 
     const result = await saveJournalEntry(
       content,

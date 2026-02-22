@@ -26,6 +26,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
+import * as Sentry from '@sentry/react-native';
 import { transcribeAudio } from '../lib/supabase/transcription';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
@@ -91,8 +92,22 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handleStartRecording = async (hasPermission: boolean) => {
     console.log('🎙️ [HOOK] handleStartRecording called, hasPermission:', hasPermission);
 
+    // Add Sentry breadcrumb
+    Sentry.addBreadcrumb({
+      category: 'recording',
+      message: 'Starting audio recording',
+      data: { hasPermission },
+      level: 'info',
+    });
+
     if (!hasPermission) {
       console.error('❌ [HOOK] No permission, cannot start recording');
+
+      // Capture permission denial
+      Sentry.captureException(new Error('Recording started without microphone permission'), {
+        tags: { component: 'useAudioRecording', action: 'start' },
+      });
+
       Alert.alert('Permission Required', 'Microphone permission is required to record audio.');
       return;
     }
@@ -139,9 +154,28 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       console.log('🔐 [HOOK] Activating wake lock...');
       await activateWakeLock();
       console.log('✅ [HOOK] Recording started successfully!');
+
+      // Add success breadcrumb
+      Sentry.addBreadcrumb({
+        category: 'recording',
+        message: 'Recording started successfully',
+        level: 'info',
+      });
     } catch (error) {
       console.error('❌ [HOOK] Failed to start recording:', error);
       console.error('❌ [HOOK] Error details:', JSON.stringify(error, null, 2));
+
+      // Capture recording start failure
+      Sentry.captureException(error, {
+        tags: { component: 'useAudioRecording', action: 'start' },
+        contexts: {
+          recording: {
+            hasPermission,
+            hadExistingRecording: !!recording,
+          },
+        },
+      });
+
       Alert.alert('Recording Error', 'Unable to start recording. Please try again.');
     }
   };
@@ -149,15 +183,23 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const handleStopRecording = async () => {
     if (recording) {
       try {
+        // Add Sentry breadcrumb
+        Sentry.addBreadcrumb({
+          category: 'recording',
+          message: 'Stopping audio recording',
+          data: { duration: recordingDuration },
+          level: 'info',
+        });
+
         // Deactivate wake lock FIRST - don't make user wait through transcription
         await deactivateWakeLock();
-        
+
         await recording.stopAndUnloadAsync();
         const uri = recording.getURI();
-        
+
         if (uri && onTranscriptionComplete) {
           setIsProcessing(true);
-          
+
           // Generate timestamp
           const timestamp = new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -167,18 +209,26 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             minute: '2-digit',
             hour12: true
           });
-          
+
           // Transcribe audio using Whisper Edge Function (server-side)
           const result = await transcribeAudio(uri);
-          
+
           setIsProcessing(false);
-          
+
           if (result.success && result.text) {
+            // Add success breadcrumb
+            Sentry.addBreadcrumb({
+              category: 'recording',
+              message: 'Recording stopped and transcribed successfully',
+              data: { textLength: result.text.length },
+              level: 'info',
+            });
+
             // Auto-navigate to mirror with transcribed text
             onTranscriptionComplete(result.text, timestamp);
           } else {
             Alert.alert(
-              'Transcription Failed', 
+              'Transcription Failed',
               result.error || 'Unable to transcribe audio. Please try again.',
               [
                 { text: 'Cancel', style: 'cancel' },
@@ -190,6 +240,18 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         }
       } catch (error) {
         console.error('Error stopping recording:', error);
+
+        // Capture stop recording failure
+        Sentry.captureException(error, {
+          tags: { component: 'useAudioRecording', action: 'stop' },
+          contexts: {
+            recording: {
+              duration: recordingDuration,
+              wasProcessing: isProcessing,
+            },
+          },
+        });
+
         setIsProcessing(false);
         Alert.alert('Error', 'Failed to stop recording properly.');
         await deactivateWakeLock();
@@ -200,7 +262,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         setRecordingDuration(0);
         pausedDurationRef.current = 0;
         latestDurationRef.current = 0;
-        wasBackgroundedRef.current = false;
+        wasBackgroundedRef.current = 0;
         resumeTimeRef.current = 0;
         hasHitMaxDurationRef.current = false;
       }
