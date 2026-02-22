@@ -1,13 +1,11 @@
 // components/mirror/MirrorViewer.tsx
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { ReflectionJournal } from './ReflectionJournal';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { ShareMirrorSheet } from './ShareMirrorSheet';
-import { supabase } from '../../lib/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { saveReflectionFocus } from '@/lib/supabase/mirrors';
 
 interface MirrorViewerProps {
   mirrorContent: any;
@@ -29,6 +27,57 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabName>('Mirror');
   const [showShareSheet, setShowShareSheet] = useState(false);
+  const [showReflectionInput, setShowReflectionInput] = useState(false);
+  const [reflectionText, setReflectionText] = useState('');
+  const [savingReflection, setSavingReflection] = useState(false);
+  const [existingReflection, setExistingReflection] = useState<string | null>(null);
+
+  // Load existing reflection if present
+  React.useEffect(() => {
+    if (mirrorContent?.reflection_focus) {
+      setExistingReflection(mirrorContent.reflection_focus);
+    }
+  }, [mirrorContent]);
+
+
+  // Sanitize AI-generated text to fix iOS rendering issues with special Unicode characters
+  const sanitizeText = (text: string) => {
+    if (!text) return text;
+    return text
+      .replace(/['']/g, "'")      // Curly single quotes
+      .replace(/[""]/g, '"')      // Curly double quotes
+      .replace(/—/g, '-')         // Em dash
+      .replace(/–/g, '-')         // En dash
+      .replace(/…/g, '...')       // Ellipsis
+      .replace(/\u00A0/g, ' ')    // Non-breaking space
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');  // Remove control chars but keep \t (09), \n (0A), \r (0D)
+  };
+
+  const handleSaveReflection = async () => {
+    if (!reflectionText.trim()) {
+      return;
+    }
+
+    setSavingReflection(true);
+
+    const result = await saveReflectionFocus(mirrorId, reflectionText.trim());
+
+    if (result.success) {
+      setExistingReflection(reflectionText.trim());
+      setSavingReflection(false);
+      setShowReflectionInput(false);
+      Alert.alert('Saved', 'Your reflection has been saved.');
+    } else {
+      setSavingReflection(false);
+      Alert.alert('Error', result.error || 'Failed to save your reflection. Please try again.');
+    }
+  };
+
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 50);
+  };
 
   const scrollViewRef = useRef<ScrollView>(null);
   const mirrorSectionRef = useRef<View>(null);
@@ -48,45 +97,6 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
     Observations: 0,
     Reflection: 0,
   });
-
-  // State for reflection data
-  const [reflectionFocus, setReflectionFocus] = useState(
-    mirrorContent.reflection_focus || ''
-  );
-  const [reflectionAction, setReflectionAction] = useState(
-    mirrorContent.reflection_action || ''
-  );
-
-  // Handle form changes from ReflectionJournal
-  const handleReflectionFormChange = (focus: string, action: string) => {
-    setReflectionFocus(focus);
-    setReflectionAction(action);
-  };
-
-  // Handler for when user completes reflection journal
-  const handleReflectionComplete = async (focus: string, action: string) => {
-    console.log('💾 Saving reflection to Mirror ID:', mirrorId);
-
-    // 1. Update local state
-    setReflectionFocus(focus);
-    setReflectionAction(action);
-
-    // 2. Save to database
-    const { error } = await supabase
-      .from('mirrors')
-      .update({
-        reflection_focus: focus,
-        reflection_action: action,
-        reflection_completed_at: new Date().toISOString()
-      })
-      .eq('id', mirrorId);
-
-    if (error) {
-      console.error('❌ Error saving reflection:', error);
-    } else {
-      console.log('✅ Reflection saved successfully');
-    }
-  };
 
   // Format date from mirrorContent
   const formatDate = () => {
@@ -167,19 +177,23 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const screen1Data = mirrorContent.screen_1_themes || mirrorContent.screen1_themes;
   const screen2Data = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
   const screen3Data = mirrorContent.screen_3_observations || mirrorContent.screen3_observations;
-  const hasCompletedReflection = Boolean(mirrorContent.reflection_focus && mirrorContent.reflection_action);
   const limitedThemes = screen1Data?.themes ? screen1Data.themes.slice(0, 4) : [];
 
   return (
     <>
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
       >
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+        >
       {/* Hero Image Section with Overlays */}
       <View style={styles.heroSection}>
         <ImageBackground
@@ -244,11 +258,11 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           {/* Biblical Mirror Story */}
           {screen2Data?.parallel_story && (
             <View style={styles.subsection}>
-              <Text style={styles.mirrorTitle}>{screen2Data.parallel_story.character}</Text>
+              <Text style={styles.mirrorTitle}>{sanitizeText(screen2Data.parallel_story.character)}</Text>
               <Text style={styles.mirrorDescription}>
-                {screen2Data.parallel_story.story}
+                {sanitizeText(screen2Data.parallel_story.story)}
                 {'\n\n'}
-                {screen2Data.parallel_story.connection}
+                {sanitizeText(screen2Data.parallel_story.connection)}
               </Text>
             </View>
           )}
@@ -263,11 +277,11 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
               <View style={styles.verseContainer}>
                 <View style={styles.verseBar} />
                 <Text style={styles.verseText}>
-                  {screen2Data.encouraging_verse.text}
+                  {sanitizeText(screen2Data.encouraging_verse.text)}
                 </Text>
               </View>
               <Text style={styles.applicationText}>
-                {screen2Data.encouraging_verse.application || screen2Data.encouraging_verse.why_it_fits}
+                {sanitizeText(screen2Data.encouraging_verse.application || screen2Data.encouraging_verse.why_it_fits)}
               </Text>
             </View>
           )}
@@ -282,11 +296,11 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
               <View style={styles.verseContainer}>
                 <View style={styles.verseBar} />
                 <Text style={styles.verseText}>
-                  {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).text}
+                  {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).text)}
                 </Text>
               </View>
               <Text style={styles.applicationText}>
-                {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).invitation}
+                {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).invitation)}
               </Text>
             </View>
           )}
@@ -305,29 +319,21 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           <View style={styles.themesContainer}>
             {limitedThemes.map((theme: any, index: number) => (
               <View key={index} style={styles.themeCard}>
-                <Text style={styles.themeName}>{theme.name}</Text>
-                <Text style={styles.themeDescription}>{theme.description}</Text>
+                <Text style={styles.themeName}>{sanitizeText(theme.name)}</Text>
+                <Text style={styles.themeDescription}>{sanitizeText(theme.description)}</Text>
                 {theme.frequency && (() => {
                   const frequencyText = theme.frequency;
-                  const parts = frequencyText.split(/Present in journals:\s*/i);
+                  // Strip out any variation of "Present in journals" from the AI response
+                  const cleanedText = frequencyText
+                    .replace(/^Present in journals:?\s*/i, '')
+                    .replace(/^from\s+/i, '');
 
-                  if (parts.length > 1) {
-                    // "Present in journals:" exists in the string
-                    return (
-                      <Text style={styles.themeFrequency}>
-                        <Text style={styles.themeFrequencyLabel}>Present in journals: </Text>
-                        {parts[1]}
-                      </Text>
-                    );
-                  } else {
-                    // "Present in journals:" doesn't exist
-                    return (
-                      <Text style={styles.themeFrequency}>
-                        <Text style={styles.themeFrequencyLabel}>Present in journals: </Text>
-                        {frequencyText}
-                      </Text>
-                    );
-                  }
+                  return (
+                    <Text style={styles.themeFrequency}>
+                      <Text style={styles.themeFrequencyLabel}>Present in Journals </Text>
+                      {sanitizeText(cleanedText)}
+                    </Text>
+                  );
                 })()}
               </View>
             ))}
@@ -335,7 +341,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
           {screen1Data?.insight && screen1Data.insight.trim().length > 0 && (
             <View style={styles.insightContainer}>
-              <Text style={styles.insightText}>{screen1Data.insight}</Text>
+              <Text style={styles.insightText}>{sanitizeText(screen1Data.insight)}</Text>
             </View>
           )}
         </View>
@@ -354,28 +360,36 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
             {screen3Data?.self_perception && (
               <View style={styles.observationCard}>
                 <Text style={styles.observationTitle}>How You See Yourself</Text>
-                <Text style={styles.observationText}>{screen3Data.self_perception.observation}</Text>
+                <Text style={styles.observationText}>
+                  {sanitizeText(screen3Data.self_perception.observation)}
+                </Text>
               </View>
             )}
 
             {screen3Data?.god_perception && (
               <View style={styles.observationCard}>
                 <Text style={styles.observationTitle}>Your Relationship with God</Text>
-                <Text style={styles.observationText}>{screen3Data.god_perception.observation}</Text>
+                <Text style={styles.observationText}>
+                  {sanitizeText(screen3Data.god_perception.observation)}
+                </Text>
               </View>
             )}
 
             {screen3Data?.others_perception && (
               <View style={styles.observationCard}>
                 <Text style={styles.observationTitle}>How You View Others</Text>
-                <Text style={styles.observationText}>{screen3Data.others_perception.observation}</Text>
+                <Text style={styles.observationText}>
+                  {sanitizeText(screen3Data.others_perception.observation)}
+                </Text>
               </View>
             )}
 
             {screen3Data?.blind_spots && (
               <View style={styles.observationCard}>
                 <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
-                <Text style={styles.observationText}>{screen3Data.blind_spots.observation}</Text>
+                <Text style={styles.observationText}>
+                  {sanitizeText(screen3Data.blind_spots.observation)}
+                </Text>
               </View>
             )}
           </View>
@@ -385,25 +399,72 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
         {!isSharedMirror && (
           <View
             ref={reflectionSectionRef}
-            style={styles.section}
+            style={[styles.section, styles.reflectionSection]}
             onLayout={handleSectionLayout('Reflection')}
           >
-            <View style={styles.sectionTagContainer}>
-              <Text style={styles.sectionTag}>Reflection</Text>
+            <View style={[styles.sectionTagContainer, styles.reflectionTagContainer]}>
+              <Text style={[styles.sectionTag, styles.reflectionTag]}>Reflection</Text>
             </View>
-            <View style={styles.subsection}>
-              <ReflectionJournal
-                onComplete={handleReflectionComplete}
-                initialFocus={reflectionFocus}
-                initialAction={reflectionAction}
-                isReadOnly={hasCompletedReflection}
-                completedAt={mirrorContent.reflection_completed_at}
-                onFormChange={handleReflectionFormChange}
-              />
+
+            <View style={styles.reflectionContent}>
+              {existingReflection ? (
+                // Show saved reflection
+                <>
+                  <Text style={styles.reflectionQuestion}>
+                    Where is God inviting you to focus?
+                  </Text>
+                  <View style={styles.savedReflectionContainer}>
+                    <Text style={styles.savedReflectionText}>{existingReflection}</Text>
+                  </View>
+                </>
+              ) : !showReflectionInput ? (
+                // Show prompt to add reflection
+                <>
+                  <IconSymbol name="bubble.left.and.bubble.right" size={182} color={colors.text.bodyLight} />
+                  <Text style={styles.reflectionDescription}>
+                    Take a moment to reflect on what God is showing you through this Mirror.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.reflectionButton}
+                    onPress={() => setShowReflectionInput(true)}
+                  >
+                    <Text style={styles.reflectionButtonText}>Add Reflection</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                // Show input form
+                <>
+                  <Text style={styles.reflectionQuestion}>
+                    Where is God inviting you to focus?
+                  </Text>
+                  <TextInput
+                    style={styles.reflectionInput}
+                    value={reflectionText}
+                    onChangeText={setReflectionText}
+                    multiline
+                    textAlignVertical="top"
+                    autoFocus
+                    onFocus={handleInputFocus}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.reflectionButton,
+                      (!reflectionText.trim() || savingReflection) && styles.reflectionButtonDisabled
+                    ]}
+                    onPress={handleSaveReflection}
+                    disabled={!reflectionText.trim() || savingReflection}
+                  >
+                    <Text style={styles.reflectionButtonText}>
+                      {savingReflection ? 'Saving...' : 'Save Reflection'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         )}
     </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Share Mirror Sheet */}
       <ShareMirrorSheet
@@ -515,7 +576,8 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.tabHighlight,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 0,  // Remove padding so grey background extends to bottom
+    flexGrow: 1,  // Allow content to grow properly
   },
   section: {
     paddingHorizontal: spacing.xl,
@@ -529,22 +591,39 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.defaultLight,
     paddingBottom: spacing.xxxl,
   },
+  reflectionSection: {
+    backgroundColor: '#ECEFF3',
+    marginTop: 40,
+    paddingTop: 40,
+    paddingBottom: 60,  // Half of previous - end page here
+    gap: spacing.xl, // Override section gap - less space between tag and icon
+  },
   sectionTagContainer: {
     backgroundColor: colors.background.tag,
     borderRadius: borderRadius.tag,
     paddingHorizontal: spacing.l,
     paddingVertical: spacing.m,
     alignSelf: 'flex-start',
+    justifyContent: 'center',  // Vertically center text
+    alignItems: 'center',  // Horizontally center text
   },
   sectionTag: {
     ...typography.heading.xs,
     fontWeight: '700',
     color: colors.text.body,
+    textAlignVertical: 'center',  // Android vertical centering
+    includeFontPadding: false,  // Android: remove extra padding
   },
   themesTagContainer: {
     backgroundColor: '#FFFFFF',
   },
   themesTag: {
+    color: '#505970',
+  },
+  reflectionTagContainer: {
+    backgroundColor: '#FFFFFF',
+  },
+  reflectionTag: {
     color: '#505970',
   },
   sectionDescription: {
@@ -555,13 +634,16 @@ const styles = StyleSheet.create({
   },
   subsection: {
     gap: spacing.l,
+    alignSelf: 'stretch',  // Match observations layout
   },
   mirrorTitle: {
     ...typography.heading.xl,
     color: colors.text.body,
   },
   mirrorDescription: {
-    ...typography.body.default,
+    fontFamily: 'Satoshi Variable',
+    fontSize: 17,
+    fontWeight: '400',
     color: colors.text.body,
     lineHeight: 24,
   },
@@ -592,15 +674,18 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   applicationText: {
-    ...typography.body.default,
+    fontFamily: 'Satoshi Variable',
+    fontSize: 17,
+    fontWeight: '400',
     color: colors.text.body,
     lineHeight: 24,
   },
   themesContainer: {
     gap: 32,
+    alignItems: 'flex-start',  // Align cards to left edge like observations
   },
   themeCard: {
-    width: 370,
+    alignSelf: 'stretch',  // Fill container width instead of fixed 370px
     gap: spacing.l,
   },
   themeName: {
@@ -609,7 +694,9 @@ const styles = StyleSheet.create({
     color: colors.text.body,
   },
   themeDescription: {
-    ...typography.body.default,
+    fontFamily: 'Satoshi Variable',
+    fontSize: 17,
+    fontWeight: '400',
     color: colors.text.body,
     lineHeight: 24,
   },
@@ -636,8 +723,10 @@ const styles = StyleSheet.create({
   },
   observationsContainer: {
     gap: 24,
+    alignItems: 'flex-start',  // Align cards to left edge
   },
   observationCard: {
+    alignSelf: 'stretch',  // Fill container width
     gap: spacing.m,
   },
   observationTitle: {
@@ -646,6 +735,71 @@ const styles = StyleSheet.create({
     color: colors.text.body,
   },
   observationText: {
+    fontFamily: 'Satoshi Variable',
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 24,
+  },
+  reflectionContent: {
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: spacing.xl,
+  },
+  reflectionDescription: {
+    ...typography.special.promptBody,
+    color: colors.text.body,
+    textAlign: 'center',
+    width: 227,
+    lineHeight: 24,
+    marginTop: spacing.ml,  // ~1/3 less space between icon and description (10pt)
+    marginBottom: 40,  // More space between description and button
+  },
+  reflectionQuestion: {
+    ...typography.heading.l,
+    color: colors.text.body,
+    textAlign: 'left',
+    width: 370,
+    marginBottom: spacing.l,  // Match section heading spacing (12pt)
+  },
+  reflectionInput: {
+    width: 370,
+    minHeight: 120,
+    backgroundColor: colors.background.white,
+    borderRadius: borderRadius.card,
+    padding: spacing.xl,
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
+    marginBottom: spacing.xxxl,
+    borderWidth: 1,
+    borderColor: colors.border.divider,
+  },
+  reflectionButton: {
+    width: 370,
+    height: 66,
+    backgroundColor: colors.background.accent,
+    borderRadius: borderRadius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reflectionButtonDisabled: {
+    backgroundColor: colors.background.disabled,
+    opacity: 0.6,
+  },
+  reflectionButtonText: {
+    ...typography.heading.l,
+    color: colors.text.black,
+  },
+  savedReflectionContainer: {
+    width: 370,
+    backgroundColor: colors.background.white,
+    borderRadius: borderRadius.card,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border.divider,
+  },
+  savedReflectionText: {
     ...typography.body.default,
     color: colors.text.body,
     lineHeight: 24,
