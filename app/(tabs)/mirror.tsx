@@ -5,7 +5,7 @@ import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } fr
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { colors, typography, spacing } from '@/theme/designTokens';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { MirrorProgress } from '../../components/journal/MirrorProgress';
@@ -30,8 +30,9 @@ import * as Sentry from '@sentry/react-native';
 
 export default function MirrorScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { user, signOut, isAuthenticated, isLoading: authLoading } = useAuth();
-  
+
   const { showSettings } = useGlobalSettings();
   
   const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
@@ -87,6 +88,14 @@ export default function MirrorScreen() {
 
   const [currentMirrorId, setCurrentMirrorId] = React.useState<string | null>(null);
 
+  // Track if we're handling a param-based mirror opening to prevent race conditions
+  const isOpeningViaMirrorParam = React.useRef(false);
+
+  // Set ref immediately if we have a param (before effects run)
+  if (params.openMirrorId && !isOpeningViaMirrorParam.current) {
+    isOpeningViaMirrorParam.current = true;
+  }
+
   // Set Sentry user context
   useEffect(() => {
     if (user) {
@@ -102,9 +111,15 @@ export default function MirrorScreen() {
     }
   }, [user]);
 
-  // ✅ Load journals ONCE on mount
+  // ✅ Load journals ONCE on mount (unless opening via param)
   useEffect(() => {
     if (isAuthenticated && user) {
+      // Skip initial load if we're opening via param (ref will be set by param effect)
+      if (isOpeningViaMirrorParam.current) {
+        console.log('⏭️ [MIRROR TAB] Skipping initial loadJournals - opening via param');
+        return;
+      }
+
       console.log('📚 Initial load of journals');
 
       Sentry.addBreadcrumb({
@@ -117,16 +132,58 @@ export default function MirrorScreen() {
     }
   }, [isAuthenticated, user]);
 
+  // Handle openMirrorId param from navigation
+  useEffect(() => {
+    if (params.openMirrorId && isAuthenticated && user) {
+      console.log('🔗 [MIRROR TAB] Received openMirrorId param:', params.openMirrorId);
+
+      // Set flag to prevent focus effect from interfering
+      isOpeningViaMirrorParam.current = true;
+
+      // Open the mirror directly
+      handleOpenExistingMirror(params.openMirrorId as string, 'none');
+
+      // Clear the param by navigating without it
+      router.setParams({ openMirrorId: undefined });
+
+      // Reset flag after a delay to allow state to settle
+      setTimeout(() => {
+        isOpeningViaMirrorParam.current = false;
+      }, 500);
+    }
+  }, [params.openMirrorId, isAuthenticated, user]);
+
   // ✅ Check status AND reload journals on focus
   useFocusEffect(
     React.useCallback(() => {
       if (isAuthenticated && user) {
-        console.log('🔍 Mirror tab focused - checking status and reloading journals');
-        console.log('📊 Current mirror state before focus check:', { mirrorState, hasViewedCurrentMirror, generatedMirrorId: generatedMirror?.id });
-        checkGenerationStatusOnFocus();
-        loadJournals(false); // ✅ Allow state updates based on journal count
+        console.log('========================================');
+        console.log('🟢 [MIRROR TAB] Tab focused');
+        console.log('🟢 [MIRROR TAB] Current state:', {
+          mirrorState,
+          isReady,
+          isGenerating,
+          isCompleted,
+          isViewing,
+          hasViewedCurrentMirror,
+          generatedMirrorId: generatedMirror?.id,
+          hasGeneratedMirror: !!generatedMirror,
+          hasOpenMirrorParam: !!params.openMirrorId,
+          isOpeningViaMirrorParam: isOpeningViaMirrorParam.current
+        });
+        console.log('========================================');
+
+        // ✅ Skip loadJournals and checkGenerationStatusOnFocus if we're handling a param-based navigation
+        if (isOpeningViaMirrorParam.current) {
+          console.log('⏭️ [MIRROR TAB] Skipping loadJournals and status check - opening mirror via param');
+          loadMirrorData();
+        } else {
+          checkGenerationStatusOnFocus();
+          loadJournals(false); // ✅ Allow state updates based on journal count
+          loadMirrorData(); // ✅ Refresh reflection data
+        }
       }
-    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror])
+    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror, loadMirrorData, params.openMirrorId])
   );
 
   // Load Day 1 mirror
@@ -150,65 +207,67 @@ export default function MirrorScreen() {
     loadDay1Mirror();
   }, [user]);
 
-  useEffect(() => {
-    const loadMirrorData = async () => {
-      const mirrorIds = [...new Set(journals
-        .filter(j => j.mirror_id)
-        .map(j => j.mirror_id))];
+  const loadMirrorData = React.useCallback(async () => {
+    const mirrorIds = [...new Set(journals
+      .filter(j => j.mirror_id)
+      .map(j => j.mirror_id))];
 
-      if (mirrorIds.length === 0) return;
+    if (mirrorIds.length === 0) return;
 
-      try {
-        const { data, error } = await supabase
-          .from('mirrors')
-          .select('id, reflection_focus, reflection_action, created_at, screen_2_biblical')
-          .in('id', mirrorIds);
+    try {
+      console.log('🔄 [MIRROR TAB] Loading mirror reflection data for', mirrorIds.length, 'mirrors');
+      const { data, error } = await supabase
+        .from('mirrors')
+        .select('id, reflection_focus, reflection_action, created_at, screen_2_biblical')
+        .in('id', mirrorIds);
 
-        if (!error && data) {
-          const reflections: Record<string, {focus: string, action: string}> = {};
-          const dates: Record<string, Date> = {};
-          const characters: Record<string, string> = {};
+      if (!error && data) {
+        const reflections: Record<string, {focus: string, action: string}> = {};
+        const dates: Record<string, Date> = {};
+        const characters: Record<string, string> = {};
 
-          data.forEach(mirror => {
-            // Store reflection data
-            if (mirror.reflection_focus && mirror.reflection_action) {
-              reflections[mirror.id] = {
-                focus: mirror.reflection_focus,
-                action: mirror.reflection_action
-              };
-            }
+        data.forEach(mirror => {
+          // Store reflection data (only focus is required, action is optional)
+          if (mirror.reflection_focus) {
+            reflections[mirror.id] = {
+              focus: mirror.reflection_focus,
+              action: mirror.reflection_action || '' // Action is optional
+            };
+            console.log('✅ [MIRROR TAB] Loaded reflection for mirror:', mirror.id);
+          }
 
-            // Store mirror creation dates
-            if (mirror.created_at) {
-              dates[mirror.id] = new Date(mirror.created_at);
-            }
+          // Store mirror creation dates
+          if (mirror.created_at) {
+            dates[mirror.id] = new Date(mirror.created_at);
+          }
 
-            // Extract biblical character from screen_2_biblical
-            if (mirror.screen_2_biblical) {
-              try {
-                const biblical = typeof mirror.screen_2_biblical === 'string'
-                  ? JSON.parse(mirror.screen_2_biblical)
-                  : mirror.screen_2_biblical;
-                if (biblical?.parallel_story?.character) {
-                  characters[mirror.id] = biblical.parallel_story.character;
-                }
-              } catch (e) {
-                console.error('Error parsing biblical data for mirror:', mirror.id, e);
+          // Extract biblical character from screen_2_biblical
+          if (mirror.screen_2_biblical) {
+            try {
+              const biblical = typeof mirror.screen_2_biblical === 'string'
+                ? JSON.parse(mirror.screen_2_biblical)
+                : mirror.screen_2_biblical;
+              if (biblical?.parallel_story?.character) {
+                characters[mirror.id] = biblical.parallel_story.character;
               }
+            } catch (e) {
+              console.error('Error parsing biblical data for mirror:', mirror.id, e);
             }
-          });
+          }
+        });
 
-          setMirrorReflections(reflections);
-          setMirrorDates(dates);
-          setBiblicalCharacters(characters);
-        }
-      } catch (error) {
-        console.error('Error loading mirror data:', error);
+        setMirrorReflections(reflections);
+        setMirrorDates(dates);
+        setBiblicalCharacters(characters);
       }
-    };
-
-    loadMirrorData();
+    } catch (error) {
+      console.error('Error loading mirror data:', error);
+    }
   }, [journals]);
+
+  useEffect(() => {
+    loadMirrorData();
+  }, [journals, loadMirrorData]);
 
   const handleViewNewMirror = () => {
     if (generatedMirror) {
@@ -276,7 +335,9 @@ export default function MirrorScreen() {
   };
 
   const handleOpenExistingMirror = async (mirrorId: string, fromModal: 'pastMirrors' | 'pastJournals' | 'none' = 'none') => {
-    console.log('🔍 Opening existing Mirror:', mirrorId, 'from:', fromModal);
+    console.log('========================================');
+    console.log('🔍 [OPEN MIRROR] Opening existing Mirror:', mirrorId, 'from:', fromModal);
+    console.log('========================================');
 
     // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
@@ -383,6 +444,7 @@ export default function MirrorScreen() {
       console.log('✅ Mirror loaded, opening viewer');
       setCurrentMirrorId(mirrorId);
       setGeneratedMirror(result.mirror);
+      console.log('🔄 [OPEN MIRROR] Setting mirrorState to "viewing"');
       setMirrorState('viewing');
 
       // ✅ Mark as viewed in database (if not already)
@@ -642,12 +704,15 @@ export default function MirrorScreen() {
   }
 
 
+  console.log('🟢 [MIRROR TAB] Render check - isViewing:', isViewing, 'generatedMirror:', !!generatedMirror);
+
   if (isViewing) {
+    console.log('🟢 [MIRROR TAB] Rendering MirrorViewer modal');
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
-        <MirrorViewer 
-          mirrorContent={generatedMirror} 
-          mirrorId={currentMirrorId || ''} 
+        <MirrorViewer
+          mirrorContent={generatedMirror}
+          mirrorId={currentMirrorId || ''}
           onClose={handleCloseMirror}
           onClosedForFeedback={handleMirrorClosedForFeedback}
         />
@@ -659,19 +724,6 @@ export default function MirrorScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.content}>
-
-          {/* Mirror generation status (ready / generating / completed-unviewed) */}
-          {(isReady || isGenerating || (isCompleted && !hasViewedCurrentMirror)) && (
-            <View style={styles.mirrorReadySection}>
-              <MirrorStatusCard
-                state={isGenerating ? 'generating' : isCompleted ? 'completed' : 'ready'}
-                journalCount={journalCount}
-                onGeneratePress={generateMirror}
-                onViewPress={handleViewNewMirror}
-                generationStartTime={generationStartTime}
-              />
-            </View>
-          )}
 
           {/* Last Mirror Section */}
           {lastMirrorData && (

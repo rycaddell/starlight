@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
   },
   textContent: {
     flex: 1,
-    gap: spacing.xs,
+    gap: spacing.s,
   },
   title: {
     ...typography.special.journalOptionTitle,

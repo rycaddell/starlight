@@ -12,6 +12,7 @@ export interface MirrorStatusProps {
   journalsNeeded?: number;
   journalsReady?: number;
   onGenerate?: () => void;
+  onViewMirror?: () => void;
 }
 
 export const MirrorStatus: React.FC<MirrorStatusProps> = ({
@@ -19,12 +20,13 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
   journalsNeeded,
   journalsReady,
   onGenerate,
+  onViewMirror,
 }) => {
   if (state === 'countdown') {
     return (
       <View style={styles.countdownContainer}>
         <Text style={styles.countdownTitle}>Mirror Ready in</Text>
-        <Text style={styles.countdownNumber}>{journalsNeeded || 0}</Text>
+        <Text style={[styles.countdownNumber, { marginBottom: -12 }]}>{journalsNeeded || 0}</Text>
         <Text style={styles.countdownSubtitle}>More Journals</Text>
       </View>
     );
@@ -56,6 +58,7 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
   if (state === 'generating') {
     return (
       <View style={styles.generatingContainer}>
+        <Text style={styles.generatingTitle}>Mirror Ready</Text>
         <View style={styles.generatingButton}>
           <Text style={styles.generatingText}>Generating Mirror</Text>
           <Image
@@ -72,7 +75,15 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
   // Complete state
   return (
     <View style={styles.completeContainer}>
-      <Text style={styles.completeText}>✨ Mirror Complete!</Text>
+      <Text style={styles.completeTitle}>Mirror Ready</Text>
+      <TouchableOpacity
+        style={styles.completeButton}
+        onPress={onViewMirror || (() => {})}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.completeButtonText}>View Mirror</Text>
+      </TouchableOpacity>
+      <Text style={styles.completeSubtitle}>Your reflection is ready</Text>
     </View>
   );
 };
@@ -80,8 +91,9 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
 const styles = StyleSheet.create({
   // Countdown state
   countdownContainer: {
-    alignItems: 'flex-start',
-    gap: spacing.m,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.s,
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.m,
   },
@@ -100,14 +112,14 @@ const styles = StyleSheet.create({
 
   // Ready state
   readyContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
     gap: spacing.xl,
     paddingVertical: spacing.xxxl,
   },
   readyTitle: {
     ...typography.heading.l,
     color: colors.text.body,
-    textAlign: 'center',
   },
   readyButton: {
     flexDirection: 'row',
@@ -119,43 +131,45 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 30,
     borderRadius: borderRadius.button,
-    width: '100%',
-    minHeight: 44,
-    gap: spacing.m,
+    width: 246,
+    height: 40,
+    gap: spacing.ml,
   },
   readyButtonText: {
     ...typography.heading.s,
     color: colors.text.primary,
-    textAlign: 'center',
   },
   readyButtonIcon: {
     width: 18,
     height: 18,
   },
   readySubtitle: {
-    ...typography.body.s,
+    ...typography.heading.xs,
     color: colors.text.bodyLight,
-    lineHeight: 18,
-    textAlign: 'center',
   },
 
   // Generating state
   generatingContainer: {
-    alignItems: 'center',
-    gap: spacing.l,
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    gap: spacing.xl,
     paddingVertical: spacing.xxxl,
+  },
+  generatingTitle: {
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   generatingButton: {
     backgroundColor: colors.background.disabled,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 30,
-    borderRadius: 100,
-    gap: spacing.m,
-    minHeight: 44,
-    width: '100%',
+    borderRadius: borderRadius.button,
+    gap: spacing.ml,
+    height: 40,
+    width: 246,
   },
   generatingText: {
     ...typography.heading.s,
@@ -166,19 +180,38 @@ const styles = StyleSheet.create({
     height: 18,
   },
   generatingSubtitle: {
-    ...typography.body.s,
+    ...typography.heading.xs,
     color: colors.text.bodyLight,
-    textAlign: 'center',
   },
 
   // Complete state
   completeContainer: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    gap: spacing.xl,
     paddingVertical: spacing.xxxl,
   },
-  completeText: {
+  completeTitle: {
     ...typography.heading.l,
     color: colors.text.body,
-    textAlign: 'center',
+  },
+  completeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background.accent,
+    paddingVertical: 10,
+    paddingHorizontal: 30,
+    borderRadius: borderRadius.button,
+    width: 246,
+    height: 40,
+  },
+  completeButtonText: {
+    ...typography.heading.s,
+    color: colors.text.body,
+  },
+  completeSubtitle: {
+    ...typography.heading.xs,
+    color: colors.text.bodyLight,
   },
 });

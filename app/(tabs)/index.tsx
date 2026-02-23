@@ -14,6 +14,7 @@ import { GuidedPromptSingle, GuidedPromptSingleHandle } from '../../components/j
 import { JournalOption } from '../../components/ui/JournalOption';
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
 import { GuidedPrompt } from '../../constants/guidedPrompts';
+import { Button } from '../../components/ui/Button';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { getMirrorThreshold } from '../../lib/config/constants';
 import { GetStartedCard } from '../../components/day1/GetStartedCard';
@@ -32,7 +33,7 @@ export default function JournalScreen() {
   const [day1ModalVisible, setDay1ModalVisible] = useState(false);
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
 
-  const { journalCount, loadJournals, mirrorState, generateMirror } = useMirrorData();
+  const { journalCount, loadJournals, mirrorState, generateMirror, viewMirror, generatedMirror, checkGenerationStatusOnFocus } = useMirrorData();
   const mirrorThreshold = getMirrorThreshold(user);
 
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -137,7 +138,8 @@ export default function JournalScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (isAuthenticated && user) {
-        console.log('📊 Journal screen focused - reloading journals');
+        console.log('📊 Journal screen focused - checking mirror status and reloading journals');
+        checkGenerationStatusOnFocus(); // Check if mirror has been viewed
         loadJournals();
         loadTodayAnsweredPrompts();
       }
@@ -380,6 +382,24 @@ export default function JournalScreen() {
           journalsNeeded={Math.max(0, mirrorThreshold - journalCount)}
           journalsReady={journalCount}
           onGenerate={generateMirror}
+          onViewMirror={() => {
+            console.log('🔵 [JOURNAL TAB] View Mirror button pressed');
+            console.log('🔵 [JOURNAL TAB] Current state:', {
+              mirrorState,
+              hasGeneratedMirror: !!generatedMirror,
+              generatedMirrorId: generatedMirror?.id
+            });
+
+            if (generatedMirror?.id) {
+              console.log('🔵 [JOURNAL TAB] Navigating to mirror tab with mirrorId:', generatedMirror.id);
+              router.push({
+                pathname: '/(tabs)/mirror',
+                params: { openMirrorId: generatedMirror.id }
+              });
+            } else {
+              console.warn('⚠️ [JOURNAL TAB] No generated mirror to view!');
+            }
+          }}
         />
 
         {/* River Illustration — bleeds edge to edge */}
@@ -410,17 +430,18 @@ export default function JournalScreen() {
           <View style={styles.section}>
             <View style={styles.dailyPromptHeader}>
               <Text style={styles.sectionTitle}>Daily Prompt</Text>
-              <TouchableOpacity
+              <Button
+                variant="link"
+                label="New Prompt"
                 onPress={() => promptRef.current?.nextPrompt()}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                activeOpacity={0.7}
-              >
-                <Image
-                  source={require('@/assets/images/icons/Refresh.png')}
-                  style={styles.refreshIcon}
-                  resizeMode="contain"
-                />
-              </TouchableOpacity>
+                icon={
+                  <Image
+                    source={require('@/assets/images/icons/Refresh.png')}
+                    style={styles.refreshIcon}
+                    resizeMode="contain"
+                  />
+                }
+              />
             </View>
 
             <GuidedPromptSingle
@@ -483,6 +504,8 @@ const styles = StyleSheet.create({
     width: screenWidth * 1.1,
     height: (screenWidth * 1.1) / (443 / 135),
     marginLeft: -spacing.screen.horizontalPadding,
+    marginTop: -30,
+    marginBottom: 30,
   },
   section: {
     gap: spacing.l,
@@ -501,8 +524,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   refreshIcon: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
   },
   loadingContainer: {
     flex: 1,

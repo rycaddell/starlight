@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HapticTab } from '@/components/HapticTab';
@@ -35,8 +35,10 @@ export default function TabLayout() {
           .eq('custom_user_id', user.id);
 
         if (!error && count && count > 0) {
+          console.log('✅ [TAB LAYOUT] User has mirrors, showing Mirror tab');
           setHasMirrors(true);
         } else {
+          console.log('ℹ️ [TAB LAYOUT] User has no mirrors, hiding Mirror tab');
           setHasMirrors(false);
         }
       } catch (error) {
@@ -46,6 +48,32 @@ export default function TabLayout() {
     };
 
     checkForMirrors();
+
+    // Set up real-time subscription for new mirrors
+    if (user) {
+      console.log('👂 [TAB LAYOUT] Setting up real-time subscription for mirrors');
+      const subscription = supabase
+        .channel('mirrors_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'mirrors',
+            filter: `custom_user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            console.log('🔔 [TAB LAYOUT] New mirror created, showing Mirror tab');
+            setHasMirrors(true);
+          }
+        )
+        .subscribe();
+
+      return () => {
+        console.log('🔕 [TAB LAYOUT] Unsubscribing from mirrors changes');
+        subscription.unsubscribe();
+      };
+    }
   }, [user]);
 
   // Show Mirror tab if user has completed Day 1 OR has any existing mirrors

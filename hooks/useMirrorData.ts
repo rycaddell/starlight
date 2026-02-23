@@ -37,6 +37,7 @@ export const useMirrorData = () => {
   
   // ✅ Update ref whenever state changes
   useEffect(() => {
+    console.log('🔄 [STATE CHANGE] mirrorState changed to:', mirrorState);
     mirrorStateRef.current = mirrorState;
   }, [mirrorState]);
 
@@ -276,10 +277,26 @@ export const useMirrorData = () => {
         if (status === 'completed') {
           const dbHasBeenViewed = mirror.has_been_viewed || false;
           console.log('📊 Mirror completed, has_been_viewed:', dbHasBeenViewed);
-          
-          // ✅ If mirror has been viewed, don't touch anything - let normal flow handle it
+
+          // ✅ If mirror has been viewed, reset to countdown state
           if (dbHasBeenViewed) {
-            console.log('✅ Mirror already viewed, ignoring');
+            console.log('✅ Mirror already viewed, resetting to countdown');
+
+            // Clear the viewed mirror if it's still in state
+            if (generatedMirror?.id === mirror.id) {
+              console.log('🔄 Clearing viewed mirror from state');
+              setGeneratedMirror(null);
+              setHasViewedCurrentMirror(false);
+            }
+
+            // Reset to appropriate state based on journal count
+            const countResult = await getUserJournalCount(user.id);
+            const count = countResult.success ? countResult.count : 0;
+            const threshold = getMirrorThreshold(user);
+            const newState = count >= threshold ? 'ready' : 'progress';
+
+            console.log(`🔄 Resetting to ${newState} state (count: ${count}/${threshold})`);
+            setMirrorState(newState);
             return;
           }
           
@@ -525,19 +542,30 @@ export const useMirrorData = () => {
   };
 
   const viewMirror = async () => {
+    console.log('========================================');
+    console.log('👁️ [VIEW MIRROR] Function called');
+    console.log('👁️ [VIEW MIRROR] Has generatedMirror:', !!generatedMirror);
+    console.log('👁️ [VIEW MIRROR] Generated mirror ID:', generatedMirror?.id);
+
     if (generatedMirror) {
-      console.log('👁️ viewMirror() called - marking as viewed');
+      console.log('👁️ [VIEW MIRROR] Setting mirrorState to "viewing"');
       setMirrorState('viewing');
-      setHasViewedCurrentMirror(true); // ✅ Mark as viewed locally
-      console.log('👁️ hasViewedCurrentMirror set to TRUE');
-      
+      console.log('👁️ [VIEW MIRROR] Setting hasViewedCurrentMirror to TRUE');
+      setHasViewedCurrentMirror(true);
+
       // ✅ Mark as viewed in database
+      console.log('👁️ [VIEW MIRROR] Marking mirror as viewed in database');
       const result = await markMirrorAsViewed(generatedMirror.id);
       if (!result.success) {
-        console.error('⚠️ Failed to mark mirror as viewed in database:', result.error);
+        console.error('⚠️ [VIEW MIRROR] Failed to mark mirror as viewed in database:', result.error);
         // Don't block the UI - user can still view the mirror
+      } else {
+        console.log('✅ [VIEW MIRROR] Mirror marked as viewed in database');
       }
+    } else {
+      console.warn('⚠️ [VIEW MIRROR] No generatedMirror - cannot view!');
     }
+    console.log('========================================');
   };
 
   const closeMirrorViewer = async () => {
