@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import { View, Text, Image, TouchableOpacity, StyleSheet, ScrollView, Alert, Modal } from 'react-native';
 import { saveSpiritualPlace } from '../../lib/supabase/day1';
+import { colors, typography, spacing, borderRadius } from '../../theme/designTokens';
 
 interface Step1SpiritualPlaceProps {
   userId: string;
@@ -156,7 +157,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: colors.background.defaultLight,
   },
   image: {
     width: '100%',
@@ -164,75 +165,66 @@ const styles = StyleSheet.create({
   },
   bottomHalf: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20,
+    backgroundColor: colors.background.white,
+    borderTopLeftRadius: borderRadius.sheet,
+    borderTopRightRadius: borderRadius.sheet,
+    marginTop: -30,
   },
   scrollContent: {
-    padding: 24,
+    padding: spacing.xxxl,
   },
   question: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
     textAlign: 'left',
-    marginBottom: 24,
+    marginBottom: spacing.xxxl,
   },
   subtext: {
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
     textAlign: 'left',
-    marginBottom: 24,
+    marginBottom: spacing.xxxl,
   },
   choicesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: spacing.m,
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: spacing.xxxl,
   },
   choiceButton: {
     width: '48%',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-    backgroundColor: '#ffffff',
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.xl,
+    borderRadius: borderRadius.pill,
+    backgroundColor: colors.background.white,
     borderWidth: 1.5,
-    borderColor: '#2563eb',
+    borderColor: colors.border.outline,
     alignItems: 'center',
   },
   choiceButtonSelected: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: colors.text.primary,
+    borderColor: colors.text.primary,
   },
   choiceText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#2563eb',
+    ...typography.heading.s,
+    color: colors.text.primary,
   },
   choiceTextSelected: {
-    color: '#ffffff',
+    color: colors.text.white,
   },
   nextButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   nextButtonDisabled: {
-    backgroundColor: '#cbd5e1',
-    shadowOpacity: 0,
+    backgroundColor: colors.background.disabled,
   },
   nextButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.heading.default,
+    color: colors.text.white,
   },
   fullscreenContainer: {
     flex: 1,

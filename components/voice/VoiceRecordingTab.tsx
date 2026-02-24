@@ -49,9 +49,6 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           <Text style={styles.statusText}>Transcribing...</Text>
         )}
 
-        {isBuildingMirror && (
-          <Text style={styles.statusText}>Building your mirror...</Text>
-        )}
 
         {/* Controls */}
         {!isRecording && !isProcessing && !isBuildingMirror ? (
@@ -62,20 +59,25 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           </TouchableOpacity>
         ) : isProcessing || isBuildingMirror ? (
           <View style={[styles.startButton, styles.processingButton]}>
-            <Text style={styles.startButtonText}>
-              {isBuildingMirror ? 'Building...' : 'Processing...'}
+            <Text style={[styles.startButtonText, styles.processingButtonText]}>
+              {isBuildingMirror ? 'Generating Mirror' : 'Processing...'}
             </Text>
           </View>
         ) : (
           <View style={styles.recordingControls}>
-            <TouchableOpacity style={styles.controlButton} onPress={onStopRecording}>
-              <Text style={styles.controlButtonText}>Stop</Text>
+            <TouchableOpacity
+              style={[styles.controlButton, !isPaused && styles.controlButtonPrimary]}
+              onPress={onStopRecording}
+            >
+              <Text style={[styles.controlButtonText, !isPaused && styles.controlButtonTextPrimary]}>
+                Stop
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.controlButton, styles.controlButtonPrimary]}
+              style={[styles.controlButton, isPaused && styles.controlButtonPrimary]}
               onPress={isPaused ? onResumeRecording : onPauseRecording}
             >
-              <Text style={[styles.controlButtonText, styles.controlButtonTextPrimary]}>
+              <Text style={[styles.controlButtonText, isPaused && styles.controlButtonTextPrimary]}>
                 {isPaused ? 'Resume' : 'Pause'}
               </Text>
             </TouchableOpacity>
@@ -95,8 +97,6 @@ const styles = StyleSheet.create({
     gap: spacing.l,
   },
   recordingUnit: {
-    backgroundColor: colors.background.defaultLight,
-    borderRadius: borderRadius.xxl,
     padding: spacing.xxxxl,
     width: '100%',
     alignItems: 'center',
@@ -124,6 +124,9 @@ const styles = StyleSheet.create({
   },
   processingButton: {
     backgroundColor: colors.background.disabled,
+  },
+  processingButtonText: {
+    color: colors.text.bodyLight,
   },
   startButtonText: {
     ...typography.heading.s,

@@ -8,6 +8,7 @@ import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { VoiceRecordingTab } from '../voice/VoiceRecordingTab';
 import { saveStepJournal } from '../../lib/supabase/day1';
 import { saveJournalEntry } from '../../lib/supabase';
+import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface Step2VoiceJournalProps {
   userId: string;
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: colors.background.defaultLight,
     position: 'relative',
   },
   image: {
@@ -228,10 +229,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxxl,
   },
   overlayText: {
-    color: '#ffffff',
+    fontFamily: fontFamily.primary,
+    color: colors.text.white,
     fontSize: 48,
     fontWeight: '700',
     textAlign: 'left',
@@ -239,54 +241,46 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 10,
   },
-  subtext: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'left',
-    marginBottom: 24,
-  },
   bottomHalf: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20,
+    backgroundColor: colors.background.white,
+    borderTopLeftRadius: borderRadius.sheet,
+    borderTopRightRadius: borderRadius.sheet,
+    marginTop: -30,
   },
   scrollContent: {
-    padding: 24,
+    padding: spacing.xxxl,
   },
   question: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
     textAlign: 'left',
-    marginBottom: 8,
-    lineHeight: 28,
+    marginBottom: spacing.m,
+  },
+  subtext: {
+    ...typography.body.default,
+    color: colors.text.bodyLight,
+    textAlign: 'left',
+    marginBottom: spacing.xxxl,
   },
   voiceContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.xl,
   },
   helperText: {
-    fontSize: 14,
-    color: '#64748b',
+    ...typography.body.s,
+    color: colors.text.bodyLight,
     textAlign: 'left',
     fontStyle: 'italic',
   },
   continueButton: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
-    marginTop: 24,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: spacing.xxxl,
   },
   continueButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.heading.default,
+    color: colors.text.white,
   },
 });

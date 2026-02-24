@@ -155,8 +155,8 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
       onRequestClose={handleClose}
     >
       <View style={styles.container}>
-        {/* Header area with background */}
-        <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+        {/* Header area with background — hidden on step 5 (hero handles navigation) */}
+        {currentStep !== 5 && <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
           {/* Single row with back button, progress, and close button */}
           <View style={styles.header}>
             {/* Back button or spacer */}
@@ -171,19 +171,17 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
             {/* Step indicator in center (hidden on step 5) */}
             {currentStep !== 5 && (
               <View style={styles.stepIndicator}>
-                {[1, 2, 3, 4, 5].map((step) => (
+                {[1, 2, 3].map((step) => (
                   <View
                     key={step}
                     style={[
                       styles.stepDot,
-                      currentStep >= step && styles.stepDotActive
+                      Math.min(currentStep, 3) >= step && styles.stepDotActive
                     ]}
                   />
                 ))}
               </View>
             )}
-            {currentStep === 5 && <View style={styles.stepIndicator} />}
-
             {/* Close button on right */}
             <View style={styles.rightSection}>
               <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
@@ -191,7 +189,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </View>}
 
         {/* Step content */}
         <View style={styles.content}>
@@ -242,6 +240,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
                   mirrorId={miniMirrorId!}
                   spiritualPlace={spiritualPlace!}
                   summaries={summaries}
+                  onClose={handleClose}
                   onComplete={handleStep5Complete}
                   onFocusAreasSaved={() => setFocusAreasSaved(true)}
                 />

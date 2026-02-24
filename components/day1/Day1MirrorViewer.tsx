@@ -2,10 +2,15 @@
 // Viewer for Day 1 mirrors in Mirror tab
 
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, Image, StyleSheet, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert } from 'react-native';
+import {
+  Modal, View, Text, Image, ImageBackground, StyleSheet, ScrollView,
+  TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { saveFocusAreas } from '../../lib/supabase/day1';
+import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface Day1MirrorViewerProps {
   visible: boolean;
@@ -14,10 +19,9 @@ interface Day1MirrorViewerProps {
   userId: string;
   userName: string;
   spiritualPlace: string;
-  isOwner: boolean; // Whether current user owns this mirror
+  isOwner: boolean;
 }
 
-// Spiritual place images (optimized JPGs)
 const SPIRITUAL_PLACE_IMAGES: { [key: string]: any } = {
   'Adventuring': require('../../assets/images/spiritual-places/adventuring.jpg'),
   'Battling': require('../../assets/images/spiritual-places/battling.jpg'),
@@ -29,6 +33,18 @@ const SPIRITUAL_PLACE_IMAGES: { [key: string]: any } = {
   'Celebrating': require('../../assets/images/spiritual-places/celebrating.jpg'),
 };
 
+const sanitizeText = (text: string) => {
+  if (!text) return text;
+  return text
+    .replace(/['']/g, "'")
+    .replace(/[""]/g, '"')
+    .replace(/—/g, '-')
+    .replace(/–/g, '-')
+    .replace(/…/g, '...')
+    .replace(/\u00A0/g, ' ')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '');
+};
+
 export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
   visible,
   onClose,
@@ -38,13 +54,13 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
   spiritualPlace,
   isOwner,
 }) => {
+  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [mirrorContent, setMirrorContent] = useState<any>(null);
   const [mirrorMetadata, setMirrorMetadata] = useState<any>(null);
   const [focusAreasText, setFocusAreasText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
-  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (visible) {
@@ -57,14 +73,8 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
     const result = await getMirrorById(mirrorId);
 
     if (result.success && result.content) {
-      console.log('🪞 Day1MirrorViewer - Full mirror content:', JSON.stringify(result.content, null, 2));
-      console.log('🔍 screen_2_biblical check:', result.content.screen_2_biblical);
-      console.log('🔍 screen2_biblical check:', result.content.screen2_biblical);
-      console.log('🔍 invitation_to_growth:', result.content.screen_2_biblical?.invitation_to_growth || result.content.screen2_biblical?.invitation_to_growth);
-
       setMirrorContent(result.content);
       setMirrorMetadata(result.mirror);
-      // Load existing focus areas if present
       if (result.mirror?.focus_areas) {
         setFocusAreasText(result.mirror.focus_areas);
       }
@@ -73,6 +83,20 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
     }
 
     setLoading(false);
+  };
+
+  const getTitle = () => {
+    const screen2Data = mirrorContent?.screen_2_biblical || mirrorContent?.screen2_biblical;
+    return screen2Data?.parallel_story?.character || '';
+  };
+
+  const formatDate = () => {
+    if (!mirrorMetadata?.created_at) return '';
+    const date = new Date(mirrorMetadata.created_at);
+    const month = date.toLocaleString('en-US', { month: 'long' });
+    const day = date.getDate();
+    const year = date.getFullYear();
+    return `${month} ${day} ${year}`;
   };
 
   const handleInputFocus = () => {
@@ -99,18 +123,16 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
       return;
     }
 
-    // Reload mirror to update metadata (focus_areas now saved)
     await loadMirror();
-
     Alert.alert('Saved', 'Your focus has been saved.');
     setSubmitting(false);
   };
 
-  // Determine if focus areas should be editable
-  // Editable if: owner AND no focus_areas saved yet
   const isFocusEditable = isOwner && (!mirrorMetadata?.focus_areas || mirrorMetadata.focus_areas.trim() === '');
 
   if (!visible) return null;
+
+  const biblical = mirrorContent?.screen_2_biblical || mirrorContent?.screen2_biblical;
 
   return (
     <Modal
@@ -120,19 +142,6 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
       onRequestClose={onClose}
     >
       <View style={styles.container}>
-        {/* Header with safe area */}
-        <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
-          <View style={styles.header}>
-            <View style={styles.leftSection} />
-            <View style={styles.centerSection} />
-            <View style={styles.rightSection}>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
         {loading ? (
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>Loading your mirror...</Text>
@@ -145,109 +154,129 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
           <KeyboardAvoidingView
             style={styles.contentContainer}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={100}
+            keyboardVerticalOffset={0}
           >
             <ScrollView
               ref={scrollViewRef}
               style={styles.scrollContainer}
               contentContainerStyle={styles.scrollContent}
               keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
             >
-              {/* Image at top */}
-              <Image
-                source={SPIRITUAL_PLACE_IMAGES[spiritualPlace] || SPIRITUAL_PLACE_IMAGES['Resting']}
-                style={styles.image}
-                resizeMode="cover"
-              />
+              {/* Hero Image */}
+              <View style={styles.heroSection}>
+                <ImageBackground
+                  source={SPIRITUAL_PLACE_IMAGES[spiritualPlace] || SPIRITUAL_PLACE_IMAGES['Resting']}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                >
+                  <View style={styles.heroOverlay} />
 
-              {/* Welcome Message */}
+                  {/* Controls — close on the right */}
+                  <View style={[styles.topNav, { top: insets.top + 14 }]}>
+                    <View style={styles.topNavRight}>
+                      <TouchableOpacity style={styles.navButton} onPress={onClose}>
+                        <Image
+                          source={require('../../assets/images/icons/Close.png')}
+                          style={styles.closeIcon}
+                        />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {/* Title and Date */}
+                  <View style={[styles.titleOverlay, { top: insets.top + 112 }]}>
+                    <Text style={styles.titleText}>{sanitizeText(getTitle())}</Text>
+                    <Text style={styles.dateText}>{formatDate()}</Text>
+                  </View>
+                </ImageBackground>
+              </View>
+
+              {/* Welcome Section */}
               <View style={styles.welcomeSection}>
                 <Text style={styles.greetingText}>{userName},</Text>
-
                 <Text style={styles.welcomeTitle}>Welcome to Oxbow.</Text>
-
-                <Text style={styles.letterBody}>
-                  Your first Mirror is below.
-                </Text>
-
+                <Text style={styles.letterBody}>Your first Mirror is below.</Text>
                 <Text style={styles.letterBody}>
                   Each Mirror you make will help you pull out themes and insights into your life with God.
                 </Text>
               </View>
 
-              {/* Biblical Mirror Content */}
+              {/* Mirror Section */}
               <View style={styles.mirrorSection}>
-                {/* Parallel Story */}
-                {(mirrorContent.screen_2_biblical?.parallel_story || mirrorContent.screen2_biblical?.parallel_story) && (
-                  <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Biblical Parallel</Text>
-                    <Text style={styles.characterName}>
-                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.character}
+                <View style={styles.sectionTagContainer}>
+                  <Text style={styles.sectionTag}>Mirror</Text>
+                </View>
+
+                {/* Biblical Parallel */}
+                {biblical?.parallel_story && (
+                  <View style={styles.subsection}>
+                    <Text style={styles.mirrorTitle}>
+                      {sanitizeText(biblical.parallel_story.character)}
                     </Text>
-                    <Text style={styles.storyText}>
-                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.story}
-                    </Text>
-                    <Text style={styles.connectionText}>
-                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).parallel_story.connection}
+                    <Text style={styles.mirrorDescription}>
+                      {sanitizeText(biblical.parallel_story.story)}
+                      {'\n\n'}
+                      {sanitizeText(biblical.parallel_story.connection)}
                     </Text>
                   </View>
                 )}
 
-                {/* Encouraging Verse */}
-                {(mirrorContent.screen_2_biblical?.encouraging_verse || mirrorContent.screen2_biblical?.encouraging_verse) && (
-                  <View style={styles.card}>
-                    <Text style={styles.cardLabel}>Encouragement</Text>
+                {/* Encouraging Word */}
+                {biblical?.encouraging_verse && (
+                  <View style={styles.subsection}>
+                    <Text style={styles.subsectionTitle}>Encouraging Word</Text>
                     <Text style={styles.verseReference}>
-                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.reference}
+                      {biblical.encouraging_verse.reference}
                     </Text>
-                    <Text style={styles.verseText}>
-                      "{(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.text}"
-                    </Text>
+                    <View style={styles.verseContainer}>
+                      <View style={styles.verseBar} />
+                      <Text style={styles.verseText}>
+                        {sanitizeText(biblical.encouraging_verse.text)}
+                      </Text>
+                    </View>
                     <Text style={styles.applicationText}>
-                      {(mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical).encouraging_verse.application}
+                      {sanitizeText(biblical.encouraging_verse.application)}
                     </Text>
                   </View>
                 )}
 
-                {/* Invitation to Growth (supports both old 'challenging_verse' and new 'invitation_to_growth' field names) */}
-                {(() => {
-                  const biblical = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
-                  const invitationVerse = biblical?.invitation_to_growth || biblical?.challenging_verse;
-
-                  console.log('🎯 Invitation render check:', {
-                    hasBiblical: !!biblical,
-                    hasInvitation: !!invitationVerse,
-                    biblical: biblical,
-                    invitationVerse: invitationVerse
-                  });
-
-                  if (!invitationVerse) {
-                    console.log('⚠️ No invitation verse found - not rendering');
-                    return null;
-                  }
-
-                  console.log('✅ Rendering invitation verse');
-                  return (
-                    <View style={styles.card}>
-                      <Text style={styles.cardLabel}>Reflection</Text>
-                      <Text style={styles.verseReference}>{invitationVerse.reference}</Text>
-                      <Text style={styles.verseText}>"{invitationVerse.text}"</Text>
-                      <Text style={styles.invitationText}>{invitationVerse.invitation}</Text>
+                {/* Invitation to Growth */}
+                {(biblical?.invitation_to_growth || biblical?.challenging_verse) && (
+                  <View style={styles.subsection}>
+                    <Text style={styles.subsectionTitle}>Invitation to Growth</Text>
+                    <Text style={styles.verseReference}>
+                      {(biblical.invitation_to_growth || biblical.challenging_verse).reference}
+                    </Text>
+                    <View style={styles.verseContainer}>
+                      <View style={styles.verseBar} />
+                      <Text style={styles.verseText}>
+                        {sanitizeText((biblical.invitation_to_growth || biblical.challenging_verse).text)}
+                      </Text>
                     </View>
-                  );
-                })()}
+                    <Text style={styles.applicationText}>
+                      {sanitizeText((biblical.invitation_to_growth || biblical.challenging_verse).invitation)}
+                    </Text>
+                  </View>
+                )}
               </View>
 
-              {/* Focus Areas Section */}
-              <View style={styles.inputSection}>
-                <Text style={styles.inputLabel}>Where is God inviting you to focus?</Text>
+              {/* Reflection Section */}
+              <View style={styles.reflectionSection}>
+                <View style={styles.reflectionTagContainer}>
+                  <Text style={styles.reflectionTag}>Reflection</Text>
+                </View>
+
+                <Text style={styles.reflectionQuestion}>
+                  Where is God inviting you to focus?
+                </Text>
 
                 {isFocusEditable ? (
                   <>
                     <TextInput
-                      style={styles.textInput}
+                      style={styles.reflectionInput}
                       placeholder="Share your thoughts..."
-                      placeholderTextColor="#94a3b8"
+                      placeholderTextColor={colors.text.bodyLight}
                       multiline
                       numberOfLines={4}
                       value={focusAreasText}
@@ -255,21 +284,23 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
                       onFocus={handleInputFocus}
                       textAlignVertical="top"
                     />
-
                     <TouchableOpacity
-                      style={[styles.submitButton, (!focusAreasText.trim() || submitting) && styles.submitButtonDisabled]}
+                      style={[
+                        styles.actionButton,
+                        (!focusAreasText.trim() || submitting) && styles.actionButtonDisabled,
+                      ]}
                       onPress={handleSaveFocus}
                       disabled={!focusAreasText.trim() || submitting}
                     >
-                      <Text style={styles.submitButtonText}>
+                      <Text style={styles.actionButtonText}>
                         {submitting ? 'Saving...' : 'Save Focus'}
                       </Text>
                     </TouchableOpacity>
                   </>
                 ) : (
-                  <View style={styles.readOnlyFocusContainer}>
-                    <Text style={styles.readOnlyFocusText}>
-                      {focusAreasText || 'No focus areas saved yet.'}
+                  <View style={styles.savedFocusContainer}>
+                    <Text style={styles.savedFocusText}>
+                      {focusAreasText || 'No focus saved yet.'}
                     </Text>
                   </View>
                 )}
@@ -285,45 +316,14 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  headerContainer: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    zIndex: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  leftSection: {
-    width: 70,
-    alignItems: 'flex-start',
-  },
-  centerSection: {
-    flex: 1,
-  },
-  rightSection: {
-    width: 70,
-    alignItems: 'flex-end',
-  },
-  closeButton: {
-    padding: 4,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: '#64748b',
+    backgroundColor: colors.background.white,
   },
   contentContainer: {
     flex: 1,
   },
   scrollContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background.white,
   },
   scrollContent: {
     flexGrow: 1,
@@ -334,8 +334,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
   },
   errorContainer: {
     flex: 1,
@@ -343,156 +343,223 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: {
-    fontSize: 16,
-    color: '#dc2626',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
   },
-  image: {
+  // Hero
+  heroSection: {
     width: '100%',
-    height: 300,
+    height: 426,
   },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  heroOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+  },
+  topNav: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    paddingHorizontal: spacing.xl,
+  },
+  topNavRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacing.m,
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeIcon: {
+    width: 28,
+    height: 28,
+    tintColor: colors.text.white,
+  },
+  titleOverlay: {
+    position: 'absolute',
+    left: spacing.xl,
+    zIndex: 2,
+  },
+  titleText: {
+    ...typography.heading.xl,
+    fontWeight: '900',
+    color: colors.text.white,
+    marginBottom: spacing.s,
+  },
+  dateText: {
+    fontFamily: fontFamily.primary,
+    fontSize: 15,
+    fontWeight: '400',
+    color: '#F6F6F6',
+  },
+  // Welcome
   welcomeSection: {
-    padding: 24,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.l,
   },
   greetingText: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#334155',
-    marginBottom: 20,
+    ...typography.heading.l,
+    color: colors.text.body,
     fontStyle: 'italic',
   },
   welcomeTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#334155',
-    textAlign: 'left',
-    marginBottom: 12,
+    ...typography.heading.s,
+    color: colors.text.body,
   },
   letterBody: {
+    fontFamily: fontFamily.primary,
     fontSize: 17,
-    color: '#475569',
-    lineHeight: 28,
-    textAlign: 'left',
-    marginBottom: 18,
+    fontWeight: '400',
+    color: colors.text.bodyLight,
+    lineHeight: 24,
   },
+  // Mirror content
   mirrorSection: {
-    padding: 24,
-    paddingTop: 0,
-    paddingBottom: 16,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.xxxl,
+    gap: spacing.xxxl,
   },
-  card: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    borderLeftWidth: 3,
-    borderLeftColor: '#059669',
+  sectionTagContainer: {
+    backgroundColor: colors.background.tag,
+    borderRadius: borderRadius.tag,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  cardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#2563eb',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  characterName: {
-    fontSize: 18,
+  sectionTag: {
+    ...typography.heading.xs,
     fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 8,
+    color: colors.text.body,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
-  storyText: {
-    fontSize: 15,
-    color: '#475569',
-    lineHeight: 22,
-    marginBottom: 8,
+  subsection: {
+    gap: spacing.l,
   },
-  connectionText: {
-    fontSize: 15,
-    color: '#059669',
-    lineHeight: 22,
-    fontStyle: 'italic',
+  mirrorTitle: {
+    ...typography.heading.xl,
+    color: colors.text.body,
+  },
+  mirrorDescription: {
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 24,
+  },
+  subsectionTitle: {
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   verseReference: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2563eb',
-    marginBottom: 8,
+    ...typography.heading.s,
+    color: colors.text.accent,
+  },
+  verseContainer: {
+    flexDirection: 'row',
+    gap: spacing.l,
+  },
+  verseBar: {
+    width: 2,
+    backgroundColor: colors.text.accent,
+    borderRadius: 1,
+    alignSelf: 'stretch',
   },
   verseText: {
-    fontSize: 15,
-    color: '#1e293b',
-    lineHeight: 22,
+    flex: 1,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '500',
     fontStyle: 'italic',
-    marginBottom: 8,
+    color: colors.text.body,
+    lineHeight: 24,
   },
   applicationText: {
-    fontSize: 15,
-    color: '#475569',
-    lineHeight: 22,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 24,
   },
-  invitationText: {
-    fontSize: 15,
-    color: '#475569',
-    lineHeight: 22,
-    fontStyle: 'italic',
+  // Reflection
+  reflectionSection: {
+    backgroundColor: colors.background.defaultLight,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxxl,
+    paddingBottom: 60,
+    gap: spacing.l,
   },
-  inputSection: {
-    padding: 24,
-    paddingTop: 16,
-    backgroundColor: '#ffffff',
-  },
-  inputLabel: {
-    fontSize: 19,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 16,
-    lineHeight: 28,
-    fontStyle: 'italic',
-  },
-  textInput: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1e293b',
-    minHeight: 120,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  submitButton: {
-    backgroundColor: '#059669',
-    paddingVertical: 16,
-    borderRadius: 12,
+  reflectionTagContainer: {
+    backgroundColor: colors.background.white,
+    borderRadius: borderRadius.tag,
+    paddingHorizontal: spacing.l,
+    paddingVertical: spacing.m,
+    alignSelf: 'flex-start',
+    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#059669',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
-  submitButtonDisabled: {
-    backgroundColor: '#cbd5e1',
-    shadowOpacity: 0,
-  },
-  submitButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
+  reflectionTag: {
+    ...typography.heading.xs,
     fontWeight: '700',
+    color: colors.text.bodyLight,
+    textAlignVertical: 'center',
+    includeFontPadding: false,
   },
-  readOnlyFocusContainer: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 16,
+  reflectionQuestion: {
+    ...typography.heading.l,
+    color: colors.text.body,
+  },
+  reflectionInput: {
+    backgroundColor: colors.background.white,
+    borderRadius: borderRadius.card,
+    padding: spacing.xl,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 24,
+    minHeight: 120,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: colors.border.divider,
   },
-  readOnlyFocusText: {
-    fontSize: 16,
-    color: '#1e293b',
-    lineHeight: 22,
+  actionButton: {
+    backgroundColor: colors.background.accent,
+    height: 66,
+    borderRadius: borderRadius.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonDisabled: {
+    backgroundColor: colors.background.disabled,
+  },
+  actionButtonText: {
+    ...typography.heading.l,
+    color: colors.text.black,
+  },
+  savedFocusContainer: {
+    backgroundColor: colors.background.white,
+    borderRadius: borderRadius.card,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border.divider,
+  },
+  savedFocusText: {
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
+    lineHeight: 24,
   },
 });

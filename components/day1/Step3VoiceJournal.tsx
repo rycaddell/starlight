@@ -8,6 +8,7 @@ import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { VoiceRecordingTab } from '../voice/VoiceRecordingTab';
 import { saveStepJournal, generateMiniMirror, getDay1Progress } from '../../lib/supabase/day1';
 import { saveJournalEntry } from '../../lib/supabase';
+import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface Step3VoiceJournalProps {
   userId: string;
@@ -246,48 +247,38 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
         </Text>
 
         {/* Voice recording component */}
-        {!isBuildingMirror && (
-          <>
-            <View style={styles.voiceContainer}>
-              <VoiceRecordingTab
-                isRecording={isRecording}
-                isPaused={isPaused}
-                recordingDuration={recordingDuration}
-                isProcessing={isProcessing}
-                hasRecorded={hasRecorded}
-                formatDuration={formatDuration}
-                onStartRecording={handleStartRecordingWithPermission}
-                onStopRecording={handleStopRecording}
-                onPauseRecording={handlePauseRecording}
-                onResumeRecording={handleResumeRecording}
-              />
-            </View>
+        <View style={styles.voiceContainer}>
+          <VoiceRecordingTab
+            isRecording={isRecording}
+            isPaused={isPaused}
+            recordingDuration={recordingDuration}
+            isProcessing={isProcessing}
+            isBuildingMirror={isBuildingMirror}
+            hasRecorded={hasRecorded}
+            formatDuration={formatDuration}
+            onStartRecording={handleStartRecordingWithPermission}
+            onStopRecording={handleStopRecording}
+            onPauseRecording={handlePauseRecording}
+            onResumeRecording={handleResumeRecording}
+          />
+        </View>
 
-            {/* Next button - shown after first recording */}
-            {hasRecorded && !isRecording && !isProcessing && (
-              <TouchableOpacity
-                style={styles.continueButton}
-                onPress={async () => {
-                  setIsBuildingMirror(true);
-                  await startMirrorGeneration();
-                }}
-              >
-                <Text style={styles.continueButtonText}>Next</Text>
-              </TouchableOpacity>
-            )}
-          </>
+        {/* Time expectation during mirror generation */}
+        {isBuildingMirror && (
+          <Text style={styles.generatingHint}>This can take up to 2 minutes</Text>
         )}
 
-        {/* Mirror Generation */}
-        {isBuildingMirror && (
-          <View style={styles.generationContainer}>
-            <View style={styles.mirrorCard}>
-              <Text style={styles.mirrorCardTitle}>Mirror In Progress</Text>
-              <View style={styles.generatingBox}>
-                <Text style={styles.generatingText}>Generating...</Text>
-              </View>
-            </View>
-          </View>
+        {/* Next button - shown after first recording, hidden while building */}
+        {hasRecorded && !isRecording && !isProcessing && !isBuildingMirror && (
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={async () => {
+              setIsBuildingMirror(true);
+              await startMirrorGeneration();
+            }}
+          >
+            <Text style={styles.continueButtonText}>Next</Text>
+          </TouchableOpacity>
         )}
       </ScrollView>
     </View>
@@ -300,7 +291,7 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     flex: 1,
-    backgroundColor: '#e2e8f0',
+    backgroundColor: colors.background.defaultLight,
     position: 'relative',
   },
   image: {
@@ -314,10 +305,11 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxxl,
   },
   overlayText: {
-    color: '#ffffff',
+    fontFamily: fontFamily.primary,
+    color: colors.text.white,
     fontSize: 48,
     fontWeight: '700',
     textAlign: 'left',
@@ -327,114 +319,43 @@ const styles = StyleSheet.create({
   },
   bottomHalf: {
     flex: 1,
-    backgroundColor: '#ffffff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    marginTop: -20,
+    backgroundColor: colors.background.white,
+    borderTopLeftRadius: borderRadius.sheet,
+    borderTopRightRadius: borderRadius.sheet,
+    marginTop: -30,
   },
   scrollContent: {
-    padding: 24,
+    padding: spacing.xxxl,
   },
   question: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
     textAlign: 'left',
-    marginBottom: 8,
-    lineHeight: 28,
+    marginBottom: spacing.m,
   },
   subtext: {
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
     textAlign: 'left',
-    marginBottom: 24,
+    marginBottom: spacing.xxxl,
   },
   voiceContainer: {
-    marginBottom: 16,
+    marginBottom: spacing.xl,
   },
-  helperText: {
-    fontSize: 14,
-    color: '#64748b',
-    textAlign: 'left',
-    fontStyle: 'italic',
-  },
-  generationContainer: {
-    marginTop: 0,
-  },
-  readyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    minHeight: 400,
-  },
-  mirrorCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 32,
-    width: '100%',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  mirrorCardTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 24,
+  generatingHint: {
+    ...typography.body.s,
+    color: colors.text.bodyLight,
     textAlign: 'center',
-  },
-  mirrorCompleteTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginBottom: 32,
-    textAlign: 'center',
-  },
-  generatingBox: {
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 24,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    width: '100%',
-  },
-  generatingText: {
-    fontSize: 18,
-    color: '#94a3b8',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  viewMirrorButton: {
-    backgroundColor: '#fbbf24',
-    paddingVertical: 16,
-    paddingHorizontal: 48,
-    borderRadius: 12,
-    width: '100%',
-    alignItems: 'center',
-  },
-  viewMirrorText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1e293b',
   },
   continueButton: {
-    backgroundColor: '#2563eb',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
-    marginTop: 24,
-    shadowColor: '#2563eb',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: spacing.xxxl,
   },
   continueButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '700',
+    ...typography.heading.default,
+    color: colors.text.white,
   },
 });
