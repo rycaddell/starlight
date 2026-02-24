@@ -11,6 +11,7 @@ import {
   Pressable,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import Animated, {
   FadeIn,
@@ -21,6 +22,7 @@ import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ONBOARDING_BACKGROUNDS, SAMPLE_JOURNAL_ENTRIES, PRODUCT_SCREENSHOT } from '../../constants/onboardingImages';
 import { supabase } from '../../lib/supabase';
+import { colors, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface JournalCardProps {
   date: string;
@@ -151,7 +153,8 @@ export const NarrativeOnboardingScreen: React.FC = () => {
       setAutoAdvanceTimer(null);
       goToNextStep();
     } else if (currentStep === 'name-input') {
-      // Do nothing, user must submit via button
+      // Dismiss keyboard on tap outside, but don't advance
+      Keyboard.dismiss();
       return;
     } else if (currentStep === 'call-to-action') {
       // Do nothing, user must tap "Get started" button
@@ -179,9 +182,9 @@ export const NarrativeOnboardingScreen: React.FC = () => {
               onSubmitEditing={handleNameSubmit}
             />
             <TouchableOpacity
-              style={[styles.button, canProceed && styles.buttonActive]}
+              style={[styles.button, nameInput.trim().length > 0 && styles.buttonActive]}
               onPress={handleNameSubmit}
-              disabled={!canProceed}
+              disabled={nameInput.trim().length === 0}
             >
               <Text style={styles.buttonText}>Continue</Text>
             </TouchableOpacity>
@@ -352,26 +355,35 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   header: {
-    fontSize: 32,
+    fontFamily: fontFamily.primary,
+    fontSize: 36,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: colors.text.white,
     textAlign: 'left',
-    marginBottom: 16,
+    marginBottom: spacing.xl,
     width: '100%',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
   subheader: {
-    fontSize: 20,
+    fontFamily: fontFamily.primary,
+    fontSize: 21,
     fontWeight: '400',
-    color: '#FFFFFF',
+    color: colors.text.white,
     textAlign: 'left',
     width: '100%',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   inputHint: {
-    fontSize: 14,
+    fontFamily: fontFamily.primary,
+    fontSize: 13,
     fontWeight: '400',
     color: 'rgba(255, 255, 255, 0.6)',
-    marginTop: 24,
-    marginBottom: 8,
+    marginTop: spacing.xxxl,
+    marginBottom: spacing.m,
   },
   nameInput: {
     width: '70%',
@@ -380,37 +392,34 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'rgba(255, 255, 255, 0.5)',
     paddingHorizontal: 0,
+    fontFamily: fontFamily.primary,
     fontSize: 24,
-    color: '#FFFFFF',
+    color: colors.text.white,
     marginBottom: 40,
   },
   button: {
     width: '100%',
-    height: 56,
+    paddingVertical: spacing.xl,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    borderRadius: 12,
+    borderRadius: borderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     opacity: 0.5,
   },
   buttonActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: colors.text.primary,
     opacity: 1,
   },
   buttonPrimary: {
-    backgroundColor: '#059669',
+    backgroundColor: colors.text.primary,
     opacity: 1,
-    marginTop: 32,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    marginTop: spacing.xxxl,
   },
   buttonText: {
-    fontSize: 18,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text.white,
   },
   journalCard: {
     position: 'absolute',
@@ -419,7 +428,7 @@ const styles = StyleSheet.create({
     right: 32,
     backgroundColor: 'rgba(255, 255, 255, 0.15)',
     borderRadius: 16,
-    padding: 24,
+    padding: spacing.xxxl,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -427,23 +436,25 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   journalLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 16,
+    fontFamily: fontFamily.primary,
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.text.white,
+    marginBottom: spacing.xl,
     textTransform: 'uppercase',
     letterSpacing: 1.2,
   },
   journalText: {
-    fontSize: 16,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
     fontWeight: '400',
-    color: '#FFFFFF',
+    color: colors.text.white,
     fontStyle: 'italic',
     lineHeight: 24,
   },
   productScreenshot: {
     width: 280,
-    height: 606, // Maintains iPhone aspect ratio (375:812)
+    height: 606,
     marginTop: 40,
     alignSelf: 'center',
     shadowColor: '#000',
@@ -454,9 +465,10 @@ const styles = StyleSheet.create({
   },
   waypointDate: {
     position: 'absolute',
+    fontFamily: fontFamily.primary,
     fontSize: 13,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: colors.text.white,
     opacity: 0.9,
     textShadowColor: 'rgba(0, 0, 0, 0.3)',
     textShadowOffset: { width: 0, height: 1 },

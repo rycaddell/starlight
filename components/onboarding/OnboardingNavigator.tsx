@@ -4,6 +4,7 @@ import { View, StyleSheet } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useAuth } from '../../contexts/AuthContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
+import { colors } from '../../theme/designTokens';
 import { NarrativeOnboardingScreen } from './NarrativeOnboardingScreen';
 
 export const OnboardingNavigator: React.FC = () => {
@@ -35,9 +36,6 @@ export const OnboardingNavigator: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#1a1a1a', // Dark gray to match overlay tone
-  },
-  screenWrapper: {
-    flex: 1,
+    backgroundColor: colors.text.black,
   },
 });

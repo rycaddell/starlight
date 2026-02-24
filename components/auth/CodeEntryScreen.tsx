@@ -1,10 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
   Alert,
   Dimensions,
   Keyboard,
@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
+import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 const { width, height } = Dimensions.get('window');
 
@@ -158,7 +159,7 @@ export const CodeEntryScreen: React.FC<CodeEntryScreenProps> = ({
                     value={code}
                     onChangeText={setCode}
                     placeholder="e.g. test123"
-                    placeholderTextColor="#9ca3af"
+                    placeholderTextColor={colors.text.bodyLight}
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoComplete="off"
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)', // Semi-transparent overlay for better text readability
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -215,7 +216,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xxxl,
     paddingTop: 32,
     paddingBottom: 32,
   },
@@ -224,37 +225,38 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   title: {
+    fontFamily: fontFamily.primary,
     fontSize: 48,
-    fontWeight: 'bold',
-    color: '#ffffff',
+    fontWeight: '900',
+    color: colors.text.white,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 4,
-    marginBottom: 8,
+    marginBottom: spacing.m,
   },
   subtitle: {
-    fontSize: 18,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
     fontWeight: '400',
-    color: '#ffffff',
+    fontStyle: 'italic',
+    color: colors.text.white,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
     opacity: 0.9,
-    fontStyle: 'italic',
   },
   bottomSection: {
     justifyContent: 'flex-end',
+    gap: spacing.xxxl,
   },
   inputContainer: {
-    marginBottom: 24,
+    gap: spacing.l,
   },
   inputLabel: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#ffffff',
-    marginBottom: 12,
+    ...typography.heading.s,
+    color: colors.text.white,
     textAlign: 'center',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 1 },
@@ -262,45 +264,27 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 12,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    fontSize: 18,
-    color: '#1f2937',
+    borderRadius: borderRadius.button,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.xl,
+    fontFamily: fontFamily.primary,
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.text.body,
     textAlign: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   submitButton: {
-    backgroundColor: '#6366f1',
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 32,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+    backgroundColor: colors.text.primary,
+    borderRadius: borderRadius.button,
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
   },
   submitButtonDisabled: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
   },
   submitButtonText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.white,
     textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
 });
