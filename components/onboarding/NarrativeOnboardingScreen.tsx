@@ -44,7 +44,7 @@ const JournalCard: React.FC<JournalCardProps> = ({ date, text }) => {
 export const NarrativeOnboardingScreen: React.FC = () => {
   const { currentStep, userName, setUserName, goToNextStep, completeOnboarding, canProceed } =
     useOnboarding();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [nameInput, setNameInput] = useState(userName);
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
   const [stepStartTime, setStepStartTime] = useState<number>(Date.now());
@@ -115,6 +115,8 @@ export const NarrativeOnboardingScreen: React.FC = () => {
         // Update local storage with new display name
         const updatedUser = { ...user, display_name: trimmedName };
         await AsyncStorage.setItem('starlight_current_user', JSON.stringify(updatedUser));
+        // Refresh auth context so the new name is live in the session
+        await refreshUser();
       }
     } catch (error) {
       console.error('❌ Exception saving display name:', error);
@@ -181,13 +183,14 @@ export const NarrativeOnboardingScreen: React.FC = () => {
               returnKeyType="done"
               onSubmitEditing={handleNameSubmit}
             />
-            <TouchableOpacity
-              style={[styles.button, nameInput.trim().length > 0 && styles.buttonActive]}
-              onPress={handleNameSubmit}
-              disabled={nameInput.trim().length === 0}
-            >
-              <Text style={styles.buttonText}>Continue</Text>
-            </TouchableOpacity>
+            {nameInput.trim().length > 0 && (
+              <TouchableOpacity
+                style={[styles.button, styles.buttonActive]}
+                onPress={handleNameSubmit}
+              >
+                <Text style={styles.buttonText}>Continue</Text>
+              </TouchableOpacity>
+            )}
           </Animated.View>
         );
 

@@ -164,6 +164,8 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
         setCurrentStep('complete');
         setIsOnboardingComplete(true);
         console.log('✅ Onboarding completed successfully');
+        // Refresh user so onboarding_completed_at is live in AuthContext
+        await refreshUser();
 
         // Preload Day 1 images in background for better UX when user starts Day 1
         preloadDay1Images().catch(error => {

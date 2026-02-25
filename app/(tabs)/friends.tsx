@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
   emptyStateHeading: {
     ...typography.heading.xl,
     color: colors.text.white,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.s,
     textAlign: 'left',
   },
   emptyStateSubheading: {

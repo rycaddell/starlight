@@ -18,7 +18,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   size,
   imageUri,
   initials,
-  backgroundColor = colors.background.defaultLight,
+  backgroundColor = colors.background.default,
 }) => {
   // Get dimensions based on size
   const getDimensions = () => {
@@ -57,9 +57,6 @@ export const Avatar: React.FC<AvatarProps> = ({
     width: dimensions.width,
     height: dimensions.height,
     borderRadius: borderRadius.avatar,
-    borderWidth: 2,
-    borderColor: colors.border.avatar,
-    ...shadows.avatar,
     backgroundColor: imageUri ? 'transparent' : backgroundColor,
     justifyContent: 'center',
     alignItems: 'center',
@@ -79,7 +76,7 @@ export const Avatar: React.FC<AvatarProps> = ({
         />
       ) : (
         <Text style={[getInitialStyle(), { color: colors.text.body }]}>
-          {initials}
+          {initials.charAt(0).toUpperCase()}
         </Text>
       )}
     </View>

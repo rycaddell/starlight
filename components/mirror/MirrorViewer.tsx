@@ -4,7 +4,6 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackg
 import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
-import { IconSymbol } from '@/components/ui/IconSymbol';
 import { saveReflectionFocus } from '@/lib/supabase/mirrors';
 
 interface MirrorViewerProps {
@@ -213,13 +212,16 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
               />
             </TouchableOpacity>
             <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
-              <IconSymbol name="square.and.arrow.up" size={40} color={colors.text.white} />
+              <Image
+                source={require('@/assets/images/icons/Share.png')}
+                style={styles.shareIcon}
+              />
             </TouchableOpacity>
           </View>
 
           {/* Title and Date Overlay */}
           <View style={styles.titleOverlay}>
-            <Text style={styles.titleOverlayText}>{getTitle()}</Text>
+            <Text style={styles.titleOverlayText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{getTitle()}</Text>
             <Text style={styles.subtitleOverlayText}>{formatDate()}</Text>
           </View>
 
@@ -420,7 +422,10 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
               ) : !showReflectionInput ? (
                 // Show prompt to add reflection
                 <>
-                  <IconSymbol name="bubble.left.and.bubble.right" size={182} color={colors.text.bodyLight} />
+                  <Image
+                    source={require('@/assets/images/icons/Reflection.png')}
+                    style={styles.reflectionIcon}
+                  />
                   <Text style={styles.reflectionDescription}>
                     Take a moment to reflect on what God is showing you through this Mirror.
                   </Text>
@@ -528,10 +533,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  shareIcon: {
+    width: 17,
+    height: 21,
+    tintColor: colors.text.white,
+  },
   titleOverlay: {
     position: 'absolute',
     top: 172,
     left: spacing.xl,
+    right: spacing.xl,
     zIndex: 2,
   },
   titleOverlayText: {
@@ -745,6 +756,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     paddingHorizontal: spacing.xl,
+  },
+  reflectionIcon: {
+    width: 120,
+    height: 120,
+    tintColor: colors.text.bodyLight,
   },
   reflectionDescription: {
     ...typography.special.promptBody,
