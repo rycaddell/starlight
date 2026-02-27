@@ -115,6 +115,10 @@ export const NarrativeOnboardingScreen: React.FC = () => {
         // Update local storage with new display name
         const updatedUser = { ...user, display_name: trimmedName };
         await AsyncStorage.setItem('starlight_current_user', JSON.stringify(updatedUser));
+        // Note: do NOT call refreshUser() here — it triggers OnboardingContext's user
+        // useEffect which resets currentStep to 'name-input'. The name is already live
+        // in OnboardingContext (setUserName above) and in AsyncStorage. AuthContext
+        // will pick up the updated user naturally via completeOnboarding() at the end.
       }
     } catch (error) {
       console.error('❌ Exception saving display name:', error);
@@ -181,13 +185,14 @@ export const NarrativeOnboardingScreen: React.FC = () => {
               returnKeyType="done"
               onSubmitEditing={handleNameSubmit}
             />
-            <TouchableOpacity
-              style={[styles.button, nameInput.trim().length > 0 && styles.buttonActive]}
-              onPress={handleNameSubmit}
-              disabled={nameInput.trim().length === 0}
-            >
-              <Text style={styles.buttonText}>Continue</Text>
-            </TouchableOpacity>
+            {nameInput.trim().length > 0 && (
+              <TouchableOpacity
+                style={[styles.button, styles.buttonActive]}
+                onPress={handleNameSubmit}
+              >
+                <Text style={styles.buttonText}>Continue</Text>
+              </TouchableOpacity>
+            )}
           </Animated.View>
         );
 

@@ -148,7 +148,6 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
                 }
                 placeholderTextColor={colors.text.bodyLight}
                 multiline
-                numberOfLines={4}
                 value={feedbackText}
                 onChangeText={setFeedbackText}
                 editable={!!feedbackType}
@@ -176,9 +175,9 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
               {/* Profile Picture */}
               <View style={styles.profilePicSection}>
                 <Avatar
-                  profilePictureUrl={user?.profile_picture_url}
-                  displayName={user?.display_name}
-                  size={60}
+                  imageUri={user?.profile_picture_url || undefined}
+                  initials={user?.display_name?.charAt(0) ?? '?'}
+                  size="default"
                 />
                 <TouchableOpacity
                   style={[styles.changeProfilePicButton, uploading && styles.buttonDisabled]}

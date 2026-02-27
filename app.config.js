@@ -35,6 +35,13 @@ export default {
       plugins: [
         "expo-router",
         [
+          "@sentry/react-native/expo",
+          {
+            organization: "oxbow-wc",
+            project: "oxbow"
+          }
+        ],
+        [
           "expo-splash-screen",
           {
             image: "./assets/images/splash-icon.png",

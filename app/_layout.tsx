@@ -59,7 +59,6 @@ Sentry.init({
 function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
     'Satoshi Variable': require('../assets/fonts/Satoshi-Variable.ttf'),
     'Satoshi Variable Italic': require('../assets/fonts/Satoshi-VariableItalic.ttf'),
   });

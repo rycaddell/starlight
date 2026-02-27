@@ -2,8 +2,8 @@
 // Avatar component with 3 sizes (small: 48pt, default: 64pt, large: 88pt)
 
 import React from 'react';
-import { View, Text, Image, StyleSheet, ViewStyle, TextStyle } from 'react-native';
-import { colors, typography, borderRadius, shadows } from '@/theme/designTokens';
+import { View, Image, Text, StyleSheet, ViewStyle } from 'react-native';
+import { borderRadius, fontFamily } from '@/theme/designTokens';
 
 export type AvatarSize = 'small' | 'default' | 'large';
 
@@ -11,77 +11,72 @@ export interface AvatarProps {
   size: AvatarSize;
   imageUri?: string;
   initials: string;
-  backgroundColor?: string; // Optional custom background color for initials
+  backgroundColor?: string; // kept for API compatibility
 }
 
-export const Avatar: React.FC<AvatarProps> = ({
-  size,
-  imageUri,
-  initials,
-  backgroundColor = colors.background.defaultLight,
-}) => {
-  // Get dimensions based on size
+export const Avatar: React.FC<AvatarProps> = ({ size, imageUri, initials }) => {
   const getDimensions = () => {
     switch (size) {
-      case 'small':
-        return { width: 48, height: 48 };
-      case 'large':
-        return { width: 88, height: 88 };
-      case 'default':
-      default:
-        return { width: 64, height: 64 };
+      case 'small':  return { width: 48, height: 48 };
+      case 'large':  return { width: 88, height: 88 };
+      default:       return { width: 64, height: 64 };
     }
   };
 
-  // Get initial font style based on size
-  const getInitialStyle = (): TextStyle => {
-    switch (size) {
-      case 'small':
-        return {
-          ...typography.special.avatarInitialSmall,
-          lineHeight: 22, // Increased from 18 for proper vertical centering
-        };
-      case 'default':
-      case 'large':
-      default:
-        return {
-          ...typography.special.avatarInitial,
-          lineHeight: 29, // Increased from 24 for proper vertical centering
-        };
-    }
+  const { width, height } = getDimensions();
+  const br = borderRadius.avatar; // 60
+
+  // Outer view: shadow only — no overflow:hidden so shadow renders outside bounds
+  const shadowStyle: ViewStyle = {
+    width,
+    height,
+    borderRadius: br,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   };
 
-  const dimensions = getDimensions();
-
-  const containerStyle: ViewStyle = {
-    width: dimensions.width,
-    height: dimensions.height,
-    borderRadius: borderRadius.avatar,
+  // Inner view: white border + solid background + clip to circle.
+  // Using backgroundColor instead of a PNG avoids antialiasing gaps at the border edge.
+  const innerStyle: ViewStyle = {
+    width,
+    height,
+    borderRadius: br,
     borderWidth: 2,
-    borderColor: colors.border.avatar,
-    ...shadows.avatar,
-    backgroundColor: imageUri ? 'transparent' : backgroundColor,
+    borderColor: '#FFFFFF',
+    overflow: 'hidden',
+    backgroundColor: '#F6F4F4',
     justifyContent: 'center',
     alignItems: 'center',
-    overflow: 'hidden',
   };
 
   return (
-    <View style={containerStyle}>
-      {imageUri ? (
-        <Image
-          source={{ uri: imageUri }}
-          style={{
-            width: dimensions.width,
-            height: dimensions.height,
-          }}
-          resizeMode="cover"
-        />
-      ) : (
-        <Text style={[getInitialStyle(), { color: colors.text.body }]}>
-          {initials}
-        </Text>
-      )}
+    <View style={shadowStyle}>
+      <View style={innerStyle}>
+        {imageUri ? (
+          <Image
+            source={{ uri: imageUri }}
+            style={[StyleSheet.absoluteFillObject, { width, height }]}
+            resizeMode="cover"
+          />
+        ) : (
+          <Text style={styles.initial}>{initials.charAt(0).toUpperCase()}</Text>
+        )}
+      </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  initial: {
+    fontFamily: fontFamily.primary,
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#273047',
+    textAlign: 'center',
+    lineHeight: 24, // matches fontSize — minimises implicit font padding so flex centering is accurate
+    marginTop: 3,   // compensates for Satoshi Variable cap height sitting above em-square centre
+  },
+});

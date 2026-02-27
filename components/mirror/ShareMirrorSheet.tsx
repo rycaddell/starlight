@@ -374,7 +374,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.m,
-    backgroundColor: colors.background.primaryLight,
+    backgroundColor: colors.text.primary,
     paddingHorizontal: spacing.xxxl,
     paddingVertical: 14,
     borderRadius: borderRadius.button,

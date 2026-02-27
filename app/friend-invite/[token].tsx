@@ -16,6 +16,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptInvite, getInviterInfo } from '@/lib/supabase/friends';
 import { Avatar } from '@/components/ui/Avatar';
+import { colors, typography, spacing, borderRadius, fontFamily } from '@/theme/designTokens';
 
 export default function AcceptInviteScreen() {
   const { token, inviter, name } = useLocalSearchParams();
@@ -66,7 +67,6 @@ export default function AcceptInviteScreen() {
 
     setAccepting(true);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'friends',
       message: 'User accepting friend invite',
@@ -78,7 +78,6 @@ export default function AcceptInviteScreen() {
       const result = await acceptInvite(token, user.id);
 
       if (!result.success) {
-        // Capture invite acceptance failure
         Sentry.captureException(new Error(`Failed to accept invite: ${result.error}`), {
           tags: { component: 'AcceptInviteScreen', action: 'accept' },
           contexts: {
@@ -94,7 +93,6 @@ export default function AcceptInviteScreen() {
         return;
       }
 
-      // Success!
       Sentry.addBreadcrumb({
         category: 'friends',
         message: 'Friend invite accepted successfully',
@@ -115,7 +113,6 @@ export default function AcceptInviteScreen() {
     } catch (error) {
       console.error('Error accepting invite:', error);
 
-      // Capture unexpected error
       Sentry.captureException(error, {
         tags: { component: 'AcceptInviteScreen', action: 'accept', type: 'unexpected' },
         contexts: { friends: { inviterName } },
@@ -144,7 +141,7 @@ export default function AcceptInviteScreen() {
   if (!user) {
     return (
       <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#6366f1" />
+        <ActivityIndicator size="large" color={colors.text.primary} />
       </SafeAreaView>
     );
   }
@@ -155,9 +152,9 @@ export default function AcceptInviteScreen() {
         {/* Inviter Info */}
         <View style={styles.inviterSection}>
           <Avatar
-            profilePictureUrl={inviterProfilePicUrl}
-            displayName={inviterName}
-            size={80}
+            imageUri={inviterProfilePicUrl || undefined}
+            initials={inviterName.charAt(0)}
+            size="large"
           />
           <Text style={styles.inviterName}>{inviterName}</Text>
           <Text style={styles.invitedText}>wants to be friends in Oxbow</Text>
@@ -171,7 +168,7 @@ export default function AcceptInviteScreen() {
             disabled={accepting}
           >
             {accepting ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={colors.text.white} />
             ) : (
               <Text style={styles.acceptButtonText}>Accept</Text>
             )}
@@ -198,60 +195,58 @@ export default function AcceptInviteScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: colors.background.default,
   },
   content: {
     flex: 1,
-    padding: 24,
+    paddingHorizontal: spacing.xxxl,
     justifyContent: 'center',
   },
   inviterSection: {
     alignItems: 'center',
-    marginBottom: 64,
-    gap: 16,
+    marginBottom: spacing.xxxxl,
+    gap: spacing.l,
   },
   inviterName: {
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#000',
-    marginBottom: 8,
+    ...typography.heading.l,
+    color: colors.text.body,
   },
   invitedText: {
-    fontSize: 16,
-    color: '#6b7280',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
   },
   actions: {
-    gap: 12,
-    marginBottom: 16,
+    gap: spacing.m,
+    marginBottom: spacing.xl,
   },
   acceptButton: {
-    backgroundColor: '#6366f1',
-    paddingVertical: 16,
-    borderRadius: 12,
+    backgroundColor: colors.text.primary,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
   },
   acceptButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
+    ...typography.heading.s,
+    color: colors.text.white,
   },
   declineButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: spacing.xl,
+    borderRadius: borderRadius.button,
     alignItems: 'center',
-    backgroundColor: '#f3f4f6',
+    backgroundColor: colors.background.card,
+    borderWidth: 1,
+    borderColor: colors.border.divider,
   },
   declineButtonText: {
-    color: '#6b7280',
-    fontSize: 16,
-    fontWeight: '500',
+    ...typography.heading.s,
+    color: colors.text.body,
   },
   buttonDisabled: {
     opacity: 0.6,
   },
   expiryNote: {
-    fontSize: 12,
-    color: '#9ca3af',
+    ...typography.body.s,
+    color: colors.text.bodyLight,
     textAlign: 'center',
   },
 });

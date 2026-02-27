@@ -1,6 +1,6 @@
 // components/voice/VoiceRecordingTab.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface VoiceRecordingTabProps {
@@ -62,6 +62,13 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
             <Text style={[styles.startButtonText, styles.processingButtonText]}>
               {isBuildingMirror ? 'Generating Mirror' : 'Processing...'}
             </Text>
+            {isBuildingMirror && (
+              <Image
+                source={require('@/assets/images/icons/In-progress.png')}
+                style={styles.generatingIcon}
+                resizeMode="contain"
+              />
+            )}
           </View>
         ) : (
           <View style={styles.recordingControls}>
@@ -85,7 +92,9 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
         )}
       </View>
 
-      <Text style={styles.limitText}>Maximum recording length: 8 minutes</Text>
+      {!isBuildingMirror && (
+        <Text style={styles.limitText}>Maximum recording length: 8 minutes</Text>
+      )}
     </View>
   );
 };
@@ -124,6 +133,13 @@ const styles = StyleSheet.create({
   },
   processingButton: {
     backgroundColor: colors.background.disabled,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.ml,
+    height: 40,
+    width: 246,
+    paddingVertical: 0,
+    paddingHorizontal: 30,
   },
   processingButtonText: {
     color: colors.text.bodyLight,
@@ -160,5 +176,9 @@ const styles = StyleSheet.create({
   limitText: {
     ...typography.body.s,
     color: colors.text.bodyLight,
+  },
+  generatingIcon: {
+    width: 18,
+    height: 18,
   },
 });

@@ -1,6 +1,6 @@
 // components/mirror/LastMirrorCard.tsx
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
 import { Button } from '@/components/ui/Button';
 import { Tag } from '@/components/ui/Tag';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
@@ -31,19 +31,35 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
   });
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onViewMirror} activeOpacity={0.9}>
-      {/* River illustration — absolute, fills full card */}
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onViewMirror}
+      activeOpacity={0.9}
+    >
+      {/* River illustration — absolute, fills left 42% of card */}
       <Image
         source={require('@/assets/images/river-illustration.png')}
-        style={styles.illustration}
-        resizeMode="stretch"
+        style={styles.riverImage}
+        resizeMode="cover"
       />
+
+      {/* Journal dots — absolutely positioned over the river */}
+      <View style={[styles.dot, { top: 29, left: 112 }]} />
+      <View style={[styles.dot, { top: 70, left: 99 }]} />
+      <View style={[styles.dot, { top: 125, left: 115 }]} />
+      <View style={[styles.dot, { top: 104, left: 34 }]} />
+      <View style={[styles.dot, { top: 194, left: 26 }]} />
+      <View style={[styles.dot, { top: 298, left: 55 }]} />
+      <View style={[styles.dot, { top: 228, left: 115 }]} />
+      <View style={[styles.dot, { top: 322, left: 8 }]} />
+      <View style={[styles.dot, { top: 366, left: 95 }]} />
+      <View style={[styles.dot, { top: 395, left: 19 }]} />
 
       {/* Content panel — right of the river path */}
       <View style={styles.contentPanel}>
         {/* Name + date as a tight group */}
         <View style={styles.nameGroup}>
-          <Text style={styles.name} numberOfLines={2}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
             {biblicalCharacter || 'Mirror'}
           </Text>
           <Text style={styles.date}>{formattedDate}</Text>
@@ -81,18 +97,19 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border.divider,
-    minHeight: 308,
+    height: 423,
   },
-  illustration: {
+  riverImage: {
     position: 'absolute',
     top: 0,
     left: 0,
-    bottom: 0,
-    width: '100%',
+    width: '42%',
+    height: '100%',
   },
   contentPanel: {
     marginLeft: '42%',
-    padding: spacing.l,
+    paddingLeft: 0,
+    paddingTop: 17,
     paddingRight: spacing.xxl,
     paddingBottom: spacing.xxl,
     gap: spacing.m,
@@ -103,14 +120,13 @@ const styles = StyleSheet.create({
   name: {
     ...typography.heading.xl,
     color: colors.text.body,
-    lineHeight: 44,
   },
   date: {
     fontFamily: typography.body.default.fontFamily,
     fontSize: 15,
     fontWeight: '400',
     color: colors.text.bodyLight,
-    lineHeight: 20,
+    lineHeight: 15,
   },
   focusSection: {
     marginTop: spacing.m,
@@ -125,5 +141,12 @@ const styles = StyleSheet.create({
   },
   addReflectionWrapper: {
     marginTop: spacing.m,
+  },
+  dot: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#A3C6F0',
   },
 });

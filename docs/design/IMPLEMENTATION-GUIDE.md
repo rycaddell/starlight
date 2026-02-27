@@ -1,7 +1,7 @@
 # Oxbow Design System - Implementation Guide
 
 > **Source**: Oxbow-02162026 design assets exported February 16, 2026
-> **Last Updated**: February 16, 2026
+> **Last Updated**: February 24, 2026
 
 This document serves as the primary reference for implementing the new Oxbow design system. All specifications are based on the official Figma designs and design tokens.
 
@@ -57,105 +57,105 @@ Oxbow follows Apple Human Interface Guidelines with emphasis on:
 
 ## Implementation Plan
 
-### Phase 1: Foundation (Priority 1)
+### Phase 1: Foundation (Priority 1) ✅ Complete
 **Goal**: Establish design system infrastructure
 
-- [ ] Bundle Satoshi Variable font files
-- [ ] Create design token constants (`/theme/designTokens.ts`)
-- [ ] Build core components (Button, Tag, Avatar, Badge)
-- [ ] Set up typography presets
-- [ ] Test font loading and rendering
+- [x] Bundle Satoshi Variable font files
+- [x] Create design token constants (`/theme/designTokens.ts`)
+- [x] Build core components (Button, Tag, Avatar, Badge)
+- [x] Set up typography presets
+- [x] Test font loading and rendering
 
 **Why First**: Foundation must be solid before building features
 
 ---
 
-### Phase 2: Navigation (Priority 2)
+### Phase 2: Navigation (Priority 2) ✅ Complete
 **Goal**: Set up navigation structure
 
-- [ ] Configure bottom tab navigator (3 tabs)
-- [ ] Create navigation stacks (Journal, Mirror, Friends)
-- [ ] Implement custom tab bar styling
-- [ ] Set up safe area handling
-- [ ] Create screen shells with placeholder content
+- [x] Configure bottom tab navigator (3 tabs)
+- [x] Create navigation stacks (Journal, Mirror, Friends)
+- [x] Implement custom tab bar styling
+- [x] Set up safe area handling
+- [x] Create screen shells with placeholder content
 
 **Why Second**: Enables parallel feature development
 
 ---
 
-### Phase 3: Core Components (Priority 3)
+### Phase 3: Core Components (Priority 3) ✅ Complete
 **Goal**: Build reusable components
 
-- [ ] Card variants (Journal, Prompt, Mirror, Friend)
-- [ ] Friend Card component
-- [ ] Journal Options cards
-- [ ] Mirror Status component
-- [ ] Mirror Illustration asset integration
+- [x] Card variants (Journal, Prompt, Mirror, Friend)
+- [x] Friend Card component
+- [x] Journal Options cards
+- [x] Mirror Status component
+- [x] Mirror Illustration asset integration
 
 **Why Third**: Maximum component reuse across screens
 
 ---
 
-### Phase 4: Landing Screen (Priority 4)
+### Phase 4: Landing Screen (Priority 4) ✅ Complete
 **Goal**: Implement main entry point
 
-- [ ] All Mirror Status states (countdown, ready, generating)
-- [ ] Settings gear icon
-- [ ] River illustration with entry dots
-- [ ] Journal Options (Voice/Text)
-- [ ] Daily Prompt card
-- [ ] Navigation wiring
+- [x] All Mirror Status states (countdown, ready, generating)
+- [x] Settings gear icon
+- [x] River illustration with entry dots
+- [x] Journal Options (Voice/Text)
+- [x] Daily Prompt card
+- [x] Navigation wiring
 
 **Why Fourth**: Showcases design system, provides early demo
 
 ---
 
-### Phase 5: Mirror Screens (Priority 5)
+### Phase 5: Mirror Screens (Priority 5) ✅ Complete
 **Goal**: Core value proposition
 
-- [ ] Mirrors Overview (with/without reflection variants)
-- [ ] Mirror Detail with collapsible header
-- [ ] Tab navigation (Mirror, Themes, Observations, Reflection)
-- [ ] Verse components
-- [ ] Footer Action bar
-- [ ] Scroll animations
+- [x] Mirrors Overview (with/without reflection variants)
+- [x] Mirror Detail with collapsible header
+- [x] Tab navigation (Mirror, Themes, Observations, Reflection)
+- [x] Verse components
+- [x] Footer Action bar
+- [x] Scroll animations
 
 **Why Fifth**: Primary app feature after foundation complete
 
 ---
 
-### Phase 6: Friends Screens (Priority 6)
+### Phase 6: Friends Screens (Priority 6) ✅ Complete
 **Goal**: Social features
 
-- [ ] Friends List with recommendations
-- [ ] Friend Detail bottom sheet
-- [ ] Message chip with badge
-- [ ] Mirror cards list
-- [ ] Swipe gestures
+- [x] Friends List with recommendations
+- [x] Friend Detail bottom sheet
+- [x] Message chip with badge
+- [x] Mirror cards list
+- [ ] Swipe gestures (deferred)
 
 **Why Sixth**: Depends on Mirror screens
 
 ---
 
-### Phase 7: Journal Creation (Priority 7)
+### Phase 7: Journal Creation (Priority 7) ✅ Complete
 **Goal**: Content creation
 
-- [ ] Voice recording interface
-- [ ] Text input interface
-- [ ] Prompt-based journal
-- [ ] Journal Detail view
+- [x] Voice recording interface
+- [x] Text input interface
+- [x] Prompt-based journal
+- [ ] Journal Detail view (deferred)
 
 **Why Seventh**: Complex input flows after viewing experiences work
 
 ---
 
-### Phase 8: Additional Features (Priority 8)
+### Phase 8: Additional Features (Priority 8) — Partial
 **Goal**: Supporting flows
 
 - [ ] Past Journals List
 - [ ] Past Mirrors List
-- [ ] Generate Mirror modal
-- [ ] Add Reflection modal
+- [x] Share Mirror modal (ShareMirrorSheet)
+- [x] Add Reflection modal
 - [ ] Invite Friend flow
 - [ ] Messages thread
 
@@ -163,17 +163,29 @@ Oxbow follows Apple Human Interface Guidelines with emphasis on:
 
 ---
 
-### Phase 9: Polish (Priority 9)
+### Phase 9: Polish (Priority 9) — In Progress
 **Goal**: Refinement
 
 - [ ] Animations and transitions
 - [ ] Empty states
 - [ ] Error states
+- [x] Sentry error monitoring (all critical workflows)
 - [ ] Performance optimization
 - [ ] Accessibility (VoiceOver, Dynamic Type)
 - [ ] Testing
 
 **Why Last**: Requires all features in place
+
+---
+
+### Additional: Auth, Settings & Onboarding (Applied February 2026)
+**Goal**: Apply design system to remaining flows outside original scope
+
+- [x] Settings & Feedback Modal (`SettingsFeedbackModal.tsx`)
+- [x] Auth code entry screen (`CodeEntryScreen.tsx`)
+- [x] Narrative onboarding flow (`NarrativeOnboardingScreen.tsx`)
+- [x] Day 1 flow screens (voice journal, mirror generation states)
+- [x] Deleted 5 legacy unused onboarding screens
 
 ## Design Token Reference
 
@@ -267,13 +279,17 @@ Configure in `app.json`:
 | Meta text | `typography.body.s` | 13pt | 500 |
 | Mirror countdown | `typography.special.mirrorCount` | 48pt | 900 |
 
-## Next Steps
+## Current Status
 
-1. ✅ Read this implementation guide
-2. ⏳ Set up design tokens in codebase
-3. ⏳ Install Satoshi font
-4. ⏳ Begin Phase 1: Foundation work
-5. ⏳ Follow implementation priorities in order
+Phases 1–7 and the core Mirror/Friends screens are complete. The design system is applied across the main app, auth, settings, onboarding, and Day 1 flow.
+
+**Remaining work:**
+- Past Journals and Past Mirrors list screens
+- Invite Friend flow
+- Messages thread
+- Swipe gestures (Friends)
+- Journal Detail view
+- Animations, empty states, accessibility, and testing (Phase 9)
 
 ## Reference Documents
 
@@ -285,4 +301,4 @@ Full detailed specs available in:
 
 ---
 
-**Last updated**: February 16, 2026 by Claude Code
+**Last updated**: February 24, 2026 by Claude Code
