@@ -26,9 +26,47 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { transcribeAudio } from '../lib/supabase/transcription';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+
+const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
+const RECORDINGS_DIR = `${FileSystem.documentDirectory}pending_recordings/`;
+
+// Ensure the persistent recordings directory exists
+const ensureRecordingsDir = async () => {
+  const info = await FileSystem.getInfoAsync(RECORDINGS_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(RECORDINGS_DIR, { intermediates: true });
+  }
+};
+
+// Add a job to the AsyncStorage pending queue
+const enqueuePendingJob = async (job: PendingVoiceJob) => {
+  const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+  const jobs: PendingVoiceJob[] = raw ? JSON.parse(raw) : [];
+  jobs.push(job);
+  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(jobs));
+};
+
+// Remove a completed/failed job from the queue by jobId
+export const dequeuePendingJob = async (jobId: string) => {
+  const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+  if (!raw) return;
+  const jobs: PendingVoiceJob[] = JSON.parse(raw);
+  const updated = jobs.filter(j => j.jobId !== jobId);
+  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+};
+
+export interface PendingVoiceJob {
+  jobId: string;
+  localPath: string;
+  promptText: string | null;
+  entryType: string;
+  createdAt: string;
+}
 
 // Maximum recording duration in seconds (8 minutes)
 // For testing: temporarily set to 10 seconds, then restore to 480
@@ -200,6 +238,36 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         if (uri && onTranscriptionComplete) {
           setIsProcessing(true);
 
+          // --- Step 3: Persist audio to permanent local storage ---
+          // The temp cache URI (/Library/Caches/AV/) can be purged by iOS.
+          // Copy to documentDirectory immediately so the file survives if
+          // the upload or transcription fails and needs to be retried.
+          const jobId = crypto.randomUUID();
+          const localPath = `${RECORDINGS_DIR}${jobId}.m4a`;
+          try {
+            await ensureRecordingsDir();
+            await FileSystem.copyAsync({ from: uri, to: localPath });
+            await enqueuePendingJob({
+              jobId,
+              localPath,
+              promptText: null, // populated by callers in Steps 4+
+              entryType: 'voice',
+              createdAt: new Date().toISOString(),
+            });
+            Sentry.addBreadcrumb({
+              category: 'recording',
+              message: 'Audio persisted to permanent local storage',
+              data: { jobId, localPath },
+              level: 'info',
+            });
+          } catch (persistError) {
+            // Non-fatal: log and continue with original temp URI
+            Sentry.captureException(persistError, {
+              tags: { component: 'useAudioRecording', action: 'persist_local' },
+            });
+          }
+          // -------------------------------------------------------
+
           // Generate timestamp
           const timestamp = new Date().toLocaleString('en-US', {
             year: 'numeric',
@@ -211,6 +279,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           });
 
           // Transcribe audio using Whisper Edge Function (server-side)
+          // NOTE: Steps 4-6 will replace this call with upload-to-storage + job-based flow
           const result = await transcribeAudio(uri);
 
           setIsProcessing(false);
