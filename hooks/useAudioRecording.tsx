@@ -29,7 +29,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
-import { transcribeAudio } from '../lib/supabase/transcription';
+import { transcribeAudio, uploadAudioToStorage } from '../lib/supabase/transcription';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
@@ -69,6 +69,8 @@ export const dequeuePendingJob = async (jobId: string) => {
 export interface PendingVoiceJob {
   jobId: string;
   localPath: string;
+  storagePath: string | null;   // set after upload succeeds
+  journalId: string | null;     // set after journal row created (Step 5)
   promptText: string | null;
   entryType: string;
   createdAt: string;
@@ -250,13 +252,19 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           // the upload or transcription fails and needs to be retried.
           const jobId = generateUUID();
           const localPath = `${RECORDINGS_DIR}${jobId}.m4a`;
+          let persistedLocalPath = uri; // fallback to temp URI if persist fails
+          let storagePath: string | null = null;
+
           try {
             await ensureRecordingsDir();
             await FileSystem.copyAsync({ from: uri, to: localPath });
+            persistedLocalPath = localPath;
             await enqueuePendingJob({
               jobId,
               localPath,
-              promptText: null, // populated by callers in Steps 4+
+              storagePath: null,
+              journalId: null,
+              promptText: null,
               entryType: 'voice',
               createdAt: new Date().toISOString(),
             });
@@ -272,7 +280,38 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
               tags: { component: 'useAudioRecording', action: 'persist_local' },
             });
           }
-          // -------------------------------------------------------
+
+          // --- Step 4: Upload binary to Supabase Storage ---
+          try {
+            const userJson = await AsyncStorage.getItem('starlight_current_user');
+            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
+
+            if (customUserId) {
+              storagePath = `${customUserId}/${jobId}.m4a`;
+              const uploadResult = await uploadAudioToStorage(persistedLocalPath, storagePath);
+
+              if (uploadResult.success) {
+                // Update queued job with storage path so recovery can use it
+                const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+                if (raw) {
+                  const jobs: PendingVoiceJob[] = JSON.parse(raw);
+                  const updated = jobs.map(j =>
+                    j.jobId === jobId ? { ...j, storagePath } : j
+                  );
+                  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+                }
+              } else {
+                storagePath = null; // upload failed, fall through to old flow
+              }
+            }
+          } catch (uploadError) {
+            // Non-fatal: fall through to legacy transcribeAudio below
+            Sentry.captureException(uploadError, {
+              tags: { component: 'useAudioRecording', action: 'upload' },
+            });
+            storagePath = null;
+          }
+          // --------------------------------------------------
 
           // Generate timestamp
           const timestamp = new Date().toLocaleString('en-US', {
