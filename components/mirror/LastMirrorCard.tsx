@@ -43,7 +43,7 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
       <View style={styles.contentPanel}>
         {/* Name + date as a tight group */}
         <View style={styles.nameGroup}>
-          <Text style={styles.name} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
             {biblicalCharacter || 'Mirror'}
           </Text>
           <Text style={styles.date}>{formattedDate}</Text>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   },
   contentPanel: {
     marginLeft: '42%',
-    padding: spacing.l,
+    paddingLeft: 0,
     paddingTop: 17,
     paddingRight: spacing.xxl,
     paddingBottom: spacing.xxl,
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     color: colors.text.bodyLight,
-    lineHeight: 20,
+    lineHeight: 15,
   },
   focusSection: {
     marginTop: spacing.m,

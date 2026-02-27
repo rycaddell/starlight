@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { CodeEntryScreen } from '../auth/CodeEntryScreen';
 import { OnboardingNavigator } from '../onboarding/OnboardingNavigator';
+import { colors, typography } from '../../theme/designTokens';
 
 interface AuthNavigatorProps {
   children: React.ReactNode;
@@ -17,21 +18,9 @@ export function AuthNavigator({ children }: AuthNavigatorProps) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#f8fafc' }}>
-        <View style={{ 
-          flex: 1, 
-          justifyContent: 'center', 
-          alignItems: 'center',
-          gap: 16 
-        }}>
-          <ActivityIndicator size="large" color="#6366f1" />
-          <Text style={{ 
-            fontSize: 16, 
-            color: '#64748b',
-            textAlign: 'center' 
-          }}>
-            ✨ Loading Oxbow...
-          </Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: colors.background.screen }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={colors.text.primary} />
         </View>
       </SafeAreaView>
     );

@@ -1,7 +1,6 @@
 import { Tabs } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Platform, AppState } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { HapticTab } from '@/components/HapticTab';
 import { TabIcon } from '@/components/navigation/TabIcon';

@@ -44,7 +44,7 @@ const JournalCard: React.FC<JournalCardProps> = ({ date, text }) => {
 export const NarrativeOnboardingScreen: React.FC = () => {
   const { currentStep, userName, setUserName, goToNextStep, completeOnboarding, canProceed } =
     useOnboarding();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const [nameInput, setNameInput] = useState(userName);
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
   const [stepStartTime, setStepStartTime] = useState<number>(Date.now());
@@ -115,8 +115,10 @@ export const NarrativeOnboardingScreen: React.FC = () => {
         // Update local storage with new display name
         const updatedUser = { ...user, display_name: trimmedName };
         await AsyncStorage.setItem('starlight_current_user', JSON.stringify(updatedUser));
-        // Refresh auth context so the new name is live in the session
-        await refreshUser();
+        // Note: do NOT call refreshUser() here — it triggers OnboardingContext's user
+        // useEffect which resets currentStep to 'name-input'. The name is already live
+        // in OnboardingContext (setUserName above) and in AsyncStorage. AuthContext
+        // will pick up the updated user naturally via completeOnboarding() at the end.
       }
     } catch (error) {
       console.error('❌ Exception saving display name:', error);

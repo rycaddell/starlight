@@ -62,7 +62,7 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
         <View style={styles.generatingButton}>
           <Text style={styles.generatingText}>Generating Mirror</Text>
           <Image
-            source={require('@/assets/images/icons/Refresh.png')}
+            source={require('@/assets/images/icons/In-progress.png')}
             style={styles.generatingIcon}
             resizeMode="contain"
           />

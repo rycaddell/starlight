@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontFamily: typography.heading.xs.fontFamily,
-    fontWeight: '500' as TextStyle['fontWeight'],
+    fontWeight: '700' as TextStyle['fontWeight'],
     fontSize: 14,
     lineHeight: 18, // Increased from 14 for proper vertical centering in React Native
     letterSpacing: 0.56, // 4% of 14pt
