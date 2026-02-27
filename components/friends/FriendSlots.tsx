@@ -4,6 +4,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import { Avatar } from '@/components/ui/Avatar';
 
 interface Friend {
   linkId: string;
@@ -34,11 +35,10 @@ export function FriendSlots({ friends, onCreateInvite }: FriendSlotsProps) {
     if (slot.type === 'friend') {
       return (
         <View key={slot.key} style={styles.slot}>
-          <View style={styles.filledAvatar}>
-            <Text style={styles.avatarText}>
-              {slot.friend.displayName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <Avatar
+            size="default"
+            initials={slot.friend.displayName}
+          />
           <Text style={styles.friendName} numberOfLines={1}>
             {slot.friend.displayName}
           </Text>
@@ -96,15 +96,7 @@ const styles = StyleSheet.create({
   slot: {
     alignItems: 'center',
     width: 80,
-  },
-  filledAvatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#6366f1',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
+    gap: 8,
   },
   emptyAvatar: {
     width: 64,
@@ -114,11 +106,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
-  },
-  avatarText: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '600',
   },
   friendName: {
     fontSize: 12,
