@@ -29,7 +29,8 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
-import { transcribeAudio, uploadAudioToStorage } from '../lib/supabase/transcription';
+import { transcribeAudio, uploadAudioToStorage, createPendingJournal, triggerTranscription } from '../lib/supabase/transcription';
+import { supabase } from '../lib/supabase/client';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
 const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
@@ -96,7 +97,71 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const wasBackgroundedRef = useRef(false);
   const resumeTimeRef = useRef<number>(0);
   const hasHitMaxDurationRef = useRef(false);
-  
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingActiveRef = useRef(false);
+
+  const stopPolling = () => {
+    pollingActiveRef.current = false;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  };
+
+  const pollForCompletion = (journalId: string, localPath: string, jobId: string) => {
+    pollingActiveRef.current = true;
+    let pollCount = 0;
+    const MAX_POLLS = 60; // 3 min at 3s intervals
+
+    const tick = async () => {
+      if (!pollingActiveRef.current) return;
+
+      if (pollCount >= MAX_POLLS) {
+        setIsProcessing(false);
+        stopPolling();
+        Alert.alert(
+          'Still Transcribing',
+          'Your recording was saved. The transcription is still processing — check back in a moment.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      try {
+        const { data: journal } = await supabase
+          .from('journals')
+          .select('transcription_status, content, created_at')
+          .eq('id', journalId)
+          .single();
+
+        if (journal?.transcription_status === 'completed') {
+          setIsProcessing(false);
+          stopPolling();
+          const timestamp = new Date(journal.created_at).toLocaleString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true,
+          });
+          onTranscriptionComplete?.(journal.content, timestamp);
+          FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+          dequeuePendingJob(jobId);
+        } else if (journal?.transcription_status === 'failed') {
+          setIsProcessing(false);
+          stopPolling();
+          dequeuePendingJob(jobId);
+          Alert.alert('Transcription Failed', 'Unable to transcribe your recording. Please try again.');
+        } else {
+          pollCount++;
+          pollTimeoutRef.current = setTimeout(tick, 3000);
+        }
+      } catch {
+        pollCount++;
+        pollTimeoutRef.current = setTimeout(tick, 3000);
+      }
+    };
+
+    tick();
+  };
+
   useEffect(() => {
     recordingStateRef.current = { isRecording, isPaused };
   }, [isRecording, isPaused]);
@@ -313,43 +378,55 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           }
           // --------------------------------------------------
 
-          // Generate timestamp
-          const timestamp = new Date().toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
+          if (storagePath) {
+            // --- New flow: create pending journal + trigger server-side transcription ---
+            const userJson = await AsyncStorage.getItem('starlight_current_user');
+            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
 
-          // Transcribe audio using Whisper Edge Function (server-side)
-          // NOTE: Steps 4-6 will replace this call with upload-to-storage + job-based flow
-          const result = await transcribeAudio(uri);
-
-          setIsProcessing(false);
-
-          if (result.success && result.text) {
-            // Add success breadcrumb
-            Sentry.addBreadcrumb({
-              category: 'recording',
-              message: 'Recording stopped and transcribed successfully',
-              data: { textLength: result.text.length },
-              level: 'info',
+            const journal = await createPendingJournal({
+              customUserId,
+              storagePath,
+              localPath: persistedLocalPath,
+              promptText: null,
+              entryType: 'voice',
             });
 
-            // Auto-navigate to mirror with transcribed text
-            onTranscriptionComplete(result.text, timestamp);
+            // Update queued job with journalId for recovery
+            const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+            if (raw) {
+              const jobs: PendingVoiceJob[] = JSON.parse(raw);
+              const updated = jobs.map(j =>
+                j.jobId === jobId ? { ...j, journalId: journal.id } : j
+              );
+              await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+            }
+
+            // Fire edge function — don't await, server handles everything
+            triggerTranscription(journal.id);
+
+            // Poll journals table for completion (runs independently)
+            pollForCompletion(journal.id, persistedLocalPath, jobId);
+            // isProcessing stays true until polling completes
+
           } else {
-            Alert.alert(
-              'Transcription Failed',
-              result.error || 'Unable to transcribe audio. Please try again.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Retry', onPress: () => handleStopRecording() }
-              ]
-            );
-            return;
+            // --- Fallback: upload failed, use legacy inline transcription ---
+            const timestamp = new Date().toLocaleString('en-US', {
+              year: 'numeric', month: 'long', day: 'numeric',
+              hour: 'numeric', minute: '2-digit', hour12: true,
+            });
+
+            const result = await transcribeAudio(uri);
+            setIsProcessing(false);
+
+            if (result.success && result.text) {
+              onTranscriptionComplete?.(result.text, timestamp);
+            } else {
+              Alert.alert(
+                'Transcription Failed',
+                result.error || 'Unable to transcribe audio. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
           }
         }
       } catch (error) {
@@ -541,6 +618,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   useEffect(() => {
     return () => {
+      stopPolling();
       if (wakeLockActiveRef.current) {
         deactivateKeepAwake('recording-session').catch(() => {});
       }
