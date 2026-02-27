@@ -35,6 +35,12 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}pending_recordings/`;
 
+const generateUUID = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+
 // Ensure the persistent recordings directory exists
 const ensureRecordingsDir = async () => {
   const info = await FileSystem.getInfoAsync(RECORDINGS_DIR);
@@ -242,7 +248,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           // The temp cache URI (/Library/Caches/AV/) can be purged by iOS.
           // Copy to documentDirectory immediately so the file survives if
           // the upload or transcription fails and needs to be retried.
-          const jobId = crypto.randomUUID();
+          const jobId = generateUUID();
           const localPath = `${RECORDINGS_DIR}${jobId}.m4a`;
           try {
             await ensureRecordingsDir();
