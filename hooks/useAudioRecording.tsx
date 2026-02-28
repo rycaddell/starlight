@@ -26,15 +26,64 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState } from 'react-native';
 import { Audio } from 'expo-av';
+import * as FileSystem from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
-import { transcribeAudio } from '../lib/supabase/transcription';
+import { transcribeAudio, uploadAudioToStorage, createPendingJournal, triggerTranscription } from '../lib/supabase/transcription';
+import { supabase } from '../lib/supabase/client';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+
+const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
+const RECORDINGS_DIR = `${FileSystem.documentDirectory}pending_recordings/`;
+
+const generateUUID = (): string =>
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+
+// Ensure the persistent recordings directory exists
+const ensureRecordingsDir = async () => {
+  const info = await FileSystem.getInfoAsync(RECORDINGS_DIR);
+  if (!info.exists) {
+    await FileSystem.makeDirectoryAsync(RECORDINGS_DIR, { intermediates: true });
+  }
+};
+
+// Add a job to the AsyncStorage pending queue
+const enqueuePendingJob = async (job: PendingVoiceJob) => {
+  const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+  const jobs: PendingVoiceJob[] = raw ? JSON.parse(raw) : [];
+  jobs.push(job);
+  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(jobs));
+};
+
+// Remove a completed/failed job from the queue by jobId
+export const dequeuePendingJob = async (jobId: string) => {
+  const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+  if (!raw) return;
+  const jobs: PendingVoiceJob[] = JSON.parse(raw);
+  const updated = jobs.filter(j => j.jobId !== jobId);
+  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+};
+
+export interface PendingVoiceJob {
+  jobId: string;
+  localPath: string;
+  storagePath: string | null;   // set after upload succeeds
+  journalId: string | null;     // set after journal row created (Step 5)
+  promptText: string | null;
+  entryType: string;
+  createdAt: string;
+  recoveryAttempts?: number;    // incremented on each startup recovery run
+  day1Step?: 2 | 3;            // set for Day 1 Step 2 / Step 3 recordings
+}
 
 // Maximum recording duration in seconds (8 minutes)
 // For testing: temporarily set to 10 seconds, then restore to 480
 const MAX_RECORDING_DURATION = 480;
 
-export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
+export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string, journalId?: string) => void, day1Step?: 2 | 3) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -50,7 +99,73 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const wasBackgroundedRef = useRef(false);
   const resumeTimeRef = useRef<number>(0);
   const hasHitMaxDurationRef = useRef(false);
-  
+  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingActiveRef = useRef(false);
+  const isRecordingStoppingRef = useRef(false); // true while handleStopRecording is executing
+
+  const stopPolling = () => {
+    pollingActiveRef.current = false;
+    if (pollTimeoutRef.current) {
+      clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+  };
+
+  const pollForCompletion = (journalId: string, localPath: string, jobId: string) => {
+    pollingActiveRef.current = true;
+    let pollCount = 0;
+    const MAX_POLLS = 60; // 3 min at 3s intervals
+
+    const tick = async () => {
+      if (!pollingActiveRef.current) return;
+
+      if (pollCount >= MAX_POLLS) {
+        setIsProcessing(false);
+        stopPolling();
+        Alert.alert(
+          'Still Transcribing',
+          'Your recording was saved. The transcription is still processing — check back in a moment.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      try {
+        const { data: journal } = await supabase
+          .from('journals')
+          .select('transcription_status, content, created_at')
+          .eq('id', journalId)
+          .single();
+
+        if (journal?.transcription_status === 'completed') {
+          setIsProcessing(false);
+          stopPolling();
+          const timestamp = new Date(journal.created_at).toLocaleString('en-US', {
+            year: 'numeric', month: 'long', day: 'numeric',
+            hour: 'numeric', minute: '2-digit', hour12: true,
+          });
+          // Pass journalId so callers know the journal is already saved and skip re-insert
+          onTranscriptionComplete?.(journal.content, timestamp, journalId);
+          FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+          dequeuePendingJob(jobId);
+        } else if (journal?.transcription_status === 'failed') {
+          setIsProcessing(false);
+          stopPolling();
+          dequeuePendingJob(jobId);
+          Alert.alert('Transcription Failed', 'Unable to transcribe your recording. Please try again.');
+        } else {
+          pollCount++;
+          pollTimeoutRef.current = setTimeout(tick, 3000);
+        }
+      } catch {
+        pollCount++;
+        pollTimeoutRef.current = setTimeout(tick, 3000);
+      }
+    };
+
+    tick();
+  };
+
   useEffect(() => {
     recordingStateRef.current = { isRecording, isPaused };
   }, [isRecording, isPaused]);
@@ -182,6 +297,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   const handleStopRecording = async () => {
     if (recording) {
+      isRecordingStoppingRef.current = true;
       try {
         // Add Sentry breadcrumb
         Sentry.addBreadcrumb({
@@ -200,42 +316,123 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         if (uri && onTranscriptionComplete) {
           setIsProcessing(true);
 
-          // Generate timestamp
-          const timestamp = new Date().toLocaleString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-          });
+          // --- Step 3: Persist audio to permanent local storage ---
+          // The temp cache URI (/Library/Caches/AV/) can be purged by iOS.
+          // Copy to documentDirectory immediately so the file survives if
+          // the upload or transcription fails and needs to be retried.
+          const jobId = generateUUID();
+          const localPath = `${RECORDINGS_DIR}${jobId}.m4a`;
+          let persistedLocalPath = uri; // fallback to temp URI if persist fails
+          let storagePath: string | null = null;
 
-          // Transcribe audio using Whisper Edge Function (server-side)
-          const result = await transcribeAudio(uri);
-
-          setIsProcessing(false);
-
-          if (result.success && result.text) {
-            // Add success breadcrumb
+          try {
+            await ensureRecordingsDir();
+            await FileSystem.copyAsync({ from: uri, to: localPath });
+            persistedLocalPath = localPath;
+            await enqueuePendingJob({
+              jobId,
+              localPath,
+              storagePath: null,
+              journalId: null,
+              promptText: null,
+              entryType: 'voice',
+              createdAt: new Date().toISOString(),
+              day1Step,
+            });
             Sentry.addBreadcrumb({
               category: 'recording',
-              message: 'Recording stopped and transcribed successfully',
-              data: { textLength: result.text.length },
+              message: 'Audio persisted to permanent local storage',
+              data: { jobId, localPath },
               level: 'info',
             });
+          } catch (persistError) {
+            // Non-fatal: log and continue with original temp URI
+            Sentry.captureException(persistError, {
+              tags: { component: 'useAudioRecording', action: 'persist_local' },
+            });
+          }
 
-            // Auto-navigate to mirror with transcribed text
-            onTranscriptionComplete(result.text, timestamp);
+          // --- Step 4: Upload binary to Supabase Storage ---
+          try {
+            const userJson = await AsyncStorage.getItem('starlight_current_user');
+            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
+
+            if (customUserId) {
+              storagePath = `${customUserId}/${jobId}.m4a`;
+              const uploadResult = await uploadAudioToStorage(persistedLocalPath, storagePath);
+
+              if (uploadResult.success) {
+                // Update queued job with storage path so recovery can use it
+                const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+                if (raw) {
+                  const jobs: PendingVoiceJob[] = JSON.parse(raw);
+                  const updated = jobs.map(j =>
+                    j.jobId === jobId ? { ...j, storagePath } : j
+                  );
+                  await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+                }
+              } else {
+                storagePath = null; // upload failed, fall through to old flow
+              }
+            }
+          } catch (uploadError) {
+            // Non-fatal: fall through to legacy transcribeAudio below
+            Sentry.captureException(uploadError, {
+              tags: { component: 'useAudioRecording', action: 'upload' },
+            });
+            storagePath = null;
+          }
+          // --------------------------------------------------
+
+          if (storagePath) {
+            // --- New flow: create pending journal + trigger server-side transcription ---
+            const userJson = await AsyncStorage.getItem('starlight_current_user');
+            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
+
+            const journal = await createPendingJournal({
+              customUserId,
+              storagePath,
+              localPath: persistedLocalPath,
+              promptText: null,
+              entryType: 'voice',
+            });
+
+            // Update queued job with journalId for recovery
+            const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+            if (raw) {
+              const jobs: PendingVoiceJob[] = JSON.parse(raw);
+              const updated = jobs.map(j =>
+                j.jobId === jobId ? { ...j, journalId: journal.id } : j
+              );
+              await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
+            }
+
+            // Fire edge function — don't await, server handles everything
+            triggerTranscription(journal.id);
+
+            // Poll journals table for completion (runs independently)
+            pollForCompletion(journal.id, persistedLocalPath, jobId);
+            // isProcessing stays true until polling completes
+
           } else {
-            Alert.alert(
-              'Transcription Failed',
-              result.error || 'Unable to transcribe audio. Please try again.',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Retry', onPress: () => handleStopRecording() }
-              ]
-            );
-            return;
+            // --- Fallback: upload failed, use legacy inline transcription ---
+            const timestamp = new Date().toLocaleString('en-US', {
+              year: 'numeric', month: 'long', day: 'numeric',
+              hour: 'numeric', minute: '2-digit', hour12: true,
+            });
+
+            const result = await transcribeAudio(uri);
+            setIsProcessing(false);
+
+            if (result.success && result.text) {
+              onTranscriptionComplete?.(result.text, timestamp);
+            } else {
+              Alert.alert(
+                'Transcription Failed',
+                result.error || 'Unable to transcribe audio. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
           }
         }
       } catch (error) {
@@ -256,13 +453,14 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         Alert.alert('Error', 'Failed to stop recording properly.');
         await deactivateWakeLock();
       } finally {
+        isRecordingStoppingRef.current = false;
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
         setRecordingDuration(0);
         pausedDurationRef.current = 0;
         latestDurationRef.current = 0;
-        wasBackgroundedRef.current = 0;
+        wasBackgroundedRef.current = false;
         resumeTimeRef.current = 0;
         hasHitMaxDurationRef.current = false;
       }
@@ -427,6 +625,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   useEffect(() => {
     return () => {
+      stopPolling();
       if (wakeLockActiveRef.current) {
         deactivateKeepAwake('recording-session').catch(() => {});
       }
@@ -438,30 +637,31 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       const { isRecording, isPaused } = recordingStateRef.current;
       const currentRecording = recordingRef.current;
       
-      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording) {
+      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording && !isRecordingStoppingRef.current) {
         try {
           // Use latest duration from timer callback ref instead of getStatusAsync
           // because iOS may have already paused the recording, giving us stale data
           const currentDuration = latestDurationRef.current;
           pausedDurationRef.current = currentDuration;
           setRecordingDuration(currentDuration);
-          
+
           // Mark that recording was backgrounded
           wasBackgroundedRef.current = true;
 
           await currentRecording.pauseAsync();
           setIsPaused(true);
-          
+
           // Reset audio mode when backgrounding
           await Audio.setAudioModeAsync({
             allowsRecordingIOS: false,
             playsInSilentModeIOS: false,
           });
-          
+
           await deactivateWakeLock();
         } catch (error) {
+          // Non-fatal: recording may have already been stopped (e.g. user tapped Stop
+          // just before backgrounding). Log silently and let the stop flow complete.
           console.error('Failed to pause recording when backgrounding:', error);
-          Alert.alert('Error', 'Failed to pause recording when backgrounding.');
         }
       }
     });

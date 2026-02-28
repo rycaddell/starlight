@@ -1,11 +1,14 @@
 // components/day1/Day1Modal.tsx
 // Main orchestrator for Day 1 onboarding flow (5 steps)
 
-import React, { useState, useEffect } from 'react';
-import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDay1Progress } from '../../lib/supabase/day1';
+
+const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
 import { Step1SpiritualPlace } from './Step1SpiritualPlace';
 import { Step2VoiceJournal } from './Step2VoiceJournal';
 import { Step3VoiceJournal } from './Step3VoiceJournal';
@@ -29,6 +32,15 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   const [focusAreasSaved, setFocusAreasSaved] = useState(false);
   const [step2JournalId, setStep2JournalId] = useState<string | null>(null);
   const [step3JournalId, setStep3JournalId] = useState<string | null>(null);
+  const [isWaitingForRecovery, setIsWaitingForRecovery] = useState(false);
+  const recoveryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clean up recovery poll on unmount
+  useEffect(() => {
+    return () => {
+      if (recoveryPollRef.current) clearTimeout(recoveryPollRef.current);
+    };
+  }, []);
 
   // Load progress and determine starting step
   useEffect(() => {
@@ -85,11 +97,58 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
         startStep = 2; // Resume at step 2
       }
 
+      // If we're missing a step journal, check whether recovery is in-flight for it
+      const missingStep = startStep === 2 ? 2 : startStep === 3 ? 3 : null;
+      if (missingStep) {
+        const hasRecoveryJob = await checkForDay1RecoveryJob(missingStep);
+        if (hasRecoveryJob) {
+          setIsWaitingForRecovery(true);
+          setLoading(false);
+          pollUntilRecoveryComplete(missingStep);
+          return;
+        }
+      }
+
       console.log('📍 Starting Day 1 at step:', startStep);
       setCurrentStep(startStep);
     }
 
     setLoading(false);
+  };
+
+  // Check AsyncStorage for a pending voice job tagged with the given Day 1 step
+  const checkForDay1RecoveryJob = async (step: 2 | 3): Promise<boolean> => {
+    try {
+      const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
+      if (!raw) return false;
+      const jobs = JSON.parse(raw);
+      return jobs.some((j: any) => j.day1Step === step);
+    } catch {
+      return false;
+    }
+  };
+
+  // Poll day_1_progress every 3s until the step journal ID is set (recovery complete)
+  const pollUntilRecoveryComplete = (step: 2 | 3) => {
+    if (!user) return;
+    const field = step === 2 ? 'step_2_journal_id' : 'step_3_journal_id';
+
+    const tick = async () => {
+      try {
+        const result = await getDay1Progress(user.id);
+        if (result.success && result.progress?.[field]) {
+          // Recovery has linked the journal — reload progress to advance to correct step
+          setIsWaitingForRecovery(false);
+          await loadProgress();
+        } else {
+          recoveryPollRef.current = setTimeout(tick, 3000);
+        }
+      } catch {
+        recoveryPollRef.current = setTimeout(tick, 3000);
+      }
+    };
+
+    recoveryPollRef.current = setTimeout(tick, 2000);
   };
 
   const handleClose = () => {
@@ -193,9 +252,12 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
 
         {/* Step content */}
         <View style={styles.content}>
-          {loading ? (
+          {loading || isWaitingForRecovery ? (
             <View style={styles.loadingContainer}>
-              <Text style={styles.loadingText}>Loading...</Text>
+              <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
+              <Text style={styles.loadingText}>
+                {isWaitingForRecovery ? 'Finishing your last recording...' : 'Loading...'}
+              </Text>
             </View>
           ) : (
             <>
@@ -317,6 +379,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 16,
+  },
+  spinner: {
+    marginBottom: 4,
   },
   loadingText: {
     fontSize: 16,

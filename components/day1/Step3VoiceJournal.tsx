@@ -60,22 +60,29 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
     handlePauseRecording,
     handleResumeRecording,
     formatDuration,
-  } = useAudioRecording(async (transcribedText: string, timestamp: string) => {
+  } = useAudioRecording(async (transcribedText: string, timestamp: string, savedJournalId?: string) => {
     console.log('🎤 [STEP3] Voice transcribed:', transcribedText.substring(0, 50));
 
-    // Save journal entry with transcribed text and mark transcription as completed
-    console.log('💾 [STEP3] Saving journal with transcription_status: completed');
-    const saveResult = await saveJournalEntry(transcribedText, userId, 'voice', null, 'completed');
+    let journalId: string;
 
-    if (!saveResult.success || !saveResult.data) {
-      console.error('❌ [STEP3] Failed to save journal:', saveResult.error);
-      Alert.alert('Save Error', saveResult.error || 'Failed to save journal. Please try again.');
-      return;
+    if (savedJournalId) {
+      // New flow: journal already created and populated by edge function
+      console.log('✅ [STEP3] Journal already saved by edge function:', savedJournalId);
+      journalId = savedJournalId;
+    } else {
+      // Fallback flow: save journal entry now
+      console.log('💾 [STEP3] Saving journal with transcription_status: completed');
+      const saveResult = await saveJournalEntry(transcribedText, userId, 'voice', null, 'completed');
+
+      if (!saveResult.success || !saveResult.data) {
+        console.error('❌ [STEP3] Failed to save journal:', saveResult.error);
+        Alert.alert('Save Error', saveResult.error || 'Failed to save journal. Please try again.');
+        return;
+      }
+
+      journalId = saveResult.data.id;
+      console.log('✅ [STEP3] Journal saved:', journalId);
     }
-
-    const journalId = saveResult.data.id;
-    console.log('✅ [STEP3] Journal saved:', journalId);
-    console.log('📄 [STEP3] Journal data:', JSON.stringify(saveResult.data, null, 2));
 
     // Link journal to day_1_progress
     console.log('🔗 [STEP3] Linking journal to day_1_progress...');
@@ -97,7 +104,7 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
       // User is re-recording on a return visit, show buttons
       setHasRecorded(true);
     }
-  });
+  }, 3);
 
   const startMirrorGeneration = async () => {
     try {

@@ -211,12 +211,14 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
                 style={styles.backIcon}
               />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
-              <Image
-                source={require('@/assets/images/icons/Share.png')}
-                style={styles.shareIcon}
-              />
-            </TouchableOpacity>
+            {!isSharedMirror && (
+              <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
+                <Image
+                  source={require('@/assets/images/icons/Share.png')}
+                  style={styles.shareIcon}
+                />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Title and Date Overlay */}

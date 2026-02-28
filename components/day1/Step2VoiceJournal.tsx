@@ -49,22 +49,29 @@ export const Step2VoiceJournal: React.FC<Step2VoiceJournalProps> = ({
     handlePauseRecording,
     handleResumeRecording,
     formatDuration,
-  } = useAudioRecording(async (transcribedText: string, timestamp: string) => {
+  } = useAudioRecording(async (transcribedText: string, timestamp: string, savedJournalId?: string) => {
     console.log('🎤 [STEP2] Voice transcribed:', transcribedText.substring(0, 50));
 
-    // Save journal entry with transcribed text and mark transcription as completed
-    console.log('💾 [STEP2] Saving journal with transcription_status: completed');
-    const saveResult = await saveJournalEntry(transcribedText, userId, 'voice', null, 'completed');
+    let journalId: string;
 
-    if (!saveResult.success || !saveResult.data) {
-      console.error('❌ [STEP2] Failed to save journal:', saveResult.error);
-      Alert.alert('Save Error', saveResult.error || 'Failed to save journal. Please try again.');
-      return;
+    if (savedJournalId) {
+      // New flow: journal already created and populated by edge function
+      console.log('✅ [STEP2] Journal already saved by edge function:', savedJournalId);
+      journalId = savedJournalId;
+    } else {
+      // Fallback flow: save journal entry now
+      console.log('💾 [STEP2] Saving journal with transcription_status: completed');
+      const saveResult = await saveJournalEntry(transcribedText, userId, 'voice', null, 'completed');
+
+      if (!saveResult.success || !saveResult.data) {
+        console.error('❌ [STEP2] Failed to save journal:', saveResult.error);
+        Alert.alert('Save Error', saveResult.error || 'Failed to save journal. Please try again.');
+        return;
+      }
+
+      journalId = saveResult.data.id;
+      console.log('✅ [STEP2] Journal saved:', journalId);
     }
-
-    const journalId = saveResult.data.id;
-    console.log('✅ [STEP2] Journal saved:', journalId);
-    console.log('📄 [STEP2] Journal data:', JSON.stringify(saveResult.data, null, 2));
 
     // Link journal to day_1_progress
     console.log('🔗 [STEP2] Linking journal to day_1_progress...');
@@ -84,7 +91,7 @@ export const Step2VoiceJournal: React.FC<Step2VoiceJournalProps> = ({
       console.error('❌ [STEP2] Failed to link journal:', linkResult.error);
       Alert.alert('Save Error', linkResult.error || 'Failed to link journal. Please try again.');
     }
-  });
+  }, 2);
 
   // Check permission and start recording
   const handleStartRecordingWithPermission = async () => {

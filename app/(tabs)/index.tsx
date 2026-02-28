@@ -41,7 +41,7 @@ export default function JournalScreen() {
   const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState<'text' | 'voice'>('voice');
 
-  const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string) => {
+  const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string, journalId?: string) => {
     console.log('🎤 Voice transcription complete in bottom sheet');
 
     // Add Sentry breadcrumb
@@ -52,10 +52,26 @@ export default function JournalScreen() {
         transcribedLength: transcribedText.length,
         mode: sheetMode,
         hasPrompt: !!sheetPrompt,
+        alreadySaved: !!journalId,
       },
       level: 'info',
     });
 
+    if (journalId) {
+      // New flow: journal already created and populated by edge function — skip DB insert
+      setBottomSheetVisible(false);
+      router.push({
+        pathname: '/(tabs)/mirror',
+        params: { journalText: transcribedText, timestamp }
+      });
+      if (isAuthenticated && user) {
+        await loadJournals();
+        await loadTodayAnsweredPrompts();
+      }
+      return;
+    }
+
+    // Fallback flow: journal not yet in DB — insert it now
     const saved = await saveJournalToDatabase(
       transcribedText,
       timestamp,

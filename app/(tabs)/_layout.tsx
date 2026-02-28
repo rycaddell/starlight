@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Platform, AppState } from 'react-native';
+import { Platform, View, Text, ActivityIndicator, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HapticTab } from '@/components/HapticTab';
 import { TabIcon } from '@/components/navigation/TabIcon';
@@ -9,12 +10,15 @@ import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 import { useFriendBadge } from '@/contexts/FriendBadgeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase/client';
+import { useVoiceRecovery } from '@/hooks/useVoiceRecovery';
 
 export default function TabLayout() {
   const { unreadCount } = useUnreadShares();
   const { newFriendsCount } = useFriendBadge();
   const { user } = useAuth();
   const [hasMirrors, setHasMirrors] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { isRecovering } = useVoiceRecovery(user?.id ?? null);
 
   // Combined badge count: unread shares + new friends
   const totalBadgeCount = unreadCount + newFriendsCount;
@@ -34,10 +38,8 @@ export default function TabLayout() {
           .eq('custom_user_id', user.id);
 
         if (!error && count && count > 0) {
-          console.log('✅ [TAB LAYOUT] User has mirrors, showing Mirror tab');
           setHasMirrors(true);
         } else {
-          console.log('ℹ️ [TAB LAYOUT] User has no mirrors, hiding Mirror tab');
           setHasMirrors(false);
         }
       } catch (error) {
@@ -50,7 +52,6 @@ export default function TabLayout() {
 
     // Set up real-time subscription for new mirrors
     if (user) {
-      console.log('👂 [TAB LAYOUT] Setting up real-time subscription for mirrors');
       const subscription = supabase
         .channel('mirrors_changes')
         .on(
@@ -61,15 +62,13 @@ export default function TabLayout() {
             table: 'mirrors',
             filter: `custom_user_id=eq.${user.id}`,
           },
-          (payload) => {
-            console.log('🔔 [TAB LAYOUT] New mirror created, showing Mirror tab');
+          () => {
             setHasMirrors(true);
           }
         )
         .subscribe();
 
       return () => {
-        console.log('🔕 [TAB LAYOUT] Unsubscribing from mirrors changes');
         subscription.unsubscribe();
       };
     }
@@ -79,6 +78,13 @@ export default function TabLayout() {
   const showMirrorTab = user?.day_1_completed_at != null || hasMirrors;
 
   return (
+    <View style={{ flex: 1 }}>
+      {isRecovering && (
+        <View style={[styles.recoveryBanner, { top: insets.top }]}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={styles.recoveryText}>Finishing a recent recording...</Text>
+        </View>
+      )}
       <Tabs
         screenOptions={{
           tabBarActiveTintColor: colors.text.accent,
@@ -130,5 +136,26 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  recoveryBanner: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    backgroundColor: colors.text.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 1000,
+  },
+  recoveryText: {
+    color: '#fff',
+    fontSize: 13,
+    fontFamily: typography.body.s.fontFamily,
+  },
+});
