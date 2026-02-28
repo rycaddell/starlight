@@ -9,7 +9,7 @@ Complete reference for the Supabase database structure, relationships, and data 
 Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
 - `users` - User accounts (access code-based auth)
-- `journals` - Journal entries (text or voice transcriptions)
+- `journals` - Journal entries (text or voice transcriptions; voice entries track transcription pipeline state)
 - `mirrors` - AI-generated spiritual reflections (full mirrors + Day 1 mini-mirrors)
 - `day_1_progress` - Day 1 onboarding progress tracking
 - `mirror_reflections` - User responses to mirror prompts (deprecated)
@@ -17,6 +17,9 @@ Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 - `friend_links` - Bi-directional friend relationships
 - `mirror_shares` - Mirrors shared between friends
 - `mirror_generation_requests` - Server-side mirror generation status
+
+**Storage:**
+- `audio-recordings` bucket - Temporary audio files during voice transcription (private; files deleted after transcription completes)
 
 **Type Definitions:** See `types/database.ts` for TypeScript interfaces
 
@@ -82,15 +85,23 @@ Stores user accounts with access code-based authentication.
 ### `journals`
 
 Stores individual journal entries from users (text or transcribed voice).
+
 ```typescript
 {
   id: string (uuid, primary key)
   custom_user_id: string (uuid, foreign key → users.id)
-  content: string (not null)
-  prompt_text: string (nullable) // Guided prompt if used
+  content: string                          // '' until transcription completes (voice)
+  journal_entry_type: string (nullable)    // 'text' | 'voice'
+  prompt_text: string (nullable)           // Guided prompt if used
   mirror_id: string (uuid, nullable, foreign key → mirrors.id)
   created_at: timestamp
   updated_at: timestamp
+
+  // Voice transcription pipeline columns (null for text journals):
+  transcription_status: string (nullable)  // 'pending' | 'processing' | 'completed' | 'failed'
+  audio_url: string (nullable)             // Storage path: "{customUserId}/{jobId}.m4a"
+  local_audio_path: string (nullable)      // Device-side path for recovery reference
+  error_message: string (nullable)         // Populated on 'failed' status
 }
 ```
 
@@ -99,11 +110,31 @@ Stores individual journal entries from users (text or transcribed voice).
 **Fields Explained:**
 - `id` - Unique identifier for the journal entry
 - `custom_user_id` - The user who created this journal (references `users.id`)
-- `content` - The journal text (typed or transcribed from voice)
+- `content` - The journal text. For voice journals: empty string until transcription completes
+- `journal_entry_type` - `'text'` or `'voice'`
 - `prompt_text` - The guided journal prompt that was used (null for free-form entries)
 - `mirror_id` - Links to the Mirror this journal was used to generate (null until included in a Mirror)
-- `created_at` - When the journal was created
-- `updated_at` - Last modification time
+- `transcription_status` - Only set for voice journals. Tracks the server-side transcription pipeline:
+  - `'pending'` — audio uploaded, edge function not yet started
+  - `'processing'` — edge function is calling Whisper
+  - `'completed'` — transcription done, `content` is populated
+  - `'failed'` — transcription failed; see `error_message`
+- `audio_url` - Path in the `audio-recordings` Storage bucket; deleted by edge function on success
+- `local_audio_path` - Device-local file path used for recovery if the upload was interrupted
+
+**Voice journal lifecycle:**
+```
+Insert (content: '', status: 'pending')
+  → Edge function sets status: 'processing'
+  → Edge function writes content, sets status: 'completed'
+  → Edge function deletes audio from Storage
+```
+
+**Hiding in-progress voice journals:** All list queries and the mirror threshold counter exclude journals that are `pending` or `processing`. The filter used throughout:
+```javascript
+.or('content.neq.,transcription_status.is.null,transcription_status.not.in.(pending,processing)')
+```
+This keeps text journals (no `transcription_status`) and completed voice journals visible, while hiding in-flight ones.
 
 **Relationships:**
 - `custom_user_id` → `users.id` (many journals to one user)
@@ -777,13 +808,46 @@ USING (auth.uid() = user_id);
 
 ---
 
+## 🗂️ Supabase Storage
+
+### `audio-recordings` Bucket
+
+**Type:** Private (not publicly accessible)
+
+**Path convention:** `{customUserId}/{jobId}.m4a`
+
+**Lifecycle:** Created by client upload → read by Edge Function → deleted by Edge Function after successful transcription. Files should never persist longer than a few minutes in the happy path.
+
+**Size limit:** 50MB per file (max recording is 8 min ≈ 15MB)
+
+**Migrations:** `20260227000000_bulletproof_voice_storage.sql`
+
+**RLS:** Permissive policy scoped to the bucket. Access scoping is enforced via path convention in the service layer. The `transcribe-audio` Edge Function uses the service role key.
+
+See [BULLETPROOF_VOICE_PLAN.md](./BULLETPROOF_VOICE_PLAN.md) for full pipeline documentation.
+
+---
+
 ## 🧹 Data Lifecycle
 
-### Journal Entry Lifecycle
+### Journal Entry Lifecycle (Text)
 ```
-1. Created → mirror_id = null (available for Mirror)
+1. Created → content: text, transcription_status: null, mirror_id: null
 2. Used in Mirror → mirror_id = [mirror_uuid] (locked)
-3. Persists indefinitely (not deleted)
+3. Persists indefinitely
+```
+
+### Journal Entry Lifecycle (Voice)
+```
+1. Audio recorded → copied to local permanent storage
+2. Audio uploaded → audio-recordings Storage bucket
+3. Pending journal inserted → content: '', transcription_status: 'pending'
+4. Edge function runs → transcription_status: 'processing'
+5. Transcription complete → content: [text], transcription_status: 'completed'
+                           → audio deleted from Storage
+6. Journal is now visible in lists and counts toward mirror threshold
+7. Used in Mirror → mirror_id = [mirror_uuid] (locked)
+8. Persists indefinitely
 ```
 
 ### Mirror Lifecycle

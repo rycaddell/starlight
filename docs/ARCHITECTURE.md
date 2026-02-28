@@ -79,7 +79,8 @@ starlight/
 │
 ├── hooks/                        # Custom React hooks
 │   ├── useAudioPermissions.tsx  # Audio permission logic
-│   ├── useAudioRecording.tsx    # Recording state & controls
+│   ├── useAudioRecording.tsx    # Recording state, controls, & server-side transcription pipeline
+│   ├── useVoiceRecovery.ts      # Startup recovery for interrupted voice jobs
 │   ├── useMirrorData.ts         # Mirror data fetching & polling
 │   └── useColorScheme.ts        # Theme management
 │
@@ -228,9 +229,18 @@ components/
 **Why:** Voice journaling is a core feature, not an add-on
 - Entire UX designed around voice parity with text
 - Dedicated `useAudioRecording` hook
-- Whisper integration for transcription
+- Server-side Whisper transcription via a reliable multi-step pipeline
 
-**Implementation:** `hooks/useAudioRecording.tsx` + `lib/whisperService.ts`
+**Implementation:** `hooks/useAudioRecording.tsx` + `lib/supabase/transcription.js`
+
+**Reliability pipeline** (see [VOICE_PIPELINE.md](./BULLETPROOF_VOICE_PLAN.md) for full details):
+1. Audio copied to permanent local storage immediately on stop
+2. Job enqueued in AsyncStorage
+3. Binary m4a uploaded to Supabase Storage
+4. Pending journal row inserted
+5. Edge function triggered (fire-and-forget)
+6. Client polls `journals.transcription_status` every 3s until `'completed'`
+7. On next launch: `useVoiceRecovery` picks up any interrupted jobs
 
 ### 3. Server-Side Mirror Generation
 
@@ -360,19 +370,56 @@ Realtime (WebSocket):
 
 ## Data Flow
 
-### Journaling Flow
+### Journaling Flow (Text)
 ```
-User Input (Text/Voice)
+User types journal entry
     ↓
-useAudioRecording hook (if voice)
+lib/supabase/journals.saveJournalEntry()
     ↓
-Whisper API (transcription)
+Supabase Database (transcription_status: null)
     ↓
-lib/supabase/journals.createJournal()
+UI Update
+```
+
+### Journaling Flow (Voice — Server-Side Pipeline)
+```
+User records audio
     ↓
-Supabase Database
+useAudioRecording.handleStopRecording()
     ↓
-UI Update (navigation to mirror screen)
+1. Copy audio → documentDirectory/pending_recordings/{jobId}.m4a
+2. Enqueue job → AsyncStorage (oxbow_pending_voice_jobs)
+3. Upload binary m4a → Supabase Storage (audio-recordings bucket)
+4. Insert journal row → journals table (status: 'pending', content: '')
+5. Fire edge function → transcribe-audio (don't await)
+    ↓
+[Client polls journals.transcription_status every 3s]
+    ↓
+Edge Function (server-side):
+    Download audio from Storage
+    → Call OpenAI Whisper
+    → Update journal (content + status: 'completed')
+    → Delete audio from Storage
+    ↓
+Poll detects 'completed'
+    ↓
+onTranscriptionComplete(content, timestamp, journalId)
+    ↓
+UI Update + local file cleanup + job dequeued
+```
+
+**Recovery (on next app launch):**
+```
+useVoiceRecovery runs once after auth
+    ↓
+Reads oxbow_pending_voice_jobs from AsyncStorage
+    ↓
+For each interrupted job:
+  - Already completed in DB → clean up, dequeue
+  - pending/processing → re-fire edge function
+  - failed → re-upload + reset + re-trigger
+  - no journal row yet → create journal, trigger
+  - exceeded 3 attempts → dequeue (zombie protection)
 ```
 
 ### Mirror Generation Flow
@@ -472,21 +519,18 @@ Step 1: User selects spiritual place (8 options)
     ↓
 lib/supabase/day1.updateDay1Progress({ spiritual_place })
     ↓
-Step 2: Voice journal - "What shaped your choice?"
+Step 2: Voice journal — "What shaped your choice?"
     ↓
-useAudioRecording → Whisper transcription
-    ↓
-lib/supabase/journals.saveJournalEntry (transcription_status: completed)
+useAudioRecording (day1Step=2) → server-side transcription pipeline
+(audio → Storage → pending journal → edge function → polling)
     ↓
 lib/supabase/day1.saveStepJournal(userId, 2, journalId)
     ↓
 Auto-progress to Step 3 (first time only)
     ↓
-Step 3: Voice journal - "How are you relating to God?"
+Step 3: Voice journal — "How are you relating to God?"
     ↓
-useAudioRecording → Whisper transcription
-    ↓
-lib/supabase/journals.saveJournalEntry (transcription_status: completed)
+useAudioRecording (day1Step=3) → server-side transcription pipeline
     ↓
 lib/supabase/day1.saveStepJournal(userId, 3, journalId)
     ↓
@@ -496,11 +540,9 @@ lib/supabase/day1.generateMiniMirror(userId)
     ↓
 Edge Function: generate-day-1-mirror
     ↓
-Fetch spiritual place + 2 journals
+Validate both journals have transcription_status='completed'
     ↓
-Sanitize content (escape quotes, newlines)
-    ↓
-Call OpenAI gpt-5-mini with structured prompt
+Fetch spiritual place + 2 journals → sanitize → GPT-5-mini
     ↓
 Multi-attempt JSON parsing (3 strategies)
     ↓
@@ -514,15 +556,26 @@ User types focus response
     ↓
 lib/supabase/day1.saveFocusAreas(userId, mirrorId, focusText)
     ↓
-Edge Function: extract-focus-theme
-    ↓
-Extract 1-2 word theme with OpenAI
+Edge Function: extract-focus-theme → 1-2 word theme
     ↓
 Update day_1_progress (focus_theme, completed_at)
     ↓
 Modal closes → User sees regular journal screen
     ↓
 Day 1 mirror appears in Mirror tab
+```
+
+**Day 1 recovery (if app is killed during Steps 2 or 3):**
+```
+useVoiceRecovery detects pending job with day1Step=2 or 3
+    ↓
+Re-triggers transcription + calls saveStepJournal to re-link journal
+    ↓
+Day1Modal shows "Finishing your last recording..." spinner
+    ↓
+Polls day_1_progress until step journal ID appears
+    ↓
+Auto-routes to Step 4 (generation)
 ```
 
 ---

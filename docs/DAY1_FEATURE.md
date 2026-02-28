@@ -226,6 +226,20 @@ CREATE POLICY "Users can update own progress"
   USING (auth.uid() = user_id);
 ```
 
+### Voice Journal Columns on `journals`
+
+Day 1 voice journals use the same voice transcription pipeline columns as regular voice journals:
+
+- `transcription_status`: `'pending'` → `'processing'` → `'completed'` | `'failed'`
+- `audio_url`: Storage path in `audio-recordings` bucket
+- `local_audio_path`: Device path used for recovery
+
+The `generate-day-1-mirror` Edge Function validates `transcription_status = 'completed'` on both journals before generating the mirror. If either is still pending, it returns an error and the client retries.
+
+See [BULLETPROOF_VOICE_PLAN.md](./BULLETPROOF_VOICE_PLAN.md) for the full voice pipeline reference.
+
+---
+
 ### Updates to `mirrors` Table
 
 Day 1 mini-mirrors are stored in the existing `mirrors` table with `mirror_type = 'day_1'`.
@@ -278,6 +292,26 @@ Day 1 mirrors appear in the main Mirror tab alongside regular mirrors.
 **Modal Launch:**
 - Clicking Day 1 mirror card opens `Day1MirrorViewer` modal
 - Clicking "View past Mirrors" includes Day 1 in `PastMirrorsModal`
+
+### Day 1 Recovery Flow
+
+If the user closes the app during Step 2 or Step 3 voice recording, the Day 1 flow needs to recover gracefully without losing the recording or requiring the user to re-record.
+
+**How it works:**
+
+1. `useAudioRecording` is called with `day1Step={2 | 3}` — this tag is persisted in the AsyncStorage job record.
+2. On next app launch, `useVoiceRecovery` runs and processes any pending jobs.
+3. After re-triggering transcription, recovery calls `saveStepJournal(uid, job.day1Step, journalId)` to link the journal back to `day_1_progress`.
+4. `Day1Modal` detects `isRecovering=true` and shows a "Finishing your last recording..." spinner.
+5. `Day1Modal` polls `day_1_progress` every 3 seconds until the step journal ID appears.
+6. Once linked, the modal auto-routes to Step 4 (loading screen → mirror generation).
+
+**Code locations:**
+- `app/(tabs)/_layout.tsx` — mounts `useVoiceRecovery`, passes `isRecovering` to `Day1Modal`
+- `components/day1/Day1Modal.tsx` — spinner display + `day_1_progress` polling
+- `hooks/useVoiceRecovery.ts` — recovery logic including `saveStepJournal` call
+
+---
 
 ### Voice Recording Permission Flow
 
@@ -490,11 +524,20 @@ function sanitizeContent(text) {
 
 ### Edge Cases
 
-- [ ] User closes app during Step 2 → Progress saved, can resume
-- [ ] User closes app during generation → Can retry from Step 4
+- [ ] User closes app during Step 2 voice recording → Recovery spinner shows on next launch; recording completes; auto-routes to Step 4
+- [ ] User closes app during Step 3 voice recording → Same as Step 2
+- [ ] User closes app during generation (Step 4) → Step 4 resumes on reopen and polls for completion
 - [ ] Mirror generation fails → Shows retry dialog
 - [ ] User goes back from Step 3 to Step 2 → Can re-record
 - [ ] User tries to start new recording while paused → Old recording discarded
+
+### Recovery Scenarios
+
+- [ ] Force-quit app immediately after tapping Stop (before upload) → Recovery re-uploads from local file on next launch
+- [ ] Force-quit after upload, before journal insert → Recovery creates journal and triggers transcription
+- [ ] Force-quit after journal insert → Recovery re-fires edge function
+- [ ] Recovery spinner appears → Eventually clears and modal auto-advances to Step 4
+- [ ] Job fails 3+ times → Auto-dequeued; user can re-record manually
 
 ---
 
@@ -529,7 +572,7 @@ function sanitizeContent(text) {
 ### Technical Debt
 1. **Hardcoded spiritual places** - Should be configurable
 2. **No A/B testing** - Can't experiment with prompts
-3. **Limited error recovery** - Generation failures require manual retry
+3. **Voice recovery is best-effort** - If the local audio file is purged by iOS before upload (e.g. a full 8-min recording that never uploaded), the recording is permanently lost
 
 ---
 
@@ -550,6 +593,14 @@ function sanitizeContent(text) {
 ### Mirror doesn't appear in Mirror tab
 **Cause:** `mini_mirror_id` not linked in `day_1_progress`
 **Fix:** Verify edge function updates progress after mirror creation
+
+### Recovery spinner loops indefinitely
+**Cause:** `saveStepJournal` failed silently, so `day_1_progress.step_2_journal_id` or `step_3_journal_id` is never set
+**Fix:** Check `day_1_progress` row directly. If the journal exists and is completed but the step column is null, manually update it and the modal will advance on next poll.
+
+### "Finishing your last recording..." never resolves
+**Cause:** The voice job may be stuck or the transcription failed
+**Fix:** Check `oxbow_pending_voice_jobs` in AsyncStorage and the journal row's `transcription_status`. If `'failed'`, the recovery hook will retry on next launch (up to 3 attempts).
 
 ---
 
