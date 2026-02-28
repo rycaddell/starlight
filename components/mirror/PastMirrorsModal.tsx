@@ -34,9 +34,6 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
   mirrors,
   onViewMirror,
 }) => {
-  console.log('📋 [PAST_MIRRORS_MODAL] Rendering with visible:', visible);
-  console.log('📋 [PAST_MIRRORS_MODAL] Mirrors count:', mirrors.length);
-
   return (
     <Modal
       visible={visible}
@@ -49,10 +46,7 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Past Mirrors</Text>
           <TouchableOpacity
-            onPress={() => {
-              console.log('✕ [PAST_MIRRORS_MODAL] Close button pressed');
-              onClose();
-            }}
+            onPress={onClose}
             style={styles.closeButton}
             activeOpacity={0.7}
           >
@@ -75,10 +69,7 @@ export const PastMirrorsModal: React.FC<PastMirrorsModalProps> = ({
               date={formatDate(mirror.date)}
               isNew={false}
               title={mirror.biblicalCharacter || 'Mirror'}
-              onViewPress={() => {
-                console.log('👁️ [PAST_MIRRORS_MODAL] View pressed for mirror:', mirror.id);
-                onViewMirror(mirror.id);
-              }}
+              onViewPress={() => onViewMirror(mirror.id)}
             />
           ))}
         </ScrollView>

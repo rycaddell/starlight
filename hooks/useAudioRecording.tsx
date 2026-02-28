@@ -75,13 +75,15 @@ export interface PendingVoiceJob {
   promptText: string | null;
   entryType: string;
   createdAt: string;
+  recoveryAttempts?: number;    // incremented on each startup recovery run
+  day1Step?: 2 | 3;            // set for Day 1 Step 2 / Step 3 recordings
 }
 
 // Maximum recording duration in seconds (8 minutes)
 // For testing: temporarily set to 10 seconds, then restore to 480
 const MAX_RECORDING_DURATION = 480;
 
-export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string) => void) => {
+export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string, journalId?: string) => void, day1Step?: 2 | 3) => {
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -99,6 +101,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const hasHitMaxDurationRef = useRef(false);
   const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingActiveRef = useRef(false);
+  const isRecordingStoppingRef = useRef(false); // true while handleStopRecording is executing
 
   const stopPolling = () => {
     pollingActiveRef.current = false;
@@ -141,7 +144,8 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             year: 'numeric', month: 'long', day: 'numeric',
             hour: 'numeric', minute: '2-digit', hour12: true,
           });
-          onTranscriptionComplete?.(journal.content, timestamp);
+          // Pass journalId so callers know the journal is already saved and skip re-insert
+          onTranscriptionComplete?.(journal.content, timestamp, journalId);
           FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
           dequeuePendingJob(jobId);
         } else if (journal?.transcription_status === 'failed') {
@@ -293,6 +297,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   const handleStopRecording = async () => {
     if (recording) {
+      isRecordingStoppingRef.current = true;
       try {
         // Add Sentry breadcrumb
         Sentry.addBreadcrumb({
@@ -332,6 +337,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
               promptText: null,
               entryType: 'voice',
               createdAt: new Date().toISOString(),
+              day1Step,
             });
             Sentry.addBreadcrumb({
               category: 'recording',
@@ -447,13 +453,14 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         Alert.alert('Error', 'Failed to stop recording properly.');
         await deactivateWakeLock();
       } finally {
+        isRecordingStoppingRef.current = false;
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
         setRecordingDuration(0);
         pausedDurationRef.current = 0;
         latestDurationRef.current = 0;
-        wasBackgroundedRef.current = 0;
+        wasBackgroundedRef.current = false;
         resumeTimeRef.current = 0;
         hasHitMaxDurationRef.current = false;
       }
@@ -630,30 +637,31 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       const { isRecording, isPaused } = recordingStateRef.current;
       const currentRecording = recordingRef.current;
       
-      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording) {
+      if (nextAppState.match(/inactive|background/) && isRecording && !isPaused && currentRecording && !isRecordingStoppingRef.current) {
         try {
           // Use latest duration from timer callback ref instead of getStatusAsync
           // because iOS may have already paused the recording, giving us stale data
           const currentDuration = latestDurationRef.current;
           pausedDurationRef.current = currentDuration;
           setRecordingDuration(currentDuration);
-          
+
           // Mark that recording was backgrounded
           wasBackgroundedRef.current = true;
 
           await currentRecording.pauseAsync();
           setIsPaused(true);
-          
+
           // Reset audio mode when backgrounding
           await Audio.setAudioModeAsync({
             allowsRecordingIOS: false,
             playsInSilentModeIOS: false,
           });
-          
+
           await deactivateWakeLock();
         } catch (error) {
+          // Non-fatal: recording may have already been stopped (e.g. user tapped Stop
+          // just before backgrounding). Log silently and let the stop flow complete.
           console.error('Failed to pause recording when backgrounding:', error);
-          Alert.alert('Error', 'Failed to pause recording when backgrounding.');
         }
       }
     });

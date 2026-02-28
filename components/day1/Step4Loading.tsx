@@ -4,6 +4,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { checkBothTranscriptionsReady, generateMiniMirror, getDay1Progress } from '../../lib/supabase/day1';
+import { colors, typography, spacing } from '../../theme/designTokens';
 
 interface Step4LoadingProps {
   userId: string;
@@ -134,7 +135,7 @@ export const Step4Loading: React.FC<Step4LoadingProps> = ({
     <View style={styles.container}>
       <View style={styles.content}>
         {/* Loading spinner */}
-        <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
+        <ActivityIndicator size="large" color={colors.text.primary} style={styles.spinner} />
 
         {/* Status message */}
         <Text style={styles.message}>{statusMessage}</Text>
@@ -165,35 +166,32 @@ export const Step4Loading: React.FC<Step4LoadingProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: colors.background.screen,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    padding: spacing.xxxxl,
   },
   content: {
     alignItems: 'center',
     maxWidth: 400,
   },
   spinner: {
-    marginBottom: 32,
+    marginBottom: spacing.xxxxl,
   },
   message: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1e293b',
+    ...typography.heading.l,
+    color: colors.text.body,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.l,
   },
   subMessage: {
-    fontSize: 16,
-    color: '#64748b',
+    ...typography.body.default,
+    color: colors.text.bodyLight,
     textAlign: 'center',
-    lineHeight: 24,
   },
   errorMessage: {
-    fontSize: 16,
+    ...typography.body.default,
     color: '#dc2626',
     textAlign: 'center',
-    fontWeight: '500',
   },
 });

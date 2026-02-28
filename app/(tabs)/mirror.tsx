@@ -101,11 +101,8 @@ export default function MirrorScreen() {
     if (isAuthenticated && user) {
       // Skip initial load if we're opening via param (ref will be set by param effect)
       if (isOpeningViaMirrorParam.current) {
-        console.log('⏭️ [MIRROR TAB] Skipping initial loadJournals - opening via param');
         return;
       }
-
-      console.log('📚 Initial load of journals');
 
       Sentry.addBreadcrumb({
         category: 'lifecycle',
@@ -120,8 +117,6 @@ export default function MirrorScreen() {
   // Handle openMirrorId param from navigation
   useEffect(() => {
     if (params.openMirrorId && isAuthenticated && user) {
-      console.log('🔗 [MIRROR TAB] Received openMirrorId param:', params.openMirrorId);
-
       // Set flag to prevent focus effect from interfering
       isOpeningViaMirrorParam.current = true;
 
@@ -142,25 +137,7 @@ export default function MirrorScreen() {
   useFocusEffect(
     React.useCallback(() => {
       if (isAuthenticated && user) {
-        console.log('========================================');
-        console.log('🟢 [MIRROR TAB] Tab focused');
-        console.log('🟢 [MIRROR TAB] Current state:', {
-          mirrorState,
-          isReady,
-          isGenerating,
-          isCompleted,
-          isViewing,
-          hasViewedCurrentMirror,
-          generatedMirrorId: generatedMirror?.id,
-          hasGeneratedMirror: !!generatedMirror,
-          hasOpenMirrorParam: !!params.openMirrorId,
-          isOpeningViaMirrorParam: isOpeningViaMirrorParam.current
-        });
-        console.log('========================================');
-
-        // ✅ Skip loadJournals and checkGenerationStatusOnFocus if we're handling a param-based navigation
         if (isOpeningViaMirrorParam.current) {
-          console.log('⏭️ [MIRROR TAB] Skipping loadJournals and status check - opening mirror via param');
           loadMirrorData();
         } else {
           checkGenerationStatusOnFocus();
@@ -182,7 +159,6 @@ export default function MirrorScreen() {
         if (result.success && result.mirror) {
           setDay1Mirror(result.mirror);
           setDay1Progress(result.progress);
-          console.log('✅ Day 1 mirror loaded:', result.mirror.id);
         }
       } catch (error) {
         console.error('❌ Error loading Day 1 mirror:', error);
@@ -200,7 +176,6 @@ export default function MirrorScreen() {
     if (mirrorIds.length === 0) return;
 
     try {
-      console.log('🔄 [MIRROR TAB] Loading mirror reflection data for', mirrorIds.length, 'mirrors');
       const { data, error } = await supabase
         .from('mirrors')
         .select('id, reflection_focus, reflection_action, created_at, screen_2_biblical')
@@ -216,9 +191,8 @@ export default function MirrorScreen() {
           if (mirror.reflection_focus) {
             reflections[mirror.id] = {
               focus: mirror.reflection_focus,
-              action: mirror.reflection_action || '' // Action is optional
+              action: mirror.reflection_action || ''
             };
-            console.log('✅ [MIRROR TAB] Loaded reflection for mirror:', mirror.id);
           }
 
           // Store mirror creation dates
@@ -292,12 +266,9 @@ export default function MirrorScreen() {
   };
 
   const handleMirrorClosedForFeedback = () => {
-    console.log('🔄 handleMirrorClosedForFeedback called');
     handleCloseMirror();
     setTimeout(() => {
-      console.log('⚙️ Attempting to open settings modal');
       showSettings();
-      console.log('✅ showSettings() called');
     }, 200);
   };
 
@@ -310,9 +281,6 @@ export default function MirrorScreen() {
       }
 
       await loadJournals();
-
-      console.log('✅ Journal deleted successfully');
-
     } catch (error) {
       console.error('❌ Error deleting journal:', error);
       Alert.alert('Error', 'Could not delete journal. Please try again.');
@@ -320,10 +288,6 @@ export default function MirrorScreen() {
   };
 
   const handleOpenExistingMirror = async (mirrorId: string, fromModal: 'pastMirrors' | 'pastJournals' | 'none' = 'none') => {
-    console.log('========================================');
-    console.log('🔍 [OPEN MIRROR] Opening existing Mirror:', mirrorId, 'from:', fromModal);
-    console.log('========================================');
-
     // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'mirror',
@@ -372,8 +336,6 @@ export default function MirrorScreen() {
       });
 
       if (isDay1Mirror) {
-        console.log('📋 Opening Day 1 mirror viewer for mirror:', mirrorId);
-
         // Add breadcrumb for Day 1 viewer
         Sentry.addBreadcrumb({
           category: 'navigation',
@@ -406,9 +368,6 @@ export default function MirrorScreen() {
         return;
       }
 
-      // Regular mirror handling
-      console.log('📋 Opening regular mirror viewer for mirror:', mirrorId);
-
       // Add breadcrumb for regular viewer
       Sentry.addBreadcrumb({
         category: 'navigation',
@@ -426,15 +385,11 @@ export default function MirrorScreen() {
         setShouldRestorePastJournalsModal(true);
       }
 
-      console.log('✅ Mirror loaded, opening viewer');
       setCurrentMirrorId(mirrorId);
       setGeneratedMirror(result.mirror);
-      console.log('🔄 [OPEN MIRROR] Setting mirrorState to "viewing"');
       setMirrorState('viewing');
 
-      // ✅ Mark as viewed in database (if not already)
       if (!result.mirror.has_been_viewed) {
-        console.log('👁️ Marking existing mirror as viewed in database');
         const markResult = await markMirrorAsViewed(mirrorId);
         if (!markResult.success) {
           console.error('⚠️ Failed to mark mirror as viewed:', markResult.error);
@@ -449,49 +404,25 @@ export default function MirrorScreen() {
 
   // Handler for share button on last mirror card
   const handleShareLastMirror = async (mirrorId: string) => {
-    console.log('========================================');
-    console.log('🔍 [SHARE] Button pressed for mirror:', mirrorId);
-    console.log('🔍 [SHARE] Current state:', {
-      pastMirrorsModalVisible,
-      shareSheetVisible,
-      selectedMirrorIdForShare,
-    });
-
     setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: true }));
 
     try {
-      console.log('🔍 [SHARE] Fetching friends...');
       const result = await fetchFriends(user!.id);
-      console.log('👥 [SHARE] Friends check result:', result);
 
       if (result.success && result.friends && result.friends.length > 0) {
-        // Has friends - show share sheet
-        console.log('✅ [SHARE] Has friends, opening share sheet');
-
-        // If Past Mirrors modal is open, close it temporarily
         if (pastMirrorsModalVisible) {
-          console.log('📋 [SHARE] Closing Past Mirrors modal temporarily');
           setPastMirrorsModalVisible(false);
           setShouldRestorePastMirrorsModal(true);
         }
 
-        console.log('✅ [SHARE] Setting selectedMirrorIdForShare to:', mirrorId);
-        console.log('✅ [SHARE] Setting shareSheetVisible to: true');
-
-        // Small delay to ensure modal closes before opening share sheet
         setTimeout(() => {
           setSelectedMirrorIdForShare(mirrorId);
           setShareSheetVisible(true);
-          console.log('✅ [SHARE] State updates dispatched');
         }, 300);
       } else {
-        // No friends - navigate to Friends tab
-        console.log('⚠️ [SHARE] No friends, navigating to Friends tab');
-
         if (pastMirrorsModalVisible) {
           setPastMirrorsModalVisible(false);
         }
-
         router.push('/(tabs)/friends');
       }
     } catch (error) {
@@ -499,7 +430,6 @@ export default function MirrorScreen() {
       Alert.alert('Error', 'Failed to check friends. Please try again.');
     } finally {
       setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: false }));
-      console.log('========================================');
     }
   };
 
@@ -507,17 +437,6 @@ export default function MirrorScreen() {
     journals.filter(journal => !journal.mirror_id),
     [journals]
   );
-
-  console.log('🔍 Mirror Display State:', {
-    mirrorState,
-    isReady,
-    isGenerating,
-    isCompleted,
-    isViewing,
-    hasViewedCurrentMirror,
-    generatedMirrorId: generatedMirror?.id,
-    shouldShowCard: (isReady || isGenerating || (isCompleted && !hasViewedCurrentMirror))
-  });
 
   // ✅ UPDATED - Show current mirror in Past Mirrors if it's been viewed
   const mirrorGroups = React.useMemo(() => journals
@@ -538,11 +457,6 @@ export default function MirrorScreen() {
     }, {} as Record<string, typeof journals>),
     [journals, hasViewedCurrentMirror, generatedMirror?.id]
   );
-
-  console.log('🔍 Past Mirrors:', {
-    totalMirrorGroups: Object.keys(mirrorGroups).length,
-    mirrorIds: Object.keys(mirrorGroups)
-  });
 
   // Get the last mirror (most recent) - consider both regular and Day 1 mirrors
   const lastMirror = React.useMemo(() => Object.entries(mirrorGroups)
@@ -689,10 +603,7 @@ export default function MirrorScreen() {
   }
 
 
-  console.log('🟢 [MIRROR TAB] Render check - isViewing:', isViewing, 'generatedMirror:', !!generatedMirror);
-
   if (isViewing) {
-    console.log('🟢 [MIRROR TAB] Rendering MirrorViewer modal');
     return (
       <Modal visible={true} animationType="slide" presentationStyle="fullScreen">
         <MirrorViewer
@@ -779,29 +690,19 @@ export default function MirrorScreen() {
         <ShareMirrorSheet
           visible={shareSheetVisible}
           onClose={() => {
-            console.log('========================================');
-            console.log('🔒 [SHARE_SHEET] Close handler called');
-            console.log('🔒 [SHARE_SHEET] Setting shareSheetVisible to: false');
-            console.log('🔒 [SHARE_SHEET] Clearing selectedMirrorIdForShare');
             setShareSheetVisible(false);
             setSelectedMirrorIdForShare(null);
 
-            // Restore Past Mirrors modal if it was open
             if (shouldRestorePastMirrorsModal) {
-              console.log('📋 [SHARE_SHEET] Restoring Past Mirrors modal');
               setTimeout(() => {
                 setPastMirrorsModalVisible(true);
                 setShouldRestorePastMirrorsModal(false);
               }, 300);
             }
-
-            console.log('========================================');
           }}
           userId={user.id}
           mirrorId={selectedMirrorIdForShare}
-          onShareSuccess={() => {
-            console.log('✅ [SHARE_SHEET] Mirror shared successfully');
-          }}
+          onShareSuccess={() => {}}
         />
       )}
 
