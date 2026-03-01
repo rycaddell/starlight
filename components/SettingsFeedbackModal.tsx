@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { saveFeedback } from '../lib/supabase';
+import { deleteAccount } from '../lib/supabase/auth';
 import { Avatar } from './ui/Avatar';
 import { useProfilePicture } from '../hooks/useProfilePicture';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../theme/designTokens';
@@ -31,11 +32,50 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
 }) => {
   const { signOut, user, refreshUser } = useAuth();
   const [feedbackType, setFeedbackType] = useState<'bug' | 'wish' | null>(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { handleAddProfilePicture, uploading } = useProfilePicture(user?.id || '', async () => {
     await refreshUser();
   });
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account, all journal entries, mirrors, and friend connections. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete My Account',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Are you sure?',
+              'All your data will be deleted immediately and cannot be recovered.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Yes, Delete Everything',
+                  style: 'destructive',
+                  onPress: async () => {
+                    setIsDeletingAccount(true);
+                    const result = await deleteAccount(user?.id);
+                    setIsDeletingAccount(false);
+                    if (result.success) {
+                      onClose();
+                      await signOut();
+                    } else {
+                      Alert.alert('Error', 'Failed to delete account. Please try again or contact support.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        },
+      ]
+    );
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -198,6 +238,19 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
               <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
                 <Text style={styles.signOutButtonText}>Sign Out</Text>
               </TouchableOpacity>
+
+              {/* Delete Account */}
+              <TouchableOpacity
+                style={[styles.deleteAccountButton, isDeletingAccount && styles.buttonDisabled]}
+                onPress={handleDeleteAccount}
+                disabled={isDeletingAccount}
+              >
+                {isDeletingAccount ? (
+                  <ActivityIndicator color={colors.text.error} size="small" />
+                ) : (
+                  <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
+                )}
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </SafeAreaView>
@@ -348,5 +401,14 @@ const styles = StyleSheet.create({
   signOutButtonText: {
     ...typography.heading.s,
     color: colors.text.white,
+  },
+  // Delete Account
+  deleteAccountButton: {
+    paddingVertical: spacing.l,
+    alignItems: 'center',
+  },
+  deleteAccountButtonText: {
+    ...typography.heading.s,
+    color: '#C0392B',
   },
 });

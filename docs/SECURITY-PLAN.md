@@ -125,7 +125,7 @@ if (__DEV__) console.log('🔑 Custom auth: Sign-in attempt');
 ---
 
 ### 🟠 FIX-4: Add in-app account deletion flow
-**Status:** ⬜ Not started
+**Status:** ✅ Done
 **Why:** Apple has required in-app account deletion for all apps with sign-in since iOS 15.2. Without it, the app will be rejected.
 
 **What "good" looks like:** A "Delete Account" option in Settings that, when confirmed, deletes all of the user's journals, mirrors, `day_1_progress`, friend relationships, and the user record — then signs them out.
