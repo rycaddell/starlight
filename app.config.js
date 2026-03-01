@@ -15,7 +15,7 @@ export default {
         bundleIdentifier: "com.caddell.starlight",
         infoPlist: {
           ITSAppUsesNonExemptEncryption: false,
-          NSMicrophoneUsageDescription: "Oxbow uses microphone access for voice journaling to enhance your spiritual reflection experience.",
+          NSMicrophoneUsageDescription: "Oxbow uses your microphone to record voice journal entries. Recordings are transcribed on our servers and then deleted.",
           NSUserNotificationUsageDescription: "Oxbow sends gentle reminders to help maintain your consistent journaling practice.",
           NSPhotoLibraryUsageDescription: "Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you."
         }
