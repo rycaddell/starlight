@@ -64,18 +64,24 @@ serve(async (req) => {
     // ─── 2. Storage: profile picture ─────────────────────────────────────────
     // Profile pictures are stored as {userId}/profile.{ext} in profile-pictures bucket.
     // Attempt deletion; non-fatal if bucket doesn't exist or file is missing.
-    const { data: profileFiles } = await supabase.storage
-      .from('profile-pictures')
-      .list(userId)
-      .catch(() => ({ data: null }));
-
-    if (profileFiles && profileFiles.length > 0) {
-      const paths = profileFiles.map((f) => `${userId}/${f.name}`);
-      await supabase.storage
+    try {
+      const { data: profileFiles } = await supabase.storage
         .from('profile-pictures')
-        .remove(paths)
-        .catch((e) => console.warn('⚠️ Failed to delete profile picture:', e.message));
-      console.log('🗑️ Deleted profile picture');
+        .list(userId);
+
+      if (profileFiles && profileFiles.length > 0) {
+        const paths = profileFiles.map((f) => `${userId}/${f.name}`);
+        const { error: profileDeleteError } = await supabase.storage
+          .from('profile-pictures')
+          .remove(paths);
+        if (profileDeleteError) {
+          console.warn('⚠️ Failed to delete profile picture:', profileDeleteError.message);
+        } else {
+          console.log('🗑️ Deleted profile picture');
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Profile picture deletion skipped:', e.message);
     }
 
     // ─── 3. mirror_shares ────────────────────────────────────────────────────
@@ -87,20 +93,20 @@ serve(async (req) => {
     console.log('🗑️ Deleted mirror_shares');
 
     // ─── 4. mirror_generation_requests ───────────────────────────────────────
-    await supabase
+    const { error: genReqError } = await supabase
       .from('mirror_generation_requests')
       .delete()
-      .eq('custom_user_id', userId)
-      .catch((e) => console.warn('⚠️ mirror_generation_requests delete:', e.message));
-    console.log('🗑️ Deleted mirror_generation_requests');
+      .eq('custom_user_id', userId);
+    if (genReqError) console.warn('⚠️ mirror_generation_requests delete:', genReqError.message);
+    else console.log('🗑️ Deleted mirror_generation_requests');
 
     // ─── 5. transcription_jobs ───────────────────────────────────────────────
-    await supabase
+    const { error: txJobsError } = await supabase
       .from('transcription_jobs')
       .delete()
-      .eq('custom_user_id', userId)
-      .catch((e) => console.warn('⚠️ transcription_jobs delete:', e.message));
-    console.log('🗑️ Deleted transcription_jobs');
+      .eq('custom_user_id', userId);
+    if (txJobsError) console.warn('⚠️ transcription_jobs delete:', txJobsError.message);
+    else console.log('🗑️ Deleted transcription_jobs');
 
     // ─── 6. day_1_progress ───────────────────────────────────────────────────
     const { error: day1Error } = await supabase
