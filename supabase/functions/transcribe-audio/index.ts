@@ -152,6 +152,13 @@ serve(async (req) => {
 
     // Mark journal as failed so client polling can surface the error
     if (journalId) {
+      const { data: journal } = await supabase
+        .from('journals')
+        .select('audio_url')
+        .eq('id', journalId)
+        .single()
+        .catch(() => ({ data: null }));
+
       await supabase
         .from('journals')
         .update({
@@ -160,6 +167,15 @@ serve(async (req) => {
         })
         .eq('id', journalId)
         .catch((e) => console.error('Failed to mark journal as failed:', e.message));
+
+      // Clean up audio even on failure — don't leave voice recordings orphaned
+      if (journal?.audio_url) {
+        await supabase.storage
+          .from('audio-recordings')
+          .remove([journal.audio_url])
+          .catch((e) => console.warn('⚠️ Failed to delete orphaned audio on error:', e.message));
+        console.log('🗑️ Orphaned audio deleted after transcription failure');
+      }
     }
 
     return new Response(
