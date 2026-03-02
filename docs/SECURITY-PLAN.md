@@ -140,7 +140,7 @@ if (__DEV__) console.log('🔑 Custom auth: Sign-in attempt');
 ---
 
 ### 🟠 FIX-5: Write and host a Privacy Policy
-**Status:** ⬜ Not started
+**Status:** 🔄 In progress — policy written (`docs/privacy_policy.md`), in-app link wired. Pending: host at public URL, update `PRIVACY_POLICY_URL` constant in `SettingsFeedbackModal.tsx`, add URL to App Store Connect.
 **Why:** Apple requires a privacy policy URL for all apps. Users need to know their spiritual journal content is processed by OpenAI.
 
 **What "good" looks like:** A URL (GitHub Pages or similar) linked from App Store Connect and from the in-app Settings screen. Must cover: what data is collected, that voice/text is sent to OpenAI, retention policy (journals stored indefinitely, audio deleted post-transcription), and contact info for data requests.

@@ -13,7 +13,10 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  Linking,
 } from 'react-native';
+
+const PRIVACY_POLICY_URL = 'https://oxbowjournal.com/privacy'; // TODO: update when hosted
 import { useAuth } from '../contexts/AuthContext';
 import { saveFeedback } from '../lib/supabase';
 import { deleteAccount } from '../lib/supabase/auth';
@@ -246,10 +249,15 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
                 disabled={isDeletingAccount}
               >
                 {isDeletingAccount ? (
-                  <ActivityIndicator color={colors.text.error} size="small" />
+                  <ActivityIndicator color='#C0392B' size="small" />
                 ) : (
                   <Text style={styles.deleteAccountButtonText}>Delete Account</Text>
                 )}
+              </TouchableOpacity>
+
+              {/* Privacy Policy */}
+              <TouchableOpacity onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}>
+                <Text style={styles.privacyPolicyText}>Privacy Policy</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -410,5 +418,11 @@ const styles = StyleSheet.create({
   deleteAccountButtonText: {
     ...typography.heading.s,
     color: '#C0392B',
+  },
+  // Privacy Policy
+  privacyPolicyText: {
+    ...typography.body.s,
+    color: colors.text.bodyLight,
+    textAlign: 'center',
   },
 });
