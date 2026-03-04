@@ -87,7 +87,7 @@ export default function MirrorScreen() {
       Sentry.setUser({
         id: user.id,
         username: user.display_name || undefined,
-        email: user.access_code || undefined,
+        email: user.phone || undefined,
       });
 
       Sentry.setTag('user_group', user.group_name || 'none');

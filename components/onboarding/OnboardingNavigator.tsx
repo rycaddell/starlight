@@ -11,8 +11,9 @@ export const OnboardingNavigator: React.FC = () => {
   const { user } = useAuth();
   const { currentStep } = useOnboarding();
   
-  // Hard check: if user has completed onboarding in database, don't render anything
-  const isOnboardingComplete = user?.onboarding_completed_at !== null;
+  // Hard check: if user has completed onboarding in database, don't render anything.
+  // Use !! to handle both null (onboarding incomplete) and undefined (user row not yet created).
+  const isOnboardingComplete = !!user?.onboarding_completed_at;
   
   if (isOnboardingComplete) {
     console.log('✅ Onboarding complete, showing main app');
