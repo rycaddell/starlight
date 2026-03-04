@@ -96,7 +96,11 @@ export function OnboardingProvider({ children }: OnboardingProviderProps) {
       if (completed) {
         setCurrentStep('complete');
       } else {
-        setCurrentStep('name-input');
+        // Only initialise userName from the user record — do NOT reset currentStep.
+        // Resetting here would send new users back to 'name-input' the moment
+        // completeProfileSetup() sets user in AuthContext (their row now exists but
+        // onboarding_completed_at is still null). The step advances naturally via
+        // goToNextStep() in NarrativeOnboardingScreen.
         setUserName(user.display_name || '');
       }
     } else {

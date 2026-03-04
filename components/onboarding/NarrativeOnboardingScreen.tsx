@@ -12,12 +12,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Alert,
 } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOut,
 } from 'react-native-reanimated';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useOnboarding } from '../../contexts/OnboardingContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ONBOARDING_BACKGROUNDS, SAMPLE_JOURNAL_ENTRIES, PRODUCT_SCREENSHOT } from '../../constants/onboardingImages';
@@ -44,7 +44,7 @@ const JournalCard: React.FC<JournalCardProps> = ({ date, text }) => {
 export const NarrativeOnboardingScreen: React.FC = () => {
   const { currentStep, userName, setUserName, goToNextStep, completeOnboarding, canProceed } =
     useOnboarding();
-  const { user } = useAuth();
+  const { user, isNewUser, completeProfileSetup } = useAuth();
   const [nameInput, setNameInput] = useState(userName);
   const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
   const [stepStartTime, setStepStartTime] = useState<number>(Date.now());
@@ -91,18 +91,30 @@ export const NarrativeOnboardingScreen: React.FC = () => {
     const trimmedName = nameInput.trim();
     setUserName(trimmedName);
 
-    // Save to database
-    if (!user) {
-      console.error('❌ No user found when saving display name');
-      // Still proceed even if save fails
+    if (isNewUser) {
+      // Brand-new user — create their profile row in the users table.
+      // AuthContext updates user state after this but OnboardingContext no longer
+      // resets currentStep when user becomes non-null (see OnboardingContext useEffect).
+      const result = await completeProfileSetup(trimmedName);
+      if (!result.success) {
+        console.error('❌ Error creating profile:', result.error);
+        Alert.alert('Error', 'Failed to save your name. Please try again.');
+        return;
+      }
       goToNextStep();
       return;
     }
 
-    try {
-      console.log('💾 Attempting to save display name for user:', user.id);
+    if (!user) {
+      console.error('❌ No user found when saving display name');
+      goToNextStep(); // defensive fallback
+      return;
+    }
 
-      const { data, error } = await supabase
+    // Existing user — update display_name only (no AsyncStorage needed, session is in SecureStore)
+    try {
+      console.log('💾 Saving display name for user:', user.id);
+      const { error } = await supabase
         .from('users')
         .update({ display_name: trimmedName })
         .eq('id', user.id)
@@ -111,14 +123,7 @@ export const NarrativeOnboardingScreen: React.FC = () => {
       if (error) {
         console.error('❌ Error saving display name:', error);
       } else {
-        console.log('✅ Display name saved:', data);
-        // Update local storage with new display name
-        const updatedUser = { ...user, display_name: trimmedName };
-        await AsyncStorage.setItem('starlight_current_user', JSON.stringify(updatedUser));
-        // Note: do NOT call refreshUser() here — it triggers OnboardingContext's user
-        // useEffect which resets currentStep to 'name-input'. The name is already live
-        // in OnboardingContext (setUserName above) and in AsyncStorage. AuthContext
-        // will pick up the updated user naturally via completeOnboarding() at the end.
+        console.log('✅ Display name saved');
       }
     } catch (error) {
       console.error('❌ Exception saving display name:', error);

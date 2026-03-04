@@ -1,28 +1,39 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as Sentry from '@sentry/react-native';
+import type { Session } from '@supabase/supabase-js';
 import {
-  signInWithAccessCode,
-  getCurrentUser,
-  autoSignInWithStoredCode,
-  clearStoredAccessCode
-} from '../lib/supabase';
+  sendPhoneOTP,
+  verifyPhoneOTP,
+  completeProfileSetup as completeProfileSetupFn,
+  signOut as supabaseSignOut,
+} from '../lib/supabase/auth';
+import { supabase } from '../lib/supabase/client';
 
-// Define custom user type
-interface CustomUser {
+export interface AppUser {
   id: string;
-  access_code: string;
-  display_name: string;
+  auth_user_id: string;
+  phone: string;
+  display_name: string | null;
   created_at: string;
   status: string;
-  group_name?: string;
-  invited_by?: string;
+  group_name?: string | null;
+  invited_by?: string | null;
+  first_login_at?: string | null;
+  onboarding_completed_at?: string | null;
+  auth_migrated_at?: string | null;
+  profile_picture_url?: string | null;
+  day_1_completed_at?: string | null;
 }
 
 interface AuthContextType {
-  user: CustomUser | null;
+  user: AppUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  signIn: (accessCode: string) => Promise<{ success: boolean; error?: string }>;
+  // True when a Supabase session exists but no users row yet (brand-new sign-up)
+  isNewUser: boolean;
+  sendOTP: (phone: string) => Promise<{ success: boolean; error?: string }>;
+  verifyOTP: (phone: string, token: string) => Promise<{ success: boolean; error?: string }>;
+  completeProfileSetup: (displayName: string) => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -30,145 +41,176 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<CustomUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isNewUser, setIsNewUser] = useState(false);
+  // Guards against resolveAppUser running before the initial session is known
+  const [initialized, setInitialized] = useState(false);
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = !!session;
 
-  // Initialize auth state on app start
+  // 1. Load the initial session, then subscribe to future auth state changes.
+  //    The onAuthStateChange callback is intentionally synchronous — no async
+  //    Supabase calls inside it. That avoids the Supabase client deadlock.
   useEffect(() => {
-    initializeAuth();
+    supabase.auth.getSession().then(({ data: { session: initial } }) => {
+      setSession(initial);
+      setInitialized(true);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const initializeAuth = async () => {
+  // 2. Resolve the app-level users row whenever the Supabase session changes.
+  //    Waits for initialized so we don't flash an unauthenticated state before
+  //    getSession() has returned.
+  useEffect(() => {
+    if (!initialized) return;
+    resolveAppUser();
+  }, [session, initialized]);
+
+  const resolveAppUser = async () => {
+    setIsLoading(true); // Show spinner while DB lookup is in flight, even on re-resolve
+    if (!session?.user?.id) {
+      setUser(null);
+      setIsNewUser(false);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      console.log('🔄 AuthContext: Initializing auth...');
+      // Primary lookup: find row by auth_user_id (covers all users after first sign-in)
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
 
-      // Add Sentry breadcrumb
-      Sentry.addBreadcrumb({
-        category: 'auth',
-        message: 'Initializing authentication',
-        level: 'info',
-      });
+      if (error) throw error;
 
-      // Try to get current user from storage
-      const currentUserResult = await getCurrentUser();
+      if (data) {
+        setUser(data);
+        setIsNewUser(false);
+        return;
+      }
 
-      if (currentUserResult.success && currentUserResult.user) {
-        console.log('✅ AuthContext: Found current user');
-        setUser(currentUserResult.user);
-      } else {
-        // Try auto sign-in with stored code
-        console.log('🔄 AuthContext: Trying auto sign-in...');
-        const autoSignInResult = await autoSignInWithStoredCode();
+      // Secondary lookup: phone-based migration for legacy users signing in for the first time.
+      // Supabase strips the leading + from session.user.phone — normalize before querying.
+      const rawPhone = session.user.phone ?? '';
+      const normalizedPhone = rawPhone.startsWith('+') ? rawPhone : `+${rawPhone}`;
 
-        if (autoSignInResult.success && autoSignInResult.user) {
-          console.log('✅ AuthContext: Auto sign-in successful');
-          setUser(autoSignInResult.user);
-        } else {
-          console.log('ℹ️ AuthContext: No stored session found');
+      if (normalizedPhone.length > 1) {
+        const { data: legacyUser, error: legacyError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('phone', normalizedPhone)
+          .is('auth_user_id', null)
+          .maybeSingle();
+
+        if (legacyError) throw legacyError;
+
+        if (legacyUser) {
+          // Silently link auth identity — migrating user skips onboarding entirely
+          const { data: migratedUser, error: migrateError } = await supabase
+            .from('users')
+            .update({
+              auth_user_id: session.user.id,
+              auth_migrated_at: new Date().toISOString(),
+            })
+            .eq('id', legacyUser.id)
+            .select()
+            .single();
+
+          if (migrateError) throw migrateError;
+
+          Sentry.addBreadcrumb({
+            category: 'auth',
+            message: 'Legacy user auto-migrated on sign-in',
+            data: { userId: migratedUser.id, authUserId: session.user.id },
+            level: 'info',
+          });
+
+          setUser(migratedUser);
+          setIsNewUser(false);
+          return;
         }
       }
-    } catch (error) {
-      console.error('❌ AuthContext: Error initializing auth:', error);
 
-      // Capture initialization error
+      // No match by auth_user_id or phone → brand-new user needs profile setup
+      setUser(null);
+      setIsNewUser(true);
+    } catch (error) {
+      console.error('❌ AuthContext: Error resolving app user:', error);
       Sentry.captureException(error, {
-        tags: { component: 'AuthContext', action: 'initialize' },
+        tags: { component: 'AuthContext', action: 'resolveAppUser' },
       });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const signIn = async (accessCode: string) => {
-    try {
-      setIsLoading(true);
-      console.log('🔑 AuthContext: Signing in...');
+  const sendOTP = async (phone: string) => {
+    return sendPhoneOTP(phone);
+  };
 
-      const result = await signInWithAccessCode(accessCode);
+  const verifyOTP = async (phone: string, token: string) => {
+    const result = await verifyPhoneOTP(phone, token);
+    // Session update arrives via onAuthStateChange → resolveAppUser fires automatically
+    return { success: result.success, error: result.error };
+  };
 
-      if (result.success && result.user) {
-        console.log('✅ AuthContext: Sign-in successful');
-        setUser(result.user);
-        return { success: true };
-      } else {
-        console.log('❌ AuthContext: Sign-in failed');
-        return { success: false, error: result.error || 'Sign-in failed' };
-      }
-    } catch (error) {
-      console.error('❌ AuthContext: Sign-in error:', error);
-
-      // Capture unexpected error
-      Sentry.captureException(error, {
-        tags: { component: 'AuthContext', action: 'signIn', type: 'unexpected' },
-      });
-
-      return { success: false, error: 'An unexpected error occurred' };
-    } finally {
-      setIsLoading(false);
+  const completeProfileSetup = async (displayName: string) => {
+    if (!session?.user) {
+      return { success: false, error: 'No active session' };
     }
+
+    const phone = session.user.phone ?? '';
+    const authUserId = session.user.id;
+
+    const result = await completeProfileSetupFn(authUserId, phone, displayName);
+
+    if (result.success && result.user) {
+      setUser(result.user);
+      setIsNewUser(false);
+    }
+
+    return { success: result.success, error: result.error };
   };
 
   const signOut = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      console.log('🚪 AuthContext: Signing out...');
-      
-      await clearStoredAccessCode();
-      setUser(null);
-      
-      console.log('✅ AuthContext: Sign-out successful');
+      await supabaseSignOut();
+      // onAuthStateChange will fire with null session → resolveAppUser clears user state
     } catch (error) {
       console.error('❌ AuthContext: Sign-out error:', error);
+      Sentry.captureException(error, {
+        tags: { component: 'AuthContext', action: 'signOut' },
+      });
     } finally {
       setIsLoading(false);
     }
   };
 
   const refreshUser = async () => {
-    try {
-      console.log('🔄 AuthContext: Refreshing user...');
-
-      const result = await getCurrentUser();
-
-      if (result.success && result.user) {
-        console.log('✅ AuthContext: User refreshed');
-        setUser(result.user);
-      } else {
-        console.log('⚠️ AuthContext: User refresh failed, signing out');
-
-        // Capture refresh failure
-        Sentry.captureException(new Error('User refresh failed'), {
-          tags: { component: 'AuthContext', action: 'refresh' },
-          contexts: {
-            auth: {
-              error: result.error,
-            },
-          },
-        });
-
-        await signOut();
-      }
-    } catch (error) {
-      console.error('❌ AuthContext: Error refreshing user:', error);
-
-      // Capture unexpected error
-      Sentry.captureException(error, {
-        tags: { component: 'AuthContext', action: 'refresh', type: 'unexpected' },
-      });
-
-      await signOut();
-    }
+    await resolveAppUser();
   };
 
   const value: AuthContextType = {
     user,
     isLoading,
     isAuthenticated,
-    signIn,
+    isNewUser,
+    sendOTP,
+    verifyOTP,
+    completeProfileSetup,
     signOut,
-    refreshUser
+    refreshUser,
   };
 
   return (

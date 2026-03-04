@@ -58,16 +58,24 @@ Rated: **L** = Likelihood (1–5), **I** = Impact (1–5), **Score** = L×I
 ## C) Fix-First List — Before App Store
 
 ### 🔴 FIX-1 + FIX-2: New auth system (combined)
-**Status:** 🔄 In planning
-**Why:** The current access code auth bypasses Supabase Auth entirely — `auth.uid()` is always null, so all RLS policies are `USING (true)` (wide open). The access code scheme (`firstname + 3 digits`) is also brute-forceable. Both problems are solved together by migrating to a proper Supabase Auth method before App Store launch.
+**Status:** 🔄 In progress — see `docs/AUTH_MIGRATION_PLAN.md` for full detail
+- ✅ Phase 0: Twilio Verify + Supabase phone auth configured
+- ✅ Phase 1: DB columns added (`auth_user_id`, `phone`, `auth_migrated_at`); RLS policies written but not yet enabled
+- ✅ Phase 2: Client code rewritten (phone OTP auth, SecureStore session, AuthContext, new screens)
+- ✅ Phase 3: 37 users pre-populated with E.164 phones; TestFlight build pushed — monitoring migration
+- ⏳ Phase 4: Enable RLS — **gate: `SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL` = 0**
+- ⏳ Phase 5: Edge function JWT verification (`generate-mirror`, `transcribe-audio`, `delete-account`, etc.) — gate: all users on new client
+- ⏳ Phase 6: Friend invite Universal Links — required before App Store submission
+
+**Why:** The current access code auth bypasses Supabase Auth entirely — `auth.uid()` is always null, so all RLS policies are `USING (true)` (wide open). The access code scheme (`firstname + 3 digits`) is also brute-forceable. Both problems are solved together by migrating to phone OTP via Supabase Auth + Twilio Verify.
 
 **What "good" looks like:**
-- Users authenticate via a real Supabase Auth method (phone OTP, magic link, email/password, or Sign in with Apple).
+- Users authenticate via phone OTP (Supabase Auth + Twilio Verify).
 - The client holds a real Supabase JWT session; `auth.uid()` returns the user's ID in all RLS policies.
-- RLS policies on `journals`, `mirrors`, `day_1_progress`, `friend_links`, `mirror_shares`, `users`, and `audio-recordings` storage are updated from `USING (true)` to `USING (auth.uid() = custom_user_id)` (or equivalent per table).
+- RLS policies on `journals`, `mirrors`, `day_1_progress`, `friend_links`, `mirror_shares`, `users`, and `audio-recordings` storage enforce per-user isolation via `current_app_user_id()` helper.
 - A user authenticated as Alice cannot read Bob's data via the Supabase client or REST API.
 
-**Approach:** TBD — new auth method being evaluated.
+**Auth method chosen:** Phone OTP via Supabase Auth + Twilio Verify.
 
 **RLS migration required once auth is chosen:**
 ```sql
@@ -229,8 +237,8 @@ Not blocking for launch given the current small, known user base:
 | `NSMicrophoneUsageDescription` | ⚠️ Generic | FIX-7 |
 | OpenAI data sharing disclosed | ❌ Missing | FIX-5, FIX-6 |
 | In-app account deletion | ❌ Missing | FIX-4 |
-| Database isolation | ❌ Open | FIX-1 |
-| Guessable access codes | ❌ Weak | FIX-2 |
+| Database isolation | ⚠️ RLS written, not yet enabled | FIX-1+2 Phase 4 |
+| Guessable access codes | ⚠️ Phone OTP shipped to TestFlight | FIX-1+2 Phase 3 |
 | Access code in logs | ❌ Present | FIX-3 |
 | Audio deleted post-transcription | ⚠️ Unverified | FIX-8 |
 | Invite expiry server-enforced | ⚠️ Client-only | FIX-9 |
