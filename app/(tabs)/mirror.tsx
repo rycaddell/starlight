@@ -17,11 +17,9 @@ import { LastJournalCard } from '../../components/mirror/LastJournalCard';
 import { PastMirrorsModal } from '../../components/mirror/PastMirrorsModal';
 import { PastJournalsModal } from '../../components/mirror/PastJournalsModal';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
-import { getMirrorById } from '../../lib/supabase/mirrors';
-import { markMirrorAsViewed } from '../../lib/supabase/mirrors';
+import { getMirrorById, markMirrorAsViewed, getUserMirrors } from '../../lib/supabase/mirrors';
 import { deleteJournalEntry } from '../../lib/supabase/journals';
 import { fetchFriends } from '../../lib/supabase/friends';
-import { supabase } from '../../lib/supabase/client';
 import { getDay1Mirror } from '../../lib/supabase/day1';
 import { Day1MirrorViewer } from '../../components/day1/Day1MirrorViewer';
 import * as Sentry from '@sentry/react-native';
@@ -33,11 +31,22 @@ export default function MirrorScreen() {
 
   const { showSettings } = useGlobalSettings();
   
-  const [mirrorReflections, setMirrorReflections] = React.useState<Record<string, {focus: string, action: string}>>({});
-  const [mirrorDates, setMirrorDates] = React.useState<Record<string, Date>>({});
-  const [biblicalCharacters, setBiblicalCharacters] = React.useState<Record<string, string>>({});
+  const [userMirrors, setUserMirrors] = React.useState<any[]>([]);
   const [day1Mirror, setDay1Mirror] = React.useState<any>(null);
   const [day1Progress, setDay1Progress] = React.useState<any>(null);
+
+  // Defined early so it can be safely used in useFocusEffect deps
+  const loadUserMirrors = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      const result = await getUserMirrors(user.id);
+      if (result.success) {
+        setUserMirrors(result.data);
+      }
+    } catch (error) {
+      console.error('❌ Error loading user mirrors:', error);
+    }
+  }, [user]);
 
   // Modal states
   const [pastMirrorsModalVisible, setPastMirrorsModalVisible] = React.useState(false);
@@ -111,6 +120,7 @@ export default function MirrorScreen() {
       });
 
       loadJournals();
+      loadUserMirrors();
     }
   }, [isAuthenticated, user]);
 
@@ -138,14 +148,14 @@ export default function MirrorScreen() {
     React.useCallback(() => {
       if (isAuthenticated && user) {
         if (isOpeningViaMirrorParam.current) {
-          loadMirrorData();
+          loadUserMirrors();
         } else {
           checkGenerationStatusOnFocus();
-          loadJournals(false); // ✅ Allow state updates based on journal count
-          loadMirrorData(); // ✅ Refresh reflection data
+          loadJournals(false);
+          loadUserMirrors();
         }
       }
-    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror, loadMirrorData, params.openMirrorId])
+    }, [isAuthenticated, user, mirrorState, hasViewedCurrentMirror, generatedMirror, loadUserMirrors, params.openMirrorId])
   );
 
   // Load Day 1 mirror
@@ -168,66 +178,6 @@ export default function MirrorScreen() {
     loadDay1Mirror();
   }, [user]);
 
-  const loadMirrorData = React.useCallback(async () => {
-    const mirrorIds = [...new Set(journals
-      .filter(j => j.mirror_id)
-      .map(j => j.mirror_id))];
-
-    if (mirrorIds.length === 0) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('mirrors')
-        .select('id, reflection_focus, reflection_action, created_at, screen_2_biblical')
-        .in('id', mirrorIds);
-
-      if (!error && data) {
-        const reflections: Record<string, {focus: string, action: string}> = {};
-        const dates: Record<string, Date> = {};
-        const characters: Record<string, string> = {};
-
-        data.forEach(mirror => {
-          // Store reflection data (only focus is required, action is optional)
-          if (mirror.reflection_focus) {
-            reflections[mirror.id] = {
-              focus: mirror.reflection_focus,
-              action: mirror.reflection_action || ''
-            };
-          }
-
-          // Store mirror creation dates
-          if (mirror.created_at) {
-            dates[mirror.id] = new Date(mirror.created_at);
-          }
-
-          // Extract biblical character from screen_2_biblical
-          if (mirror.screen_2_biblical) {
-            try {
-              const biblical = typeof mirror.screen_2_biblical === 'string'
-                ? JSON.parse(mirror.screen_2_biblical)
-                : mirror.screen_2_biblical;
-              if (biblical?.parallel_story?.character) {
-                characters[mirror.id] = biblical.parallel_story.character;
-              }
-            } catch (e) {
-              console.error('Error parsing biblical data for mirror:', mirror.id, e);
-            }
-          }
-        });
-
-        setMirrorReflections(reflections);
-        setMirrorDates(dates);
-        setBiblicalCharacters(characters);
-      }
-    } catch (error) {
-      console.error('Error loading mirror data:', error);
-    }
-  }, [journals]);
-
-  useEffect(() => {
-    loadMirrorData();
-  }, [journals, loadMirrorData]);
-
   const handleViewNewMirror = () => {
     if (generatedMirror) {
       Sentry.addBreadcrumb({
@@ -248,6 +198,7 @@ export default function MirrorScreen() {
   const handleCloseMirror = () => {
     closeMirrorViewer();
     setCurrentMirrorId(null);
+    loadUserMirrors();
 
     // Restore modals if they were open before viewing a mirror
     if (shouldRestorePastMirrorsModal) {
@@ -438,55 +389,32 @@ export default function MirrorScreen() {
     [journals]
   );
 
-  // ✅ UPDATED - Show current mirror in Past Mirrors if it's been viewed
-  const mirrorGroups = React.useMemo(() => journals
-    .filter(journal => 
-      journal.mirror_id != null && 
-      (hasViewedCurrentMirror || journal.mirror_id !== generatedMirror?.id)
-      // ✅ Show current mirror in Past Mirrors once viewed
-    )
-    .reduce((groups, journal) => {
-      const mirrorId = journal.mirror_id;
-      if (mirrorId && !groups[mirrorId]) {
-        groups[mirrorId] = [];
-      }
-      if (mirrorId) {
-        groups[mirrorId].push(journal);
-      }
-      return groups;
-    }, {} as Record<string, typeof journals>),
-    [journals, hasViewedCurrentMirror, generatedMirror?.id]
-  );
-
-  // Get the last mirror (most recent) - consider both regular and Day 1 mirrors
-  const lastMirror = React.useMemo(() => Object.entries(mirrorGroups)
-    .sort(([, journalsA], [, journalsB]) => {
-      const dateA = mirrorDates[journalsA[0].mirror_id!] || new Date(journalsA[0].created_at);
-      const dateB = mirrorDates[journalsB[0].mirror_id!] || new Date(journalsB[0].created_at);
-      return dateB.getTime() - dateA.getTime();
-    })[0],
-    [mirrorGroups, mirrorDates]
-  );
-
-  const lastMirrorId = lastMirror?.[0];
+  // Most recent regular or Day 1 mirror, derived directly from the mirrors table
   const lastMirrorData = React.useMemo(() => {
-    // Compare Day 1 mirror with last regular mirror
+    const regularMirrors = userMirrors.filter(m => m.mirror_type !== 'day_1');
     let lastRegularMirror = null;
-    if (lastMirrorId) {
+    if (regularMirrors.length > 0) {
+      const m = regularMirrors[0]; // already sorted desc by created_at
+      let biblicalCharacter = null;
+      if (m.screen_2_biblical) {
+        try {
+          const biblical = typeof m.screen_2_biblical === 'string'
+            ? JSON.parse(m.screen_2_biblical)
+            : m.screen_2_biblical;
+          biblicalCharacter = biblical?.parallel_story?.character || null;
+        } catch (e) {}
+      }
       lastRegularMirror = {
-        id: lastMirrorId,
-        date: mirrorDates[lastMirrorId] || new Date(lastMirror[1][0].created_at),
-        biblicalCharacter: biblicalCharacters[lastMirrorId],
-        reflectionFocus: mirrorReflections[lastMirrorId]?.focus,
+        id: m.id,
+        date: new Date(m.created_at),
+        biblicalCharacter,
+        reflectionFocus: m.reflection_focus || null,
         isDay1: false,
       };
     }
 
-    // Check if Day 1 mirror exists and is more recent
     if (day1Mirror) {
       const day1Date = new Date(day1Mirror.created_at);
-
-      // Extract biblical character from Day 1 mirror
       let day1Character = null;
       if (day1Mirror.screen_2_biblical) {
         try {
@@ -494,11 +422,8 @@ export default function MirrorScreen() {
             ? JSON.parse(day1Mirror.screen_2_biblical)
             : day1Mirror.screen_2_biblical;
           day1Character = biblical?.parallel_story?.character || null;
-        } catch (e) {
-          console.error('Error parsing Day 1 biblical data:', e);
-        }
+        } catch (e) {}
       }
-
       const day1MirrorData = {
         id: day1Mirror.id,
         date: day1Date,
@@ -507,30 +432,38 @@ export default function MirrorScreen() {
         isDay1: true,
         spiritualPlace: day1Progress?.spiritualPlace,
       };
-
-      // Return whichever is most recent
       if (!lastRegularMirror || day1Date > lastRegularMirror.date) {
         return day1MirrorData;
       }
     }
 
     return lastRegularMirror;
-  }, [lastMirrorId, lastMirror, mirrorDates, biblicalCharacters, mirrorReflections, day1Mirror, day1Progress]);
+  }, [userMirrors, day1Mirror, day1Progress]);
 
-  // Get all mirrors for the modal (sorted from most recent to oldest)
+  // All mirrors for the modal (sorted most recent first), derived directly from the mirrors table
   const allMirrors = React.useMemo(() => {
-    const regularMirrors = Object.entries(mirrorGroups)
-      .map(([mirrorId, journals]) => ({
-        id: mirrorId,
-        date: mirrorDates[mirrorId] || new Date(journals[0].created_at),
-        biblicalCharacter: biblicalCharacters[mirrorId],
-        reflectionFocus: mirrorReflections[mirrorId]?.focus,
-        isDay1: false,
-      }));
+    const regularMirrors = userMirrors
+      .filter(m => m.mirror_type !== 'day_1')
+      .map(m => {
+        let biblicalCharacter = null;
+        if (m.screen_2_biblical) {
+          try {
+            const biblical = typeof m.screen_2_biblical === 'string'
+              ? JSON.parse(m.screen_2_biblical)
+              : m.screen_2_biblical;
+            biblicalCharacter = biblical?.parallel_story?.character || null;
+          } catch (e) {}
+        }
+        return {
+          id: m.id,
+          date: new Date(m.created_at),
+          biblicalCharacter,
+          reflectionFocus: m.reflection_focus || null,
+          isDay1: false,
+        };
+      });
 
-    // Add Day 1 mirror if it exists
     if (day1Mirror) {
-      // Extract biblical character from Day 1 mirror
       let day1Character = null;
       if (day1Mirror.screen_2_biblical) {
         try {
@@ -538,27 +471,21 @@ export default function MirrorScreen() {
             ? JSON.parse(day1Mirror.screen_2_biblical)
             : day1Mirror.screen_2_biblical;
           day1Character = biblical?.parallel_story?.character || null;
-        } catch (e) {
-          console.error('Error parsing Day 1 biblical data:', e);
-        }
+        } catch (e) {}
       }
-
-      const day1MirrorEntry = {
+      regularMirrors.push({
         id: day1Mirror.id,
         date: new Date(day1Mirror.created_at),
         biblicalCharacter: day1Character,
-        reflectionFocus: null, // Day 1 mirrors use focus_areas instead
+        reflectionFocus: null,
         isDay1: true,
         spiritualPlace: day1Progress?.spiritualPlace,
         focusAreas: day1Mirror.focus_areas,
-      };
-
-      return [...regularMirrors, day1MirrorEntry]
-        .sort((a, b) => b.date.getTime() - a.date.getTime());
+      });
     }
 
     return regularMirrors.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [mirrorGroups, mirrorDates, biblicalCharacters, mirrorReflections, day1Mirror, day1Progress]);
+  }, [userMirrors, day1Mirror, day1Progress]);
 
   // Get the last journal (most recent) - include ALL journals
   const lastJournalEntry = React.useMemo(() => {

@@ -32,6 +32,7 @@ import * as Sentry from '@sentry/react-native';
 import { transcribeAudio, uploadAudioToStorage, createPendingJournal, triggerTranscription } from '../lib/supabase/transcription';
 import { supabase } from '../lib/supabase/client';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useAuth } from '../contexts/AuthContext';
 
 const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
 const RECORDINGS_DIR = `${FileSystem.documentDirectory}pending_recordings/`;
@@ -84,6 +85,7 @@ export interface PendingVoiceJob {
 const MAX_RECORDING_DURATION = 480;
 
 export const useAudioRecording = (onTranscriptionComplete?: (text: string, timestamp: string, journalId?: string) => void, day1Step?: 2 | 3) => {
+  const { user } = useAuth();
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordingDuration, setRecordingDuration] = useState(0);
@@ -354,8 +356,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
           // --- Step 4: Upload binary to Supabase Storage ---
           try {
-            const userJson = await AsyncStorage.getItem('starlight_current_user');
-            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
+            const customUserId = user?.id ?? null;
 
             if (customUserId) {
               storagePath = `${customUserId}/${jobId}.m4a`;
@@ -386,8 +387,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
           if (storagePath) {
             // --- New flow: create pending journal + trigger server-side transcription ---
-            const userJson = await AsyncStorage.getItem('starlight_current_user');
-            const customUserId = userJson ? JSON.parse(userJson)?.id : null;
+            const customUserId = user?.id ?? null;
 
             const journal = await createPendingJournal({
               customUserId,

@@ -22,7 +22,7 @@ interface Day1ModalProps {
 }
 
 export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComplete }) => {
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -34,6 +34,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   const [step3JournalId, setStep3JournalId] = useState<string | null>(null);
   const [isWaitingForRecovery, setIsWaitingForRecovery] = useState(false);
   const recoveryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextLoadRef = useRef(false);
 
   // Clean up recovery poll on unmount
   useEffect(() => {
@@ -42,9 +43,15 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     };
   }, []);
 
+  // Debug: trace state changes
+  useEffect(() => {
+    console.log('🔍 [Day1Modal] state:', { currentStep, loading, miniMirrorId, isWaitingForRecovery });
+  }, [currentStep, loading, miniMirrorId, isWaitingForRecovery]);
+
   // Load progress and determine starting step
   useEffect(() => {
     if (visible && user) {
+      console.log('🔄 [Day1Modal] loadProgress triggered — visible:', visible, 'userId:', user.id);
       loadProgress();
     }
   }, [visible, user]);
@@ -52,6 +59,13 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   const loadProgress = async () => {
     if (!user) return;
 
+    if (skipNextLoadRef.current) {
+      console.log('⏭️ [Day1Modal] loadProgress skipped (step transition in progress)');
+      skipNextLoadRef.current = false;
+      return;
+    }
+
+    console.log('📂 [Day1Modal] loadProgress start');
     setLoading(true);
     const result = await getDay1Progress(user.id);
 
@@ -109,10 +123,17 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
         }
       }
 
-      console.log('📍 Starting Day 1 at step:', startStep);
+      console.log('📍 [Day1Modal] loadProgress → startStep:', startStep, {
+        mini_mirror_id: progress.mini_mirror_id,
+        generation_status: progress.generation_status,
+        completed_at: progress.completed_at,
+      });
       setCurrentStep(startStep);
+    } else {
+      console.log('⚠️ [Day1Modal] loadProgress — no progress found:', result);
     }
 
+    console.log('📂 [Day1Modal] loadProgress done, setLoading(false)');
     setLoading(false);
   };
 
@@ -184,19 +205,17 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     setCurrentStep(3); // Go to Step 3 (prayer topics voice journal)
   };
 
-  const handleStep3Complete = async (mirrorId: string, summaries: any) => {
+  const handleStep3Complete = (mirrorId: string, summaries: any) => {
+    console.log('✅ [Day1Modal] handleStep3Complete — mirrorId:', mirrorId);
     setMiniMirrorId(mirrorId);
     setSummaries(summaries);
-    // Refresh user data to get updated display_name before showing Step 5
-    await refreshUser();
-    setCurrentStep(5); // Go directly to Step 5 (skip loading screen)
+    setCurrentStep(5);
+    console.log('✅ [Day1Modal] setCurrentStep(5) called');
   };
 
-  const handleStep4Complete = async (mirrorId: string, generatedSummaries: any) => {
+  const handleStep4Complete = (mirrorId: string, generatedSummaries: any) => {
     setMiniMirrorId(mirrorId);
     setSummaries(generatedSummaries);
-    // Refresh user data to get updated display_name before showing Step 5
-    await refreshUser();
     setCurrentStep(5);
   };
 

@@ -254,13 +254,13 @@ Not blocking for launch given the current small, known user base:
 
 | Week | Work |
 |------|------|
-| **Now** | FIX-3 — remove access code from logs (30 min) |
-| **Week 1–3** | FIX-1+2 — new auth system + RLS lockdown (largest lift; database isolation follows automatically once auth is in place) |
-| **Week 2** | FIX-8 — verify + harden audio deletion |
-| **Week 2** | FIX-9 — invite expiry in Edge Function |
-| **Week 3** | FIX-4 — account deletion flow |
-| **Week 3** | FIX-5 — write and host privacy policy |
+| ~~**Now**~~ | ~~FIX-3 — remove access code from logs~~ ✅ Done |
+| ~~**Week 1–3**~~ | FIX-1+2 — auth migration in progress (Phases 0–3 ✅; Phase 4 gated on migration counter = 0; Phase 5 after all users migrated; Phase 6 before App Store) |
+| ~~**Week 2**~~ | ~~FIX-8 — verify + harden audio deletion~~ ✅ Done |
+| ~~**Week 2**~~ | ~~FIX-9 — invite expiry~~ ✅ Done (client layer; server enforcement in Phase 5) |
+| ~~**Week 3**~~ | ~~FIX-4 — account deletion flow~~ ✅ Done (app data; auth.users deletion in Phase 5) |
+| **Week 3** | FIX-5 — host privacy policy at public URL; update `PRIVACY_POLICY_URL` constant; add to App Store Connect |
 | **Week 4** | FIX-6 — App Store privacy nutrition label |
-| **Week 4** | FIX-7 — permission strings |
+| ~~**Week 4**~~ | ~~FIX-7 — permission strings~~ ✅ Done |
 | **Week 5** | End-to-end security verification; fix any gaps |
 | **Week 6** | Submit |
