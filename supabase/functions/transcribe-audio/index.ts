@@ -62,6 +62,7 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const openaiApiKey = Deno.env.get('OPENAI_API_KEY');
 
@@ -73,6 +74,33 @@ serve(async (req) => {
     console.log('🚀 transcribe-audio invoked');
 
     if (!openaiApiKey) throw new Error('OPENAI_API_KEY not configured');
+
+    // Verify JWT
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Resolve app user ID
+    const { data: appUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+    if (!appUser) {
+      return new Response(JSON.stringify({ success: false, error: 'User not found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     const body = await req.json();
     journalId = body.journalId;
@@ -89,6 +117,13 @@ serve(async (req) => {
       .single();
 
     if (fetchError || !journal) throw new Error(`Journal not found: ${fetchError?.message}`);
+
+    // Verify journal belongs to the authenticated user
+    if (journal.custom_user_id !== appUser.id) {
+      return new Response(JSON.stringify({ success: false, error: 'Forbidden' }), {
+        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
     if (!journal.audio_url) throw new Error('Journal has no audio_url — upload may have failed');
     if (journal.transcription_status === 'completed') {
       console.log('⚠️ Journal already transcribed, skipping');

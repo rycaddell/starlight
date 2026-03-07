@@ -288,17 +288,40 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
-    // Create Supabase client with service role key
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Verify JWT — only the authenticated user can trigger their own mirror
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ success: false, error: 'Unauthorized' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Create Supabase client with service role key
     supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Get request body
-    const { customUserId } = await req.json();
-    
-    if (!customUserId) {
-      throw new Error('customUserId is required');
+    // Resolve app user ID from auth user
+    const { data: appUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single();
+    if (!appUser) {
+      return new Response(JSON.stringify({ success: false, error: 'User not found' }), {
+        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
+    const customUserId = appUser.id;
 
     console.log(`👤 Generating Mirror for user: ${customUserId}`);
 

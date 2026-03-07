@@ -10,6 +10,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { saveFocusAreas, completeDay1 } from '../../lib/supabase/day1';
+import { supabase } from '../../lib/supabase/client';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface Step5MiniMirrorProps {
@@ -127,12 +128,13 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
     try {
       const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       const edgeFunctionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/extract-focus-theme`;
+      const { data: { session } } = await supabase.auth.getSession();
 
       const response = await fetch(edgeFunctionUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${anonKey}`,
+          'Authorization': `Bearer ${session?.access_token}`,
           'apikey': anonKey,
         },
         body: JSON.stringify({ focusText: focusAreasText }),
