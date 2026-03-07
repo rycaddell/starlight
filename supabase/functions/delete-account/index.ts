@@ -28,18 +28,41 @@ serve(async (req) => {
   }
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
   try {
-    const { userId } = await req.json();
-
-    if (!userId) {
+    // Verify JWT — only the authenticated user can delete their own account
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
+    if (!token) {
       return new Response(
-        JSON.stringify({ success: false, error: 'userId is required' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
       );
     }
+    const anonClient = createClient(supabaseUrl, supabaseAnonKey);
+    const { data: { user: authUser }, error: authError } = await anonClient.auth.getUser(token);
+    if (authError || !authUser) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 401 }
+      );
+    }
+
+    // Resolve app user ID from auth user
+    const { data: appUser } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', authUser.id)
+      .single();
+    if (!appUser) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'User not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+    const userId = appUser.id;
 
     console.log('🗑️ Starting account deletion for user:', userId);
 
@@ -154,7 +177,12 @@ serve(async (req) => {
       .delete()
       .eq('id', userId);
     if (userError) throw new Error(`users: ${userError.message}`);
-    console.log('✅ User record deleted — account deletion complete');
+    console.log('🗑️ User record deleted');
+
+    // ─── 12. auth.users — remove Supabase Auth identity ──────────────────────
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(authUser.id);
+    if (authDeleteError) throw new Error(`auth.users: ${authDeleteError.message}`);
+    console.log('✅ Auth user deleted — account deletion complete');
 
     return new Response(
       JSON.stringify({ success: true }),
