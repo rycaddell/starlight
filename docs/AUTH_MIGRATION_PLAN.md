@@ -16,7 +16,7 @@
 | Phase 3: Pre-flight complete | ✅ Ready to ship | 2026-03-03 | 37 users, all phones validated E.164, access_code NOT NULL dropped |
 | Phase 3: TestFlight build pushed | ⏳ In progress | | Monitor: `SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL AND group_name != 'Demo Users'` |
 | Phase 4: Enable RLS | ✅ Complete | 2026-03-06 | Verified working on own account |
-| Phase 5: Edge function JWT auth | ✅ Complete | 2026-03-06 | All 5 functions verified; client call sites updated |
+| Phase 5: Edge function JWT auth | ✅ Complete | 2026-03-06 | All 5 functions updated and deployed |
 | Phase 6: Friend invite Universal Links | ⏳ Pending | | Required before App Store submission |
 
 ---
