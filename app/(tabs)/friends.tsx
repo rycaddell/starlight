@@ -17,6 +17,8 @@ import {
   Image,
   ImageBackground,
 } from 'react-native';
+import branch from 'react-native-branch';
+import * as Sentry from '@sentry/react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
@@ -106,6 +108,18 @@ export default function FriendsScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Branch SDK health check — runs once on mount in dev builds
+  useEffect(() => {
+    if (!__DEV__) return;
+    branch.getLatestReferringParams()
+      .then((params) => {
+        console.log('[Branch] ✅ SDK initialized. Latest params:', JSON.stringify(params));
+      })
+      .catch((e) => {
+        console.error('[Branch] ❌ SDK NOT initialized:', e?.message ?? e);
+      });
+  }, []);
 
   // Mark friends as viewed when screen is focused
   // Dismiss all "new friend" statuses when user navigates away
@@ -288,9 +302,36 @@ export default function FriendsScreen() {
         return;
       }
 
-      // Open native share sheet
+      // Generate a Branch short URL via SDK (requires session context; free plan only allows SDK-based creation)
+      let shareUrl = result.deepLink; // fallback to oxbow:// scheme
+      try {
+        console.log('[Branch] Creating BUO for token:', result.token);
+        const buo = await branch.createBranchUniversalObject(
+          `invite/${result.token}`,
+          { title: `${user.display_name} invited you to Oxbow` }
+        );
+        console.log('[Branch] BUO created, generating short URL...');
+        const { url } = await buo.generateShortUrl(
+          { feature: 'friend_invite', channel: 'share_sheet' },
+          {
+            invite_token: result.token,
+            inviter_id: user.id,
+            inviter_name: user.display_name,
+            $fallback_url: 'https://oxbowjournal.com',
+          }
+        );
+        console.log('[Branch] ✅ Short URL:', url);
+        shareUrl = url;
+      } catch (branchError: any) {
+        console.error('[Branch] ❌ generateShortUrl failed:', branchError?.message, branchError?.code);
+        Sentry.captureException(branchError, {
+          tags: { flow: 'branch_invite_short_url' },
+          extra: { token: result.token, errorCode: branchError?.code },
+        });
+      }
+
       await RNShare.share({
-        message: `Join me on Oxbow! Use this link to connect as friends:\n\n${result.deepLink}`,
+        message: `Join me on Oxbow! ${shareUrl}`,
         title: 'Join me on Oxbow',
       });
 

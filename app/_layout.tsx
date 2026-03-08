@@ -1,9 +1,11 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
+import branch from 'react-native-branch';
+import { useEffect, useRef } from 'react';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -12,6 +14,7 @@ import { UnreadSharesProvider } from '../contexts/UnreadSharesContext';
 import { FriendBadgeProvider } from '../contexts/FriendBadgeContext';
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // Initialize Sentry
 Sentry.init({
@@ -56,6 +59,46 @@ Sentry.init({
   },
 });
 
+// Handles Branch deep links — must sit inside AuthProvider to access user
+function BranchHandler() {
+  const { user } = useAuth();
+  const router = useRouter();
+  const pendingInviteRef = useRef<{ token: string; inviterId: string; inviterName: string } | null>(null);
+
+  // Register Branch subscriber once on mount
+  useEffect(() => {
+    const unsubscribe = branch.subscribe(({ error, params }) => {
+      if (error || !params?.['+clicked_branch_link']) return;
+
+      const token = params['invite_token'] as string;
+      const inviterId = params['inviter_id'] as string;
+      const inviterName = params['inviter_name'] as string;
+
+      if (!token) return;
+
+      if (user?.id) {
+        router.push(`/friend-invite/${token}?inviter=${inviterId}&name=${encodeURIComponent(inviterName)}`);
+      } else {
+        // Deferred case: user may still be in onboarding — store for after auth
+        pendingInviteRef.current = { token, inviterId, inviterName };
+      }
+    });
+
+    return () => unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally register once
+
+  // Once user signs in, process any stored pending invite
+  useEffect(() => {
+    if (user?.id && pendingInviteRef.current) {
+      const { token, inviterId, inviterName } = pendingInviteRef.current;
+      pendingInviteRef.current = null;
+      router.push(`/friend-invite/${token}?inviter=${inviterId}&name=${encodeURIComponent(inviterName)}`);
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return null;
+}
+
 function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
@@ -73,6 +116,7 @@ function RootLayout() {
         <FriendBadgeProvider>
           <OnboardingProvider>
             <GlobalSettingsProvider>
+              <BranchHandler />
               <AuthNavigator>
                 <Stack>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

@@ -53,16 +53,18 @@
       <key>NSAllowsLocalNetworking</key>
       <true/>
     </dict>
+    <key>NSCameraUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your camera</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Oxbow uses microphone access for voice journaling to enhance your spiritual reflection experience.</string>
+    <string>Oxbow uses your microphone to record voice journal entries. Recordings are transcribed on our servers and then deleted.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you.</string>
     <key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
     </array>
     <key>NSUserNotificationUsageDescription</key>
     <string>Oxbow sends gentle reminders to help maintain your consistent journaling practice.</string>
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UILaunchStoryboardName</key>
@@ -91,5 +93,12 @@
     <string>Automatic</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
+    <key>branch_key</key>
+    <string>key_live_hCztJHj8AChUp2BR9P5mwkketqe3spYf</string>
+    <key>branch_universal_link_domains</key>
+    <array>
+      <string>oxbow.app.link</string>
+      <string>oxbow-alternate.app.link</string>
+    </array>
   </dict>
 </plist>
