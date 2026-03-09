@@ -148,33 +148,12 @@ if (__DEV__) console.log('🔑 Custom auth: Sign-in attempt');
 ---
 
 ### 🟠 FIX-5: Write and host a Privacy Policy
-**Status:** 🔄 In progress — policy written (`docs/privacy_policy.md`), in-app link wired. Pending: host at public URL, update `PRIVACY_POLICY_URL` constant in `SettingsFeedbackModal.tsx`, add URL to App Store Connect.
-**Why:** Apple requires a privacy policy URL for all apps. Users need to know their spiritual journal content is processed by OpenAI.
-
-**What "good" looks like:** A URL (GitHub Pages or similar) linked from App Store Connect and from the in-app Settings screen. Must cover: what data is collected, that voice/text is sent to OpenAI, retention policy (journals stored indefinitely, audio deleted post-transcription), and contact info for data requests.
-
-**Key sections to include:**
-- Data collected (journal text, voice audio, display name, push token)
-- Third parties: OpenAI ("We send voice recordings and journal text to OpenAI for transcription and AI reflection generation. OpenAI's privacy policy: [link]")
-- Data retention: journals/mirrors stored until account deletion; audio deleted immediately after transcription
-- User rights: how to request data deletion (link to in-app Delete Account)
-- Contact email
-
-**Verify:** Privacy policy URL resolves; Settings screen links to it.
+**Status:** ✅ Done
 
 ---
 
 ### 🟠 FIX-6: Complete App Store Privacy Nutrition Label
-**Status:** ⬜ Not started
-**Why:** Apple will reject or require post-launch update if inaccurate. Reviewers now check for undisclosed third-party data sharing.
-
-**Declarations required:**
-- **Identifiers → User ID** — Used for app functionality, linked to identity
-- **Audio Data** — Voice journals, used for app functionality, linked to identity; shared with OpenAI (third party)
-- **Other Data** — Journal text / mirror content, used for app functionality, linked to identity; shared with OpenAI (third party)
-- **Contact Info → Name** — Display name, used for app functionality
-
-**Verify:** Review in App Store Connect → Privacy before submission; compare against Apple's [privacy details guide](https://developer.apple.com/app-store/app-privacy-details/).
+**Status:** ✅ Done
 
 ---
 
@@ -232,10 +211,10 @@ Not blocking for launch given the current small, known user base:
 
 | Check | Status | Action |
 |-------|--------|--------|
-| Privacy Policy URL | ❌ Missing | FIX-5 |
-| Privacy Nutrition Label | ❌ Missing | FIX-6 |
-| `NSMicrophoneUsageDescription` | ⚠️ Generic | FIX-7 |
-| OpenAI data sharing disclosed | ❌ Missing | FIX-5, FIX-6 |
+| Privacy Policy URL | ✅ Done | FIX-5 |
+| Privacy Nutrition Label | ✅ Done | FIX-6 |
+| `NSMicrophoneUsageDescription` | ✅ Done | FIX-7 |
+| OpenAI data sharing disclosed | ✅ Done | FIX-5, FIX-6 |
 | In-app account deletion | ❌ Missing | FIX-4 |
 | Database isolation | ⚠️ RLS written, not yet enabled | FIX-1+2 Phase 4 |
 | Guessable access codes | ⚠️ Phone OTP shipped to TestFlight | FIX-1+2 Phase 3 |
@@ -259,8 +238,8 @@ Not blocking for launch given the current small, known user base:
 | ~~**Week 2**~~ | ~~FIX-8 — verify + harden audio deletion~~ ✅ Done |
 | ~~**Week 2**~~ | ~~FIX-9 — invite expiry~~ ✅ Done (client layer; server enforcement in Phase 5) |
 | ~~**Week 3**~~ | ~~FIX-4 — account deletion flow~~ ✅ Done (app data; auth.users deletion in Phase 5) |
-| **Week 3** | FIX-5 — host privacy policy at public URL; update `PRIVACY_POLICY_URL` constant; add to App Store Connect |
-| **Week 4** | FIX-6 — App Store privacy nutrition label |
+| ~~**Week 3**~~ | ~~FIX-5 — privacy policy~~ ✅ Done |
+| ~~**Week 4**~~ | ~~FIX-6 — App Store privacy nutrition label~~ ✅ Done |
 | ~~**Week 4**~~ | ~~FIX-7 — permission strings~~ ✅ Done |
 | **Week 5** | End-to-end security verification; fix any gaps |
 | **Week 6** | Submit |
