@@ -9,6 +9,7 @@ import {
   ImageBackground,
   Image,
   Pressable,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   Keyboard,
@@ -329,7 +330,13 @@ export const NarrativeOnboardingScreen: React.FC = () => {
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        {renderContent()}
+        <ScrollView
+          scrollEnabled={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.container}
+        >
+          {renderContent()}
+        </ScrollView>
       </KeyboardAvoidingView>
     </Pressable>
   );
