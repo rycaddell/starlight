@@ -9,7 +9,7 @@ import {
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getMirrorById } from '../../lib/supabase/mirrors';
-import { saveFocusAreas, completeDay1 } from '../../lib/supabase/day1';
+import { saveFocusAreas, updateFocusTheme } from '../../lib/supabase/day1';
 import { supabase } from '../../lib/supabase/client';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
@@ -18,7 +18,6 @@ interface Step5MiniMirrorProps {
   userName: string;
   mirrorId: string;
   spiritualPlace: string;
-  summaries: any;
   onClose: () => void;
   onComplete: () => void;
   onFocusAreasSaved?: () => void;
@@ -53,7 +52,6 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
   userName,
   mirrorId,
   spiritualPlace,
-  summaries,
   onClose,
   onComplete,
   onFocusAreasSaved,
@@ -143,30 +141,14 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
       const data = await response.json();
       const focusTheme = data.success ? data.theme : 'Growth';
       console.log('✅ Focus theme:', focusTheme);
-
-      const completeResult = await completeDay1(userId, focusTheme);
-
-      if (!completeResult.success) {
-        Alert.alert('Error', completeResult.error || 'Failed to complete Day 1.');
-        setSubmitting(false);
-        return;
-      }
-
-      console.log('🎉 Day 1 completed successfully with theme:', focusTheme);
-      onComplete();
+      await updateFocusTheme(userId, focusTheme);
     } catch (error) {
-      console.error('❌ Theme extraction error:', error);
-      const completeResult = await completeDay1(userId, 'Growth');
-
-      if (!completeResult.success) {
-        Alert.alert('Error', completeResult.error || 'Failed to complete Day 1.');
-        setSubmitting(false);
-        return;
-      }
-
-      console.log('🎉 Day 1 completed successfully with fallback theme');
-      onComplete();
+      console.error('❌ Theme extraction error (non-blocking):', error);
+      await updateFocusTheme(userId, 'Growth');
     }
+
+    console.log('🎉 Focus saved, closing Day 1');
+    onComplete();
   };
 
   if (loading) {

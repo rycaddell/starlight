@@ -348,6 +348,13 @@ export default function JournalScreen() {
     }
   };
 
+  const handleDay1Close = async () => {
+    setDay1ModalVisible(false);
+    if (isAuthenticated && user) {
+      await refreshUser();
+    }
+  };
+
   const handleDay1Complete = async () => {
     console.log('🎉 Day 1 flow completed');
     setDay1ModalVisible(false);
@@ -494,7 +501,7 @@ export default function JournalScreen() {
       {/* Day 1 Modal */}
       <Day1Modal
         visible={day1ModalVisible}
-        onClose={() => setDay1ModalVisible(false)}
+        onClose={handleDay1Close}
         onComplete={handleDay1Complete}
       />
     </SafeAreaView>
