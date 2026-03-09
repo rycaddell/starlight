@@ -1,6 +1,6 @@
 // components/mirror/MirrorViewer.tsx
 import React, { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground, TextInput, KeyboardAvoidingView, Platform, Alert, Keyboard } from 'react-native';
 import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
@@ -53,6 +53,8 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   };
 
   const handleSaveReflection = async () => {
+    Keyboard.dismiss();
+
     if (!reflectionText.trim()) {
       return;
     }
@@ -189,6 +191,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
           ref={scrollViewRef}
           style={styles.container}
           contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={16}
