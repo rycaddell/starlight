@@ -1,12 +1,12 @@
 // components/day1/Step3VoiceJournal.tsx
 // Step 3: Voice journal about prayer topics
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, StyleSheet, ScrollView, Alert, TouchableOpacity, AppState } from 'react-native';
 import { Audio } from 'expo-av';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
 import { VoiceRecordingTab } from '../voice/VoiceRecordingTab';
-import { saveStepJournal, generateMiniMirror, getDay1Progress } from '../../lib/supabase/day1';
+import { saveStepJournal } from '../../lib/supabase/day1';
 import { saveJournalEntry } from '../../lib/supabase';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
@@ -14,7 +14,7 @@ interface Step3VoiceJournalProps {
   userId: string;
   spiritualPlace: string;
   existingJournalId?: string; // If set, user is returning to completed step
-  onComplete: (mirrorId: string, summaries: any) => void;
+  onComplete: () => void;
 }
 
 // Spiritual place images (optimized JPGs)
@@ -35,19 +35,8 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
   existingJournalId,
   onComplete,
 }) => {
-  const [isBuildingMirror, setIsBuildingMirror] = useState(false);
   // If existingJournalId exists, user is returning to completed step
   const [hasRecorded, setHasRecorded] = useState(!!existingJournalId);
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Clean up polling on unmount
-  useEffect(() => {
-    return () => {
-      if (pollingIntervalRef.current) {
-        clearInterval(pollingIntervalRef.current);
-      }
-    };
-  }, []);
 
   // Audio recording hook with callback
   const {
@@ -88,70 +77,19 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
     console.log('🔗 [STEP3] Linking journal to day_1_progress...');
     const linkResult = await saveStepJournal(userId, 3, journalId);
 
-    if (!linkResult.success) {
+    if (linkResult.success) {
+      console.log('✅ [STEP3] Journal linked to Day 1 progress');
+
+      if (!existingJournalId) {
+        onComplete(); // Signal Day1Modal to start generation
+      } else {
+        setHasRecorded(true);
+      }
+    } else {
       console.error('❌ [STEP3] Failed to link journal:', linkResult.error);
       Alert.alert('Save Error', linkResult.error || 'Failed to link journal. Please try again.');
-      return;
-    }
-
-    console.log('✅ [STEP3] Journal linked to Day 1 progress');
-
-    // If this was the first recording (user didn't return to this step), auto-progress to mirror generation
-    if (!existingJournalId) {
-      setIsBuildingMirror(true);
-      await startMirrorGeneration();
-    } else {
-      // User is re-recording on a return visit, show buttons
-      setHasRecorded(true);
     }
   }, 3);
-
-  const startMirrorGeneration = async () => {
-    try {
-      console.log('🚀 [STEP3] Starting mirror generation...');
-
-      // Trigger mirror generation
-      const generateResult = await generateMiniMirror(userId);
-
-      if (generateResult.success) {
-        // Generation completed - auto-navigate to Step 5
-        console.log('✅ [STEP3] Mirror generated successfully, navigating to Step 5');
-        setIsBuildingMirror(false);
-        onComplete(generateResult.mirror.id, generateResult.summaries);
-      } else {
-        // Generation failed
-        console.error('❌ [STEP3] Mirror generation failed:', generateResult.error);
-        setIsBuildingMirror(false);
-
-        // Show retry option
-        Alert.alert(
-          'Generation Failed',
-          'Unable to generate your mirror. This sometimes happens with AI processing. Would you like to try again?',
-          [
-            {
-              text: 'Cancel',
-              style: 'cancel',
-              onPress: () => {
-                // Stay on Step 3 with buttons visible
-                setHasRecorded(true);
-              }
-            },
-            {
-              text: 'Retry',
-              onPress: async () => {
-                setIsBuildingMirror(true);
-                await startMirrorGeneration();
-              }
-            }
-          ]
-        );
-      }
-    } catch (error) {
-      console.error('❌ [STEP3] Error in mirror generation:', error);
-      setIsBuildingMirror(false);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    }
-  };
 
   // Check permission and start recording
   const handleStartRecordingWithPermission = async () => {
@@ -171,46 +109,26 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
       console.log('📝 [STEP3-PERMISSION] Permission not granted, requesting directly...');
 
       try {
-        console.log('🔧 [STEP3-PERMISSION] Setting audio mode...');
-
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
 
-        console.log('✅ [STEP3-PERMISSION] Audio mode set successfully');
-        console.log('🔐 [STEP3-PERMISSION] Requesting system permission...');
-
         const permission = await Audio.requestPermissionsAsync();
-        console.log('📊 [STEP3-PERMISSION] Permission response:', JSON.stringify(permission, null, 2));
-
         const granted = permission.granted === true || permission.status === 'granted';
-        console.log('🔍 [STEP3-PERMISSION] Permission granted:', granted);
 
         if (granted) {
-          console.log('✅ [STEP3-PERMISSION] Permission granted, waiting for app to become active...');
-
-          // Wait for app to return to active state after permission dialog closes
           const subscription = AppState.addEventListener('change', async (nextAppState) => {
             if (nextAppState === 'active') {
-              console.log('📱 [STEP3-PERMISSION] App returned to active state');
               subscription.remove();
-
-              // Small delay to ensure app is fully active
               setTimeout(async () => {
-                console.log('🎙️ [STEP3-PERMISSION] Calling handleStartRecording...');
                 await handleStartRecording(true);
               }, 50);
             }
           });
 
-          // Fallback timeout in case AppState doesn't fire
-          setTimeout(() => {
-            console.log('⚠️ [STEP3-PERMISSION] Fallback timeout reached, removing listener');
-            subscription.remove();
-          }, 3000);
+          setTimeout(() => subscription.remove(), 3000);
         } else {
-          console.error('❌ [STEP3-PERMISSION] Permission denied by user');
           Alert.alert(
             'Permission Denied',
             'Microphone access is needed for voice journaling. Please enable it in Settings.',
@@ -242,9 +160,8 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
         </View>
       </View>
 
-      {/* Bottom half: Question and voice recording OR mirror generation */}
+      {/* Bottom half: Question and voice recording */}
       <ScrollView style={styles.bottomHalf} contentContainerStyle={styles.scrollContent}>
-        {/* Always show question and subcopy */}
         <Text style={styles.question}>
           How are you relating to God?
         </Text>
@@ -260,7 +177,6 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
             isPaused={isPaused}
             recordingDuration={recordingDuration}
             isProcessing={isProcessing}
-            isBuildingMirror={isBuildingMirror}
             hasRecorded={hasRecorded}
             formatDuration={formatDuration}
             onStartRecording={handleStartRecordingWithPermission}
@@ -270,20 +186,9 @@ export const Step3VoiceJournal: React.FC<Step3VoiceJournalProps> = ({
           />
         </View>
 
-        {/* Time expectation during mirror generation */}
-        {isBuildingMirror && (
-          <Text style={styles.generatingHint}>This can take up to 2 minutes</Text>
-        )}
-
-        {/* Next button - shown after first recording, hidden while building */}
-        {hasRecorded && !isRecording && !isProcessing && !isBuildingMirror && (
-          <TouchableOpacity
-            style={styles.continueButton}
-            onPress={async () => {
-              setIsBuildingMirror(true);
-              await startMirrorGeneration();
-            }}
-          >
+        {/* Next button - shown when returning to a completed step */}
+        {hasRecorded && !isRecording && !isProcessing && (
+          <TouchableOpacity style={styles.continueButton} onPress={onComplete}>
             <Text style={styles.continueButtonText}>Next</Text>
           </TouchableOpacity>
         )}
@@ -348,11 +253,6 @@ const styles = StyleSheet.create({
   },
   voiceContainer: {
     marginBottom: spacing.xl,
-  },
-  generatingHint: {
-    ...typography.body.s,
-    color: colors.text.bodyLight,
-    textAlign: 'center',
   },
   continueButton: {
     backgroundColor: colors.text.primary,

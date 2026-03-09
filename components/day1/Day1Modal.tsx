@@ -2,17 +2,20 @@
 // Main orchestrator for Day 1 onboarding flow (5 steps)
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text, ActivityIndicator } from 'react-native';
+import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Video, ResizeMode } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
-import { getDay1Progress } from '../../lib/supabase/day1';
+import { getDay1Progress, completeDay1, generateMiniMirror } from '../../lib/supabase/day1';
+import { colors, typography, spacing, fontFamily } from '../../theme/designTokens';
+
+const { width, height } = Dimensions.get('window');
 
 const PENDING_JOBS_KEY = 'oxbow_pending_voice_jobs';
 import { Step1SpiritualPlace } from './Step1SpiritualPlace';
 import { Step2VoiceJournal } from './Step2VoiceJournal';
 import { Step3VoiceJournal } from './Step3VoiceJournal';
-import { Step4Loading } from './Step4Loading';
 import { Step5MiniMirror } from './Step5MiniMirror';
 
 interface Day1ModalProps {
@@ -28,13 +31,11 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   const [loading, setLoading] = useState(true);
   const [spiritualPlace, setSpiritualPlace] = useState<string | null>(null);
   const [miniMirrorId, setMiniMirrorId] = useState<string | null>(null);
-  const [summaries, setSummaries] = useState<any>(null);
-  const [focusAreasSaved, setFocusAreasSaved] = useState(false);
   const [step2JournalId, setStep2JournalId] = useState<string | null>(null);
   const [step3JournalId, setStep3JournalId] = useState<string | null>(null);
   const [isWaitingForRecovery, setIsWaitingForRecovery] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const recoveryPollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const skipNextLoadRef = useRef(false);
 
   // Clean up recovery poll on unmount
   useEffect(() => {
@@ -45,8 +46,8 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
 
   // Debug: trace state changes
   useEffect(() => {
-    console.log('🔍 [Day1Modal] state:', { currentStep, loading, miniMirrorId, isWaitingForRecovery });
-  }, [currentStep, loading, miniMirrorId, isWaitingForRecovery]);
+    console.log('🔍 [Day1Modal] state:', { currentStep, loading, isGenerating, miniMirrorId, isWaitingForRecovery });
+  }, [currentStep, loading, isGenerating, miniMirrorId, isWaitingForRecovery]);
 
   // Load progress and determine starting step
   useEffect(() => {
@@ -58,12 +59,6 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
 
   const loadProgress = async () => {
     if (!user) return;
-
-    if (skipNextLoadRef.current) {
-      console.log('⏭️ [Day1Modal] loadProgress skipped (step transition in progress)');
-      skipNextLoadRef.current = false;
-      return;
-    }
 
     console.log('📂 [Day1Modal] loadProgress start');
     setLoading(true);
@@ -97,43 +92,45 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
       }
 
       // Determine starting step
-      let startStep = 1;
-
       if (progress.mini_mirror_id && progress.generation_status === 'completed') {
-        startStep = 5; // Show mini-mirror + focus input
-      } else if (progress.generation_status === 'generating') {
-        startStep = 4; // Resume on loading screen
+        setCurrentStep(5);
       } else if (progress.step_3_journal_id) {
-        startStep = 4; // Waiting for transcriptions or generation
+        // Recording done but no mirror — resume generation from here
+        setLoading(false);
+        handleGenerateMirror();
+        return;
       } else if (progress.step_2_journal_id) {
-        startStep = 3; // Resume at step 3
-      } else if (progress.spiritual_place) {
-        startStep = 2; // Resume at step 2
-      }
-
-      // If we're missing a step journal, check whether recovery is in-flight for it
-      const missingStep = startStep === 2 ? 2 : startStep === 3 ? 3 : null;
-      if (missingStep) {
-        const hasRecoveryJob = await checkForDay1RecoveryJob(missingStep);
+        // Check whether recovery is in-flight for step 3
+        const hasRecoveryJob = await checkForDay1RecoveryJob(3);
         if (hasRecoveryJob) {
           setIsWaitingForRecovery(true);
           setLoading(false);
-          pollUntilRecoveryComplete(missingStep);
+          pollUntilRecoveryComplete(3);
           return;
         }
+        setCurrentStep(3);
+      } else if (progress.spiritual_place) {
+        // Check whether recovery is in-flight for step 2
+        const hasRecoveryJob = await checkForDay1RecoveryJob(2);
+        if (hasRecoveryJob) {
+          setIsWaitingForRecovery(true);
+          setLoading(false);
+          pollUntilRecoveryComplete(2);
+          return;
+        }
+        setCurrentStep(2);
+      } else {
+        setCurrentStep(1);
       }
 
-      console.log('📍 [Day1Modal] loadProgress → startStep:', startStep, {
+      console.log('📂 [Day1Modal] loadProgress done', {
         mini_mirror_id: progress.mini_mirror_id,
         generation_status: progress.generation_status,
-        completed_at: progress.completed_at,
       });
-      setCurrentStep(startStep);
     } else {
       console.log('⚠️ [Day1Modal] loadProgress — no progress found:', result);
     }
 
-    console.log('📂 [Day1Modal] loadProgress done, setLoading(false)');
     setLoading(false);
   };
 
@@ -173,26 +170,41 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   };
 
   const handleClose = () => {
-    // Only show alert for Step 5 without saved focus areas
-    if (currentStep === 5 && !focusAreasSaved) {
-      Alert.alert(
-        'Proceed without focus?',
-        'Answering this will help shape your Oxbow experience.',
-        [
-          { text: 'Stay', style: 'cancel' },
-          { text: 'Leave', onPress: onClose }
-        ]
-      );
-      return;
-    }
-
-    // For all other cases, just close (progress is auto-saved)
     onClose();
   };
 
   const handleBack = () => {
-    if (currentStep > 1 && currentStep < 4) {
+    if (currentStep > 1 && currentStep < 3) {
       setCurrentStep(currentStep - 1);
+    }
+  };
+
+  const handleGenerateMirror = async () => {
+    if (!user) return;
+    setIsGenerating(true);
+    try {
+      const generateResult = await generateMiniMirror(user.id);
+      if (generateResult.success) {
+        setMiniMirrorId(generateResult.mirror.id);
+        await completeDay1(user.id);
+        setIsGenerating(false);
+        setCurrentStep(5);
+      } else {
+        console.error('❌ [Day1Modal] Mirror generation failed:', generateResult.error);
+        setIsGenerating(false);
+        Alert.alert(
+          'Generation Failed',
+          'Unable to generate your Mirror. Would you like to try again?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Retry', onPress: handleGenerateMirror },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('❌ [Day1Modal] Unexpected error during generation:', error);
+      setIsGenerating(false);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };
 
@@ -202,25 +214,15 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   };
 
   const handleStep2Complete = () => {
-    setCurrentStep(3); // Go to Step 3 (prayer topics voice journal)
+    setCurrentStep(3);
   };
 
-  const handleStep3Complete = (mirrorId: string, summaries: any) => {
-    console.log('✅ [Day1Modal] handleStep3Complete — mirrorId:', mirrorId);
-    setMiniMirrorId(mirrorId);
-    setSummaries(summaries);
-    setCurrentStep(5);
-    console.log('✅ [Day1Modal] setCurrentStep(5) called');
-  };
-
-  const handleStep4Complete = (mirrorId: string, generatedSummaries: any) => {
-    setMiniMirrorId(mirrorId);
-    setSummaries(generatedSummaries);
-    setCurrentStep(5);
+  const handleStep3Complete = () => {
+    handleGenerateMirror();
   };
 
   const handleStep5Complete = () => {
-    onComplete(); // Close modal and refresh main app
+    onComplete();
   };
 
   if (!user) return null;
@@ -239,7 +241,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
           <View style={styles.header}>
             {/* Back button or spacer */}
             <View style={styles.leftSection}>
-              {currentStep > 1 && currentStep < 4 && (
+              {currentStep > 1 && currentStep <= 3 && !isGenerating && (
                 <TouchableOpacity onPress={handleBack} style={styles.backButton}>
                   <Text style={styles.backButtonText}>←</Text>
                 </TouchableOpacity>
@@ -271,7 +273,23 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
 
         {/* Step content */}
         <View style={styles.content}>
-          {loading || isWaitingForRecovery ? (
+          {isGenerating ? (
+            <View style={styles.generatingContainer}>
+              <Video
+                source={require('../../assets/background-video.mp4')}
+                style={styles.generatingVideo}
+                resizeMode={ResizeMode.COVER}
+                isLooping
+                isMuted
+                shouldPlay
+              />
+              <View style={styles.generatingOverlay} />
+              <View style={styles.generatingContent}>
+                <ActivityIndicator size="large" color={colors.text.white} style={styles.generatingSpinner} />
+                <Text style={styles.generatingMessage}>Building your first Mirror</Text>
+              </View>
+            </View>
+          ) : loading || isWaitingForRecovery ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#2563eb" style={styles.spinner} />
               <Text style={styles.loadingText}>
@@ -306,24 +324,14 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
                 />
               )}
 
-              {currentStep === 4 && (
-                <Step4Loading
-                  userId={user.id}
-                  userName={user.display_name || 'friend'}
-                  onComplete={handleStep4Complete}
-                />
-              )}
-
               {currentStep === 5 && (
                 <Step5MiniMirror
                   userId={user.id}
                   userName={user.display_name || 'friend'}
                   mirrorId={miniMirrorId!}
                   spiritualPlace={spiritualPlace!}
-                  summaries={summaries}
                   onClose={handleClose}
                   onComplete={handleStep5Complete}
-                  onFocusAreasSaved={() => setFocusAreasSaved(true)}
                 />
               )}
             </>
@@ -406,5 +414,40 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 16,
     color: '#64748b',
+  },
+  generatingContainer: {
+    flex: 1,
+  },
+  generatingVideo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    right: 0,
+    width,
+    height,
+  },
+  generatingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  generatingContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xxxxl,
+  },
+  generatingSpinner: {
+    marginBottom: spacing.xxxxl,
+  },
+  generatingMessage: {
+    fontFamily: fontFamily.primary,
+    fontSize: 36,
+    fontWeight: '700',
+    color: colors.text.white,
+    textAlign: 'center',
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 4,
   },
 });

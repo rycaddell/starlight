@@ -428,7 +428,7 @@ export default function MirrorScreen() {
         id: day1Mirror.id,
         date: day1Date,
         biblicalCharacter: day1Character,
-        reflectionFocus: null,
+        reflectionFocus: day1Mirror.focus_areas || null,
         isDay1: true,
         spiritualPlace: day1Progress?.spiritualPlace,
       };
@@ -477,10 +477,9 @@ export default function MirrorScreen() {
         id: day1Mirror.id,
         date: new Date(day1Mirror.created_at),
         biblicalCharacter: day1Character,
-        reflectionFocus: null,
+        reflectionFocus: day1Mirror.focus_areas || null,
         isDay1: true,
         spiritualPlace: day1Progress?.spiritualPlace,
-        focusAreas: day1Mirror.focus_areas,
       });
     }
 
