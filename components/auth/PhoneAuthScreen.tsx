@@ -85,7 +85,7 @@ export const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ onPhoneSubmit 
           <SafeAreaView style={styles.contentContainer}>
             <View style={styles.content}>
               <View style={styles.headerSection}>
-                <Text style={styles.title}>Oxbow</Text>
+                <Text style={styles.title}>Oxbow Journal</Text>
                 <Text style={styles.subtitle}>a spiritual attention app</Text>
               </View>
               <View style={styles.bottomSection}>
