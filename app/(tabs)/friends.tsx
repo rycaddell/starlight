@@ -553,7 +553,7 @@ export default function FriendsScreen() {
                 Shared exploration in Oxbow
               </Text>
 
-              {/* Create Invite Button */}
+              {/* Invite button hidden until Branch deep linking is configured
               <TouchableOpacity
                 style={[styles.emptyStateButton, creatingInvite && styles.buttonDisabled]}
                 onPress={handleCreateInvite}
@@ -565,6 +565,7 @@ export default function FriendsScreen() {
                   <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
                 )}
               </TouchableOpacity>
+              */}
             </View>
           </SafeAreaView>
         </ImageBackground>
@@ -584,6 +585,7 @@ export default function FriendsScreen() {
           {/* Header: "Friends" title with Invite button on right */}
           <View style={styles.header}>
             <Text style={styles.title}>Friends</Text>
+            {/* Invite button hidden until Branch deep linking is configured
             <TouchableOpacity
               onPress={handleCreateInvite}
               disabled={creatingInvite}
@@ -595,6 +597,7 @@ export default function FriendsScreen() {
                 <Text style={styles.inviteButtonText}>Invite a Friend</Text>
               )}
             </TouchableOpacity>
+            */}
           </View>
 
           {/* Friend Cards - full width */}
