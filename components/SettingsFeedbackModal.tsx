@@ -16,7 +16,7 @@ import {
   Linking,
 } from 'react-native';
 
-const PRIVACY_POLICY_URL = 'https://oxbowjournal.com/privacy'; // TODO: update when hosted
+const PRIVACY_POLICY_URL = 'https://app.termly.io/policy-viewer/policy.html?policyUUID=bf1cff31-3390-4b3d-b6d2-5bfc2642343d';
 import { useAuth } from '../contexts/AuthContext';
 import { saveFeedback } from '../lib/supabase';
 import { deleteAccount } from '../lib/supabase/auth';
