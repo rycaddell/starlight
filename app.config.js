@@ -11,7 +11,7 @@ export default {
       userInterfaceStyle: "automatic",
       newArchEnabled: true,
       ios: {
-        supportsTablet: true,
+        supportsTablet: false,
         bundleIdentifier: "com.caddell.starlight",
         infoPlist: {
           ITSAppUsesNonExemptEncryption: false,
