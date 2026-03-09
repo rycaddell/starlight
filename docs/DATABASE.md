@@ -8,20 +8,22 @@ Complete reference for the Supabase database structure, relationships, and data 
 
 Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
-- `users` - User accounts (access code-based auth)
+- `users` - User accounts (phone OTP auth via Supabase Auth + Twilio Verify)
 - `journals` - Journal entries (text or voice transcriptions; voice entries track transcription pipeline state)
 - `mirrors` - AI-generated spiritual reflections (full mirrors + Day 1 mini-mirrors)
 - `day_1_progress` - Day 1 onboarding progress tracking
-- `mirror_reflections` - User responses to mirror prompts (deprecated)
 - `friend_invites` - Friend invite links and tracking
 - `friend_links` - Bi-directional friend relationships
 - `mirror_shares` - Mirrors shared between friends
 - `mirror_generation_requests` - Server-side mirror generation status
 
+**Deprecated:**
+- `mirror_reflections` - User responses to mirror prompts (deprecated; data stored on `mirrors` table instead)
+
 **Storage:**
 - `audio-recordings` bucket - Temporary audio files during voice transcription (private; files deleted after transcription completes)
 
-**Type Definitions:** See `types/database.ts` for TypeScript interfaces
+**Type Definitions:** See `types/database.ts` (⚠️ partially stale — AuthContext.tsx `AppUser` interface is the authoritative type for the `users` table)
 
 ---
 
@@ -29,56 +31,42 @@ Oxbow uses **Supabase** (PostgreSQL) as its database with the following tables:
 
 ### `users`
 
-Stores user accounts with access code-based authentication.
+Stores user accounts. Auth is handled by Supabase Auth (phone OTP via Twilio Verify); this table extends `auth.users` with app-specific fields.
 
-**⚠️ Note:** This table is separate from Supabase Auth. Users sign in with pre-created access codes, not email/password.
 ```typescript
 {
-  id: string (uuid, primary key)
-  access_code: string (unique, not null)
-  display_name: string
-  status: string
-  group_name: string (nullable)
-  invited_by: string (nullable, references users.id)
-  push_token: string (nullable)
+  id: string (uuid, primary key)               // App-level user ID (used in all foreign keys)
+  auth_user_id: string (uuid, nullable)         // → auth.users.id; null until user migrates
+  phone: string (nullable)                      // E.164 format, e.g. "+15555551234"
+  display_name: string (nullable)               // Set during onboarding Step 1
+  status: string                                // 'active' | 'inactive'
+  group_name: string (nullable)                 // e.g. 'Mens Group' (tech debt — hardcoded special-casing)
+  invited_by: string (uuid, nullable)           // → users.id of inviter
+  push_token: string (nullable)                 // Expo push notification token
+  access_code: string (nullable)                // Legacy; nullable since auth migration
+  first_login_at: timestamp (nullable)
+  onboarding_completed_at: timestamp (nullable) // Set when narrative onboarding completes
+  day_1_completed_at: timestamp (nullable)      // Set when Day 1 flow completes
+  auth_migrated_at: timestamp (nullable)        // Set when user completes phone OTP migration
+  profile_picture_url: string (nullable)        // URL to profile image
   created_at: timestamp
   updated_at: timestamp
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the user
-- `access_code` - The code users enter to sign in (e.g., "SPRING2024")
-- `display_name` - User's chosen display name
-- `status` - User account status (active, inactive, etc.)
-- `group_name` - Optional group/cohort identifier (e.g., "Mens Group")
-- `invited_by` - ID of user who invited them (for referral tracking)
-- `push_token` - Expo push notification token for this device
+**Auth architecture:**
+- Users authenticate via phone OTP (Supabase Auth + Twilio Verify)
+- `auth_user_id` links to `auth.users.id`; used by RLS policies via `auth.uid()`
+- `access_code` is legacy from the old auth system — nullable, not used for auth
+- `resolveAppUser()` in AuthContext looks up by `auth_user_id` first, then falls back to `phone` for migrating users
+
+**`group_name = 'Mens Group'`** triggers special handling in several places (Wednesday reminders, etc.) — acknowledged tech debt.
 
 **Indexes:**
 - Primary key on `id`
-- Unique index on `access_code`
-- Index on `status` for filtering active users
+- Index on `auth_user_id`
+- Index on `phone`
 - Index on `push_token` for notification lookups
-
-**⚠️ TECHNICAL DEBT - Mens Group Customizations:**
-- Users with `group_name = 'Mens Group'` receive special treatment (see below)
-- This is hardcoded and should be refactored to a more flexible system
-
-**Example Row:**
-```json
-{
-  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "access_code": "SPRING2024",
-  "display_name": "Sarah M.",
-  "status": "active",
-  "group_name": "Beta Testers",
-  "invited_by": null,
-  "push_token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
-  "created_at": "2024-01-15T10:30:00Z",
-  "updated_at": "2024-01-15T10:30:00Z"
-}
-```
 
 ---
 
@@ -89,7 +77,7 @@ Stores individual journal entries from users (text or transcribed voice).
 ```typescript
 {
   id: string (uuid, primary key)
-  custom_user_id: string (uuid, foreign key → users.id)
+  custom_user_id: string (uuid, foreign key → users.id)  // ⚠️ Named custom_user_id for historical reasons
   content: string                          // '' until transcription completes (voice)
   journal_entry_type: string (nullable)    // 'text' | 'voice'
   prompt_text: string (nullable)           // Guided prompt if used
@@ -105,22 +93,7 @@ Stores individual journal entries from users (text or transcribed voice).
 }
 ```
 
-**⚠️ Note:** Column name is `custom_user_id` for historical reasons but references `users.id`
-
-**Fields Explained:**
-- `id` - Unique identifier for the journal entry
-- `custom_user_id` - The user who created this journal (references `users.id`)
-- `content` - The journal text. For voice journals: empty string until transcription completes
-- `journal_entry_type` - `'text'` or `'voice'`
-- `prompt_text` - The guided journal prompt that was used (null for free-form entries)
-- `mirror_id` - Links to the Mirror this journal was used to generate (null until included in a Mirror)
-- `transcription_status` - Only set for voice journals. Tracks the server-side transcription pipeline:
-  - `'pending'` — audio uploaded, edge function not yet started
-  - `'processing'` — edge function is calling Whisper
-  - `'completed'` — transcription done, `content` is populated
-  - `'failed'` — transcription failed; see `error_message`
-- `audio_url` - Path in the `audio-recordings` Storage bucket; deleted by edge function on success
-- `local_audio_path` - Device-local file path used for recovery if the upload was interrupted
+**⚠️ Column naming gotcha:** The FK to `users.id` is called `custom_user_id` for historical reasons. Do not confuse with `user_id`.
 
 **Voice journal lifecycle:**
 ```
@@ -136,50 +109,37 @@ Insert (content: '', status: 'pending')
 ```
 This keeps text journals (no `transcription_status`) and completed voice journals visible, while hiding in-flight ones.
 
-**Relationships:**
-- `custom_user_id` → `users.id` (many journals to one user)
-- `mirror_id` → `mirrors.id` (many journals to one mirror)
-
-**Indexes:**
-- Primary key on `id`
-- Index on `custom_user_id` for user-specific queries
-- Index on `mirror_id` for finding journals in a mirror
-- Index on `created_at` for chronological sorting
-
 **Business Logic:**
 - Each journal can only be associated with ONE Mirror
 - Once `mirror_id` is set, that journal is "locked" to that Mirror
 - New journals have `mirror_id: null` until included in Mirror generation
-- Guided prompts are stored in `prompt_text` for AI context when generating Mirrors
 
-**Example Row:**
-```json
-{
-  "id": "j1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "content": "Today I felt grateful for the small moments of peace in my day. I noticed the sunrise and took time to reflect on what brings me joy.",
-  "mirror_id": null,
-  "created_at": "2024-03-10T08:15:00Z",
-  "updated_at": "2024-03-10T08:15:00Z"
-}
-```
+**Indexes:**
+- Primary key on `id`
+- Index on `custom_user_id`
+- Index on `mirror_id`
+- Index on `created_at`
 
 ---
 
 ### `mirrors`
 
-Stores AI-generated spiritual reflections based on 10 journal entries.
+Stores AI-generated spiritual reflections. Covers both full mirrors (10+ journals) and Day 1 mini-mirrors (2 voice journals).
+
 ```typescript
 {
   id: string (uuid, primary key)
-  custom_user_id: string (uuid, foreign key → custom_users.id)
+  custom_user_id: string (uuid, foreign key → users.id)
+  mirror_type: string                      // 'full' | 'day_1'
   screen_1_themes: JSON (not null)
   screen_2_biblical: JSON (not null)
   screen_3_observations: JSON (not null)
-  screen_4_suggestions: JSON (nullable)
+  screen_4_suggestions: JSON (nullable)    // Legacy; not shown in current 3-screen UI
   journal_count: integer (default: 10)
-  reflection_focus: text (nullable)
-  reflection_action: text (nullable)
+  focus_areas: text[] (nullable)           // User's selected focus areas (Day 1 flow)
+  status: string (nullable)                // Generation status if tracked here
+  reflection_focus: text (nullable)        // User's free-text reflection response
+  reflection_action: text (nullable)       // User's action commitment
   reflection_completed_at: timestamp (nullable)
   has_been_viewed: boolean (default: false)
   created_at: timestamp
@@ -187,320 +147,106 @@ Stores AI-generated spiritual reflections based on 10 journal entries.
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the Mirror
-- `custom_user_id` - The user this Mirror belongs to
-- `screen_1_themes` - JSON containing identified themes from journals
-- `screen_2_biblical` - JSON containing relevant biblical references and stories
-- `screen_3_observations` - JSON containing observations about spiritual journey
-- `screen_4_suggestions` - JSON containing suggestions for growth
-- `journal_count` - Number of journals used (default: 10)
-- `reflection_focus` - User's answer to "What will you focus on?" (Screen 4)
-- `reflection_action` - User's answer to "What action will you take?" (Screen 4)
-- `reflection_completed_at` - When user completed the reflection journal
-- `has_been_viewed` - Tracks if mirror has been viewed (prevents re-showing generation card)
-- `created_at` - When the Mirror was generated
-- `updated_at` - Last modification time
+**`mirror_type`:**
+- `'full'` — Standard mirror generated from 10+ journals
+- `'day_1'` — Mini-mirror generated from Day 1 onboarding (2 voice journals + spiritual place)
 
-**Relationships:**
-- `custom_user_id` → `custom_users.id` (many mirrors to one user)
-- One mirror ← many journals (via `journals.mirror_id`)
+**Mirror threshold:** 10 journals for full mirrors. Day 1 mini-mirrors use 2 journals.
+
+**`screen_2_biblical` JSON shape (Day 1 mini-mirror):**
+```json
+{
+  "parallel_story": "...",
+  "encouraging_verse": "...",
+  "challenging_verse": "...",
+  "one_line_summaries": ["...", "..."]
+}
+```
 
 **Indexes:**
 - Primary key on `id`
-- Index on `custom_user_id` for user-specific queries
-- Index on `created_at` for chronological sorting
-
-**Generation Details:**
-- Mirrors are generated server-side using Supabase Edge Functions
-- Uses OpenAI GPT-5-mini for faster response times (3-8 seconds typical)
-- Automatic retry logic handles timeouts (up to 2 attempts)
-- Status tracked in `mirror_generation_requests` table during generation
-
-**JSON Structure Examples:**
-
-**`screen_1_themes`:**
-```json
-{
-  "title": "Themes in Your Journey",
-  "themes": [
-    {
-      "name": "Gratitude",
-      "description": "You frequently express thankfulness for small moments",
-      "frequency": "high"
-    },
-    {
-      "name": "Peace-seeking",
-      "description": "A recurring desire for inner calm and stillness",
-      "frequency": "medium"
-    }
-  ]
-}
-```
-
-**`screen_2_biblical`:**
-```json
-{
-  "title": "Biblical Reflections",
-  "references": [
-    {
-      "verse": "Philippians 4:6-7",
-      "text": "Do not be anxious about anything...",
-      "relevance": "Relates to your journey toward peace"
-    }
-  ]
-}
-```
-
-**`screen_3_observations`:**
-```json
-{
-  "title": "Observations",
-  "observations": [
-    "You show growth in recognizing moments of grace",
-    "There's a pattern of seeking solitude for reflection"
-  ]
-}
-```
-
-**`screen_4_suggestions`:**
-```json
-{
-  "title": "Suggestions for Growth",
-  "suggestions": [
-    {
-      "area": "Daily Practice",
-      "suggestion": "Consider a morning gratitude ritual"
-    }
-  ]
-}
-```
-
-**Example Row:**
-```json
-{
-  "id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "screen_1_themes": { /* JSON as above */ },
-  "screen_2_biblical": { /* JSON as above */ },
-  "screen_3_observations": { /* JSON as above */ },
-  "screen_4_suggestions": { /* JSON as above */ },
-  "journal_count": 15,
-  "created_at": "2024-03-25T14:30:00Z",
-  "updated_at": "2024-03-25T14:30:00Z"
-}
-```
+- Index on `custom_user_id`
+- Index on `created_at`
 
 ---
 
-### `mirror_generation_requests`
+### `day_1_progress`
 
-Tracks Mirror generation requests and their status (used for server-side polling).
+Tracks a user's progress through the 5-step Day 1 onboarding flow. One row per user.
+
 ```typescript
 {
   id: string (uuid, primary key)
-  custom_user_id: string (uuid, foreign key → custom_users.id)
-  mirror_id: string (uuid, nullable, foreign key → mirrors.id)
-  status: string (not null) // 'pending', 'processing', 'completed', 'failed'
-  requested_at: timestamp (not null)
-  completed_at: timestamp (nullable)
+  custom_user_id: string (uuid, foreign key → users.id)
+  spiritual_place: string (nullable)       // Step 1: user's "spiritual place" description
+  step_2_journal_id: string (uuid, nullable, → journals.id)  // Step 2 voice journal
+  step_3_journal_id: string (uuid, nullable, → journals.id)  // Step 3 voice journal
+  mini_mirror_id: string (uuid, nullable, → mirrors.id)      // Generated after steps 2+3
+  focus_areas: text[] (nullable)           // Step 5: selected focus areas
+  day_1_focus_theme: string (nullable)     // 1-2 word theme extracted from focus text
+  completed_at: timestamp (nullable)       // Set when Day 1 flow completes
   created_at: timestamp
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the generation request
-- `custom_user_id` - The user requesting Mirror generation
-- `mirror_id` - Links to the generated Mirror once complete (null during generation)
-- `status` - Current status of the generation request
-  - `'pending'` - Request created, not yet started
-  - `'processing'` - Edge Function actively generating
-  - `'completed'` - Mirror successfully generated
-  - `'failed'` - Generation failed (timeout, error, etc.)
-- `requested_at` - When generation was requested
-- `completed_at` - When generation finished (success or failure)
-- `created_at` - Record creation timestamp
+**Day 1 flow:**
+1. Spiritual place text → saved to `spiritual_place`
+2. Voice journal 1 → `step_2_journal_id`
+3. Voice journal 2 → `step_3_journal_id`
+4. Mini-mirror generated from spiritual_place + journals 2+3 → `mini_mirror_id`
+5. Focus area selection → `focus_areas`, `day_1_focus_theme`
 
-**Relationships:**
-- `custom_user_id` → `custom_users.id` (many requests to one user)
-- `mirror_id` → `mirrors.id` (one request to one mirror)
-
-**Indexes:**
-- Primary key on `id`
-- Index on `custom_user_id` for user-specific queries
-- Index on `status` for finding active requests
-- Index on `requested_at` for chronological sorting
-
-**Business Logic:**
-- Client creates record with status 'pending' when user taps "Generate Mirror"
-- Edge Function updates to 'processing' when it starts
-- Edge Function updates to 'completed' with mirror_id when done
-- Edge Function updates to 'failed' if generation fails or times out
-- Client polls this table every 5 seconds to check status
-- Used for rate limiting (1 Mirror per 24 hours per user)
-
-**Example Row:**
-```json
-{
-  "id": "req-1a2b3c4d-5678-90ab-cdef-1234567890ab",
-  "custom_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "mirror_id": "m9z8y7x6-w5v4-u3t2-s1r0-q9p8o7n6m5l4",
-  "status": "completed",
-  "requested_at": "2024-03-25T14:25:00Z",
-  "completed_at": "2024-03-25T14:25:08Z",
-  "created_at": "2024-03-25T14:25:00Z"
-}
-```
-
----
-
-### `mirror_reflections`
-
-Stores user responses to prompts/questions within Mirrors.
-```typescript
-{
-  id: string (uuid, primary key)
-  mirror_id: string (uuid, foreign key → mirrors.id)
-  user_id: string (uuid, foreign key → custom_users.id)
-  screen_number: integer (1-4)
-  question: string
-  response: string
-  created_at: timestamp
-  updated_at: timestamp
-}
-```
-
-**Fields Explained:**
-- `id` - Unique identifier for the reflection
-- `mirror_id` - Which Mirror this reflection belongs to
-- `user_id` - The user who wrote this reflection
-- `screen_number` - Which screen (1-4) this reflection is for
-- `question` - The prompt/question being answered
-- `response` - User's written response
-- `created_at` - When the reflection was created
-- `updated_at` - Last modification time
-
-**Relationships:**
-- `mirror_id` → `mirrors.id` (many reflections to one mirror)
-- `user_id` → `custom_users.id` (many reflections to one user)
-
-**Indexes:**
-- Primary key on `id`
-- Index on `mirror_id` for mirror-specific queries
-- Index on `user_id` for user-specific queries
-- Composite index on `(mirror_id, screen_number)` for screen queries
-
-**Example Row:**
-```json
-{
-  "id": "r1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "mirror_id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "screen_number": 1,
-  "question": "Which theme resonates most with you?",
-  "response": "Gratitude definitely stands out to me. I hadn't realized how often I was expressing thankfulness.",
-  "created_at": "2024-03-25T15:00:00Z",
-  "updated_at": "2024-03-25T15:00:00Z"
-}
-```
-
-**⚠️ Note:** This table is **deprecated** in favor of storing reflection data directly on the `mirrors` table (`reflection_focus`, `reflection_action` fields).
+**Edge Functions involved:** `generate-day-1-mirror`, `extract-focus-theme`
 
 ---
 
 ### `friend_invites`
 
-Tracks friend invite creation for analytics and validation.
+Tracks friend invite creation for validation and analytics.
 
 ```typescript
 {
   id: string (uuid, primary key)
-  inviter_user_id: string (uuid, foreign key → custom_users.id)
-  inviter_display_name: string (not null)
-  token: string (unique, not null)
+  inviter_user_id: string (uuid, foreign key → users.id)
+  inviter_display_name: string (not null)  // Cached; avoids join when accepting
+  token: string (unique, not null)         // Plain UUID used in deep link
   created_at: timestamp
   accepted_at: timestamp (nullable)
-  accepted_by_user_id: string (uuid, foreign key → custom_users.id, nullable)
+  accepted_by_user_id: string (uuid, nullable, → users.id)
 }
 ```
-
-**Fields Explained:**
-- `id` - Unique identifier for the invite
-- `inviter_user_id` - User who created the invite
-- `inviter_display_name` - Cached display name (avoids join when accepting)
-- `token` - Plain UUID used in deep link (ephemeral, 72h expiry)
-- `created_at` - When invite was created
-- `accepted_at` - When invite was accepted (null if not yet accepted)
-- `accepted_by_user_id` - Who accepted the invite
-
-**Relationships:**
-- `inviter_user_id` → `custom_users.id` (many invites to one inviter)
-- `accepted_by_user_id` → `custom_users.id` (many invites to one accepter)
-
-**Indexes:**
-- Primary key on `id`
-- Unique index on `token`
-- Index on `inviter_user_id`
 
 **Business Logic:**
-- 72-hour expiry enforced in application (not database constraint)
-- Token is plain UUID (not hashed) - sufficient for ephemeral links
+- 72-hour expiry enforced in application layer (not a database constraint)
+- Token is a plain UUID — sufficient for ephemeral links
 - Once accepted, `accepted_at` and `accepted_by_user_id` are set
-
-**Example Row:**
-```json
-{
-  "id": "i1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "inviter_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "inviter_display_name": "Sarah M.",
-  "token": "f8e7d6c5-b4a3-9281-7065-f4e3d2c1b0a9",
-  "created_at": "2024-03-20T10:00:00Z",
-  "accepted_at": "2024-03-20T11:30:00Z",
-  "accepted_by_user_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a"
-}
-```
+- Invite acceptance also creates a row in `friend_links`
 
 ---
 
 ### `friend_links`
 
-Bi-directional friend relationships with 3-friend limit.
+Bi-directional friend relationships with a 3-friend limit.
 
 ```typescript
 {
   id: string (uuid, primary key)
-  user_a_id: string (uuid, foreign key → custom_users.id)
-  user_b_id: string (uuid, foreign key → custom_users.id)
-  status: string (default: 'active') CHECK ('active' | 'revoked')
+  user_a_id: string (uuid, foreign key → users.id)  // Always UUID < user_b_id
+  user_b_id: string (uuid, foreign key → users.id)  // Always UUID > user_a_id
+  status: string (default: 'active')       // 'active' | 'revoked'
   created_at: timestamp
+
   CONSTRAINT unique_friend_link UNIQUE (user_a_id, user_b_id)
   CONSTRAINT no_self_link CHECK (user_a_id != user_b_id)
   CONSTRAINT ordered_ids CHECK (user_a_id < user_b_id)
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the friend link
-- `user_a_id` - First user (always UUID < user_b_id)
-- `user_b_id` - Second user (always UUID > user_a_id)
-- `status` - 'active' or 'revoked' (soft delete)
-- `created_at` - When friendship was created
-
 **Key Design:**
-- **Ordered IDs:** `user_a_id` always < `user_b_id` prevents duplicate rows
+- **Ordered IDs:** `user_a_id` always < `user_b_id` prevents duplicate rows for same pair
 - **Bi-directional:** Single row represents both sides of friendship
 - **Soft Delete:** `status='revoked'` instead of DELETE
-- **3-Friend Limit:** Enforced in service layer (not database constraint)
-
-**Relationships:**
-- `user_a_id` → `custom_users.id`
-- `user_b_id` → `custom_users.id`
-
-**Indexes:**
-- Primary key on `id`
-- Unique constraint on `(user_a_id, user_b_id)`
-- Partial index on `user_a_id` WHERE status = 'active'
-- Partial index on `user_b_id` WHERE status = 'active'
+- **3-Friend Limit:** Enforced in service layer (`checkCanInvite`), not a database constraint
 
 **Helper Function:**
 ```sql
@@ -517,16 +263,11 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-**Example Row:**
-```json
-{
-  "id": "l1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "user_a_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "user_b_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a",
-  "status": "active",
-  "created_at": "2024-03-20T11:30:00Z"
-}
-```
+**Indexes:**
+- Primary key on `id`
+- Unique constraint on `(user_a_id, user_b_id)`
+- Partial index on `user_a_id` WHERE status = 'active'
+- Partial index on `user_b_id` WHERE status = 'active'
 
 ---
 
@@ -538,273 +279,129 @@ Tracks mirrors shared between friends.
 {
   id: string (uuid, primary key)
   mirror_id: string (uuid, foreign key → mirrors.id)
-  sender_user_id: string (uuid, foreign key → custom_users.id)
-  recipient_user_id: string (uuid, foreign key → custom_users.id)
+  sender_user_id: string (uuid, foreign key → users.id)
+  recipient_user_id: string (uuid, foreign key → users.id)
   created_at: timestamp
-  viewed_at: timestamp (nullable)
+  viewed_at: timestamp (nullable)          // Set on first view; drives "NEW" badge
+
   CONSTRAINT unique_mirror_share UNIQUE (mirror_id, recipient_user_id)
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the share
-- `mirror_id` - The mirror being shared
-- `sender_user_id` - User who shared the mirror
-- `recipient_user_id` - User receiving the share
-- `created_at` - When mirror was shared
-- `viewed_at` - When recipient first viewed the mirror (null if not viewed)
-
-**Relationships:**
-- `mirror_id` → `mirrors.id` (many shares to one mirror)
-- `sender_user_id` → `custom_users.id` (many shares from one sender)
-- `recipient_user_id` → `custom_users.id` (many shares to one recipient)
-
-**Indexes:**
-- Primary key on `id`
-- Unique constraint on `(mirror_id, recipient_user_id)` prevents duplicate shares
-- Index on `recipient_user_id` for inbox queries
-- Index on `sender_user_id` for outbox queries
-- Index on `mirror_id` for finding all shares of a mirror
-
 **Business Logic:**
 - Same mirror can be shared with multiple friends (different recipients)
 - Cannot share same mirror twice with same friend (unique constraint)
-- `viewed_at` tracks first view (for "NEW" badge)
+- `viewed_at` is set on first view only (tracks "NEW" badge state)
 
-**Example Row:**
-```json
-{
-  "id": "s1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "mirror_id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "sender_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "recipient_user_id": "b2c3d4e5-f6a7-8901-bcde-f1234567890a",
-  "created_at": "2024-03-25T16:00:00Z",
-  "viewed_at": null
-}
-```
+**Indexes:**
+- Primary key on `id`
+- Unique constraint on `(mirror_id, recipient_user_id)`
+- Index on `recipient_user_id`
+- Index on `sender_user_id`
 
 ---
 
 ### `mirror_generation_requests`
 
-Tracks server-side mirror generation status (polling).
+Tracks server-side mirror generation status. Client polls this table during generation.
 
 ```typescript
 {
   id: string (uuid, primary key)
-  custom_user_id: string (uuid, foreign key → custom_users.id)
-  status: string (default: 'pending') CHECK ('pending' | 'processing' | 'completed' | 'failed')
-  mirror_id: string (uuid, foreign key → mirrors.id, nullable)
+  custom_user_id: string (uuid, foreign key → users.id)
+  status: string (default: 'pending')      // 'pending' | 'processing' | 'completed' | 'failed'
+  mirror_id: string (uuid, nullable, → mirrors.id)  // Set when status = 'completed'
   requested_at: timestamp (default: NOW())
   completed_at: timestamp (nullable)
   error_message: text (nullable)
 }
 ```
 
-**Fields Explained:**
-- `id` - Unique identifier for the generation request
-- `custom_user_id` - User requesting mirror generation
-- `status` - Current status of generation
-  - `pending` - Request created, waiting for Edge Function
-  - `processing` - Edge Function picked up request, generating
-  - `completed` - Mirror generated successfully
-  - `failed` - Generation failed with error
-- `mirror_id` - Generated mirror (set when status = 'completed')
-- `requested_at` - When request was created
-- `completed_at` - When generation finished (success or fail)
-- `error_message` - Error details if status = 'failed'
+**Status flow:**
+- `pending` — Request created by client, Edge Function not yet started
+- `processing` — Edge Function picked up request
+- `completed` — Mirror generated; `mirror_id` is populated
+- `failed` — Generation failed; see `error_message`
 
-**Relationships:**
-- `custom_user_id` → `custom_users.id` (many requests to one user)
-- `mirror_id` → `mirrors.id` (one request to one mirror)
+**Business Logic:**
+- Client polls every 3 seconds during generation
+- Rate limit: 1 mirror per 24 hours (checked by `checkCanGenerateMirror` in service layer)
 
 **Indexes:**
 - Primary key on `id`
 - Composite index on `(custom_user_id, status)` for polling queries
 - Index on `requested_at` for rate limiting
 
-**Business Logic:**
-- Client polls this table every 3 seconds during generation
-- Rate limit: 1 mirror per 24 hours (enforced by checking recent requests)
-- Edge Function updates status as generation progresses
+---
 
-**Example Row:**
-```json
-{
-  "id": "g1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "custom_user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-  "status": "completed",
-  "mirror_id": "m1a2b3c4-d5e6-7890-abcd-ef1234567890",
-  "requested_at": "2024-03-25T14:00:00Z",
-  "completed_at": "2024-03-25T14:00:35Z",
-  "error_message": null
-}
-```
+### `mirror_reflections` (Deprecated)
+
+Formerly stored user responses to mirror prompts per screen. **Deprecated** — reflection data is now stored directly on the `mirrors` table (`reflection_focus`, `reflection_action` fields). This table may still exist in the DB but is not written to by any current code.
 
 ---
 
 ## 🔗 Relationships Diagram
+
 ```
-custom_users (1) ──────< journals (many)
-     │                      │
-     │                      │ mirror_id
-     │                      ↓
-     │                   mirrors (1)
-     │                      │
-     └──────────────────────┘
-     
-     
-mirrors (1) ──────< mirror_reflections (many)
+users (1) ──────────────────< journals (many)
+  │                                │
+  │                                │ mirror_id
+  │                                ↓
+  │                           mirrors (1)
+  │                                ▲
+  │                                │ mini_mirror_id
+  ├──────────< day_1_progress ─────┘
+  │
+  ├──────────< friend_invites
+  │
+  ├── user_a_id ──< friend_links >── user_b_id
+  │
+  ├── sender ──< mirror_shares >── recipient
+  │
+  └──────────< mirror_generation_requests
 ```
-
-**Explained:**
-- One user can have many journals
-- One user can have many mirrors
-- One mirror is associated with exactly 15 journals
-- One mirror can have many reflections (user responses)
-
----
-
-## 📊 Common Queries
-
-### Get User's Available Journals (Not Yet in a Mirror)
-```sql
-SELECT * FROM journals
-WHERE user_id = $1
-  AND mirror_id IS NULL
-ORDER BY created_at DESC;
-```
-
-**Use Case:** Finding journals eligible for next Mirror generation
-
----
-
-### Get Journals for a Specific Mirror
-```sql
-SELECT * FROM journals
-WHERE mirror_id = $1
-ORDER BY created_at ASC;
-```
-
-**Use Case:** Displaying which journals were used in a Mirror
-
----
-
-### Get User's Mirror History
-```sql
-SELECT * FROM mirrors
-WHERE user_id = $1
-ORDER BY created_at DESC;
-```
-
-**Use Case:** Displaying past Mirrors on Mirror screen
-
----
-
-### Check if User Can Unlock Mirror
-```sql
-SELECT COUNT(*) as available_journals
-FROM journals
-WHERE user_id = $1
-  AND mirror_id IS NULL;
-```
-
-**Use Case:** Determining if "Unlock Mirror" button should appear (needs >= 15)
-
----
-
-### Get Mirror with Associated Journals
-```sql
-SELECT 
-  m.*,
-  json_agg(j.*) as journals
-FROM mirrors m
-LEFT JOIN journals j ON j.mirror_id = m.id
-WHERE m.id = $1
-GROUP BY m.id;
-```
-
-**Use Case:** Loading a complete Mirror with all its source journals
-
----
-
-### Get User's Reflections for a Mirror
-```sql
-SELECT * FROM mirror_reflections
-WHERE mirror_id = $1
-  AND user_id = $2
-ORDER BY screen_number ASC, created_at ASC;
-```
-
-**Use Case:** Loading user's responses when viewing a past Mirror
 
 ---
 
 ## 🔐 Row Level Security (RLS)
 
-Supabase uses Row Level Security policies to control data access.
+**Current status:** RLS policies have been **written but not yet enabled**. Enforcement is gated on Phase 4 of the auth migration (all users must have `auth_user_id` set before enabling isolation).
 
-### Recommended Policies
-
-**`custom_users` table:**
+**Gate condition:**
 ```sql
--- Users can only read their own data
-CREATE POLICY "Users can view own profile"
-ON custom_users FOR SELECT
-USING (auth.uid() = id);
-
--- Users can update their own display_name
-CREATE POLICY "Users can update own profile"
-ON custom_users FOR UPDATE
-USING (auth.uid() = id);
+SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL;
+-- Must be 0 before enabling RLS
 ```
 
-**`journals` table:**
+**Policies written (not yet active):**
 ```sql
--- Users can only see their own journals
-CREATE POLICY "Users can view own journals"
-ON journals FOR SELECT
-USING (auth.uid() = user_id);
+-- journals: users can only access their own
+CREATE POLICY "Users can access own journals"
+  ON journals FOR ALL
+  USING (auth.uid() = custom_user_id);
 
--- Users can create journals for themselves
-CREATE POLICY "Users can create own journals"
-ON journals FOR INSERT
-WITH CHECK (auth.uid() = user_id);
+-- mirrors: users can only access their own
+CREATE POLICY "Users can access own mirrors"
+  ON mirrors FOR ALL
+  USING (auth.uid() = custom_user_id);
 
--- Users can update their own journals (before mirror_id is set)
-CREATE POLICY "Users can update own journals"
-ON journals FOR UPDATE
-USING (auth.uid() = user_id AND mirror_id IS NULL);
+-- mirror_shares: sender or recipient
+CREATE POLICY "Users can access own shares"
+  ON mirror_shares FOR ALL
+  USING (auth.uid() = sender_user_id OR auth.uid() = recipient_user_id);
+
+-- friend_links: either side of friendship
+CREATE POLICY "Users can access own friend links"
+  ON friend_links FOR ALL
+  USING (auth.uid() = user_a_id OR auth.uid() = user_b_id);
+
+-- audio-recordings storage: path must start with user's own ID
+CREATE POLICY "Users can access own audio"
+  ON storage.objects FOR ALL
+  USING (bucket_id = 'audio-recordings' AND (storage.foldername(name))[1] = auth.uid()::text);
 ```
 
-**`mirrors` table:**
-```sql
--- Users can only see their own mirrors
-CREATE POLICY "Users can view own mirrors"
-ON mirrors FOR SELECT
-USING (auth.uid() = user_id);
-
--- Only server/admin can create mirrors
--- (Mirror generation happens server-side)
-```
-
-**`mirror_reflections` table:**
-```sql
--- Users can view their own reflections
-CREATE POLICY "Users can view own reflections"
-ON mirror_reflections FOR SELECT
-USING (auth.uid() = user_id);
-
--- Users can create reflections for their mirrors
-CREATE POLICY "Users can create own reflections"
-ON mirror_reflections FOR INSERT
-WITH CHECK (auth.uid() = user_id);
-
--- Users can update their own reflections
-CREATE POLICY "Users can update own reflections"
-ON mirror_reflections FOR UPDATE
-USING (auth.uid() = user_id);
-```
+**See:** `docs/AUTH_MIGRATION_PLAN.md` Phase 4 for full rollout plan.
 
 ---
 
@@ -820,11 +417,7 @@ USING (auth.uid() = user_id);
 
 **Size limit:** 50MB per file (max recording is 8 min ≈ 15MB)
 
-**Migrations:** `20260227000000_bulletproof_voice_storage.sql`
-
 **RLS:** Permissive policy scoped to the bucket. Access scoping is enforced via path convention in the service layer. The `transcribe-audio` Edge Function uses the service role key.
-
-See [BULLETPROOF_VOICE_PLAN.md](./BULLETPROOF_VOICE_PLAN.md) for full pipeline documentation.
 
 ---
 
@@ -852,17 +445,10 @@ See [BULLETPROOF_VOICE_PLAN.md](./BULLETPROOF_VOICE_PLAN.md) for full pipeline d
 
 ### Mirror Lifecycle
 ```
-1. Generated when 15 journals available
+1. Generated when 10 journals available (full) or after Day 1 steps 2+3 (day_1)
 2. Persists indefinitely
 3. Can be viewed multiple times
 4. Associated journals remain linked
-```
-
-### Mirror Reflection Lifecycle
-```
-1. Created when user responds to prompt
-2. Can be edited by user
-3. Persists with Mirror
 ```
 
 ---
@@ -870,401 +456,128 @@ See [BULLETPROOF_VOICE_PLAN.md](./BULLETPROOF_VOICE_PLAN.md) for full pipeline d
 ## 🔄 Data Constraints
 
 ### Business Rules
-- ✅ A journal can belong to **at most one** Mirror (`mirror_id` nullable, unique per journal)
-- ✅ A Mirror must be associated with **exactly 15** journals (enforced at generation)
-- ✅ Users cannot delete journals (only soft-delete via status field, if implemented)
-- ✅ Mirrors cannot be edited once generated (immutable after creation)
-- ✅ Access codes must be **unique** across all users
-
-### Database Constraints
-```sql
--- Ensure journal_count is always 15 for mirrors
-ALTER TABLE mirrors
-ADD CONSTRAINT check_journal_count
-CHECK (journal_count = 15);
-
--- Ensure screen_number is 1-4 for reflections
-ALTER TABLE mirror_reflections
-ADD CONSTRAINT check_screen_number
-CHECK (screen_number >= 1 AND screen_number <= 4);
-
--- Ensure access codes are unique and not empty
-ALTER TABLE custom_users
-ADD CONSTRAINT unique_access_code UNIQUE (access_code);
-ALTER TABLE custom_users
-ADD CONSTRAINT check_access_code_not_empty
-CHECK (access_code <> '');
-```
+- A journal can belong to **at most one** Mirror (`mirror_id` nullable, set once)
+- A full Mirror is generated from **10** journals
+- Mirrors cannot be edited once generated (immutable after creation)
+- Users cannot delete individual journals (account deletion removes all)
+- Friend limit is **3 active friends** per user (enforced in service layer)
 
 ---
 
-## 📈 Indexing Strategy
+## 🔴 Supabase Realtime Configuration
 
-### Performance-Critical Indexes
+Oxbow uses **Supabase Realtime** (WebSocket-based) for instant updates on the Friends tab.
+
+### Enabled Tables
+- `friend_links` — New friend connections
+- `mirror_shares` — Shared mirrors
+
+**Enable via SQL:**
 ```sql
--- User lookups by access code (sign-in)
-CREATE INDEX idx_users_access_code ON custom_users(access_code);
+ALTER PUBLICATION supabase_realtime ADD TABLE friend_links;
+ALTER PUBLICATION supabase_realtime ADD TABLE mirror_shares;
 
--- User's journals (frequent query)
-CREATE INDEX idx_journals_user_id ON journals(user_id);
-
--- Available journals for Mirror generation
-CREATE INDEX idx_journals_user_mirror_null 
-ON journals(user_id) WHERE mirror_id IS NULL;
-
--- Mirror history (frequent query)
-CREATE INDEX idx_mirrors_user_created 
-ON mirrors(user_id, created_at DESC);
-
--- Reflections by mirror and screen
-CREATE INDEX idx_reflections_mirror_screen 
-ON mirror_reflections(mirror_id, screen_number);
+-- Verify
+SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
 ```
 
----
+### Subscription Patterns
 
-## 🚨 Common Data Issues
-
-### Issue 1: User Can't Unlock Mirror Despite 15 Journals
-**Cause:** Journals already used in previous Mirror (mirror_id not null)  
-**Solution:** Query with `WHERE mirror_id IS NULL`
-
-### Issue 2: Mirror Shows Wrong Journal Count
-**Cause:** `journal_count` field not updated during generation  
-**Solution:** Use COUNT query on journals table as source of truth
-
-### Issue 3: Duplicate Access Codes
-**Cause:** Unique constraint not enforced  
-**Solution:** Add unique constraint and index on `access_code`
-
-### Issue 4: Orphaned Journals
-**Cause:** Mirror deleted but journals still reference it  
-**Solution:** Use CASCADE on foreign key or set `mirror_id` to NULL
-
----
-
-## 🛠️ Migrations
-
-### Adding a New Field to Journals
-```sql
--- Add a new field for journal type (text vs voice)
-ALTER TABLE journals
-ADD COLUMN input_type VARCHAR(10) DEFAULT 'text'
-CHECK (input_type IN ('text', 'voice'));
-
--- Backfill existing data
-UPDATE journals SET input_type = 'text' WHERE input_type IS NULL;
+**Mirror shares (UnreadSharesContext):**
+```javascript
+supabase
+  .channel(`mirror_shares:${user.id}`)
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'mirror_shares',
+    filter: `recipient_user_id=eq.${user.id}`
+  }, () => refreshUnreadCount())
+  .subscribe();
 ```
 
-### Creating Indexes for New Queries
-```sql
--- If adding search functionality
-CREATE INDEX idx_journals_content_search 
-ON journals USING gin(to_tsvector('english', content));
+**Friend links (FriendBadgeContext):** Supabase Realtime doesn't support OR filters, so two subscriptions are used — one for `user_a_id`, one for `user_b_id`.
+
+```javascript
+supabase
+  .channel(`friend_links_a:${user.id}`)
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_links',
+      filter: `user_a_id=eq.${user.id}` }, () => refreshNewFriendsCount())
+  .subscribe();
+
+supabase
+  .channel(`friend_links_b:${user.id}`)
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'friend_links',
+      filter: `user_b_id=eq.${user.id}` }, () => refreshNewFriendsCount())
+  .subscribe();
 ```
 
 ---
 
 ## 📚 Service Layer Reference
 
-All database operations should go through the service layer in `lib/supabase/`:
+All database operations go through `lib/supabase/`:
 
 **`lib/supabase/auth.js`**
-- `signInWithAccessCode(code)`
-- `signOut()`
-- `getCurrentUser()`
+- `sendPhoneOTP(phone)` — Send OTP via Twilio Verify
+- `verifyPhoneOTP(phone, token)` — Verify OTP, create Supabase Auth session
+- `completeProfileSetup(authUserId, phone, displayName)` — Create `users` row on first sign-in
+- `completeUserOnboarding(userId)` — Set `onboarding_completed_at`
+- `signOut()` — Sign out of Supabase Auth + clear SecureStore
+- `deleteAccount(userId)` — Calls `delete-account` Edge Function
 
 **`lib/supabase/journals.js`**
-- `createJournal(userId, content)`
-- `fetchJournals(userId)`
-- `fetchAvailableJournals(userId)`
-- `updateJournal(journalId, updates)`
+- `saveJournalEntry(customUserId, content, type, promptText)` — Create text or voice journal
+- `getUserJournals(customUserId, limit)` — Fetch user's journals (excludes in-progress voice)
+- `getUserJournalCount(customUserId)` — Count completed journals
+- `getTodaysAnsweredPrompts(customUserId)` — Prompts answered today
+- `getLastJournalType(customUserId)` — Most recent journal type
 
 **`lib/supabase/mirrors.js`**
-- `generateMirror(userId)`
-- `fetchMirrors(userId)`
-- `fetchMirrorById(mirrorId)`
+- `requestMirrorGeneration(customUserId)` — Trigger full mirror generation
+- `checkMirrorGenerationStatus(customUserId)` — Poll generation status
+- `checkCanGenerateMirror(customUserId, user)` — Check 24h rate limit + journal count
+- `getMirrorById(mirrorId)` — Returns `{ mirror, content }` — read dates from `mirror.created_at`
+- `getUserMirrors(userId)` — Fetch mirror list
+- `markMirrorAsViewed(mirrorId)` — Set `has_been_viewed = true`
+- `saveReflectionFocus(mirrorId, text)` — Save reflection response
 
-**`lib/supabase/feedback.js`**
-- `createReflection(mirrorId, userId, screenNumber, question, response)`
-- `fetchReflections(mirrorId, userId)`
-- `updateReflection(reflectionId, response)`
+**`lib/supabase/friends.js`**
+- `createInviteLink(inviterUserId, inviterName)` — Create invite token
+- `acceptInvite(token, inviteeUserId)` — Accept and create friend link
+- `fetchFriends(userId)` — Get active friends
+- `unlinkFriend(linkId)` — Revoke friendship
+- `checkCanInvite(userId)` — Enforce 3-friend limit
+- `getInviterInfo(token)` — Look up invite details (validates expiry)
 
----
-
-## 🔍 Debugging Tips
-
-### Check Journal Availability
-```javascript
-// In browser console or React component
-import { supabase } from '@/lib/supabase/client';
-
-const { data, error } = await supabase
-  .from('journals')
-  .select('*')
-  .eq('user_id', userId)
-  .is('mirror_id', null);
-
-console.log(`Available journals: ${data?.length}`);
-```
-
-### Verify Mirror Generation
-```javascript
-// Check that 15 journals were linked
-const { data: mirror } = await supabase
-  .from('mirrors')
-  .select('*, journals(*)')
-  .eq('id', mirrorId)
-  .single();
-
-console.log(`Journals in mirror: ${mirror.journals.length}`);
-```
-
-### Reset User's Mirror Progress (Testing)
-```sql
--- WARNING: Only for dev/testing!
-UPDATE journals
-SET mirror_id = NULL
-WHERE user_id = '[user_uuid]';
-```
+**`lib/supabase/day1.js`**
+- Full Day 1 flow: spiritual place, journal linking, mini-mirror generation, focus area saving
 
 ---
 
-## 🔴 Supabase Realtime Configuration
+## 🔍 Common Debugging Queries
 
-### Overview
-
-Oxbow uses **Supabase Realtime** (WebSocket-based) for instant updates instead of polling. This provides:
-- 70x bandwidth reduction (99% fewer API calls)
-- 3x battery life improvement
-- Instant UI updates when data changes
-
-### Enabling Realtime on Tables
-
-Realtime must be enabled for these tables:
-- `friend_links` - For new friend connections
-- `mirror_shares` - For shared mirrors
-
-**Via Supabase Dashboard:**
-1. Go to Database → Replication
-2. Select table (e.g., `friend_links`)
-3. Enable "Realtime"
-4. Save
-
-**Via SQL:**
+### Check available journals for mirror generation
 ```sql
--- Enable Realtime publication for friend_links
-ALTER PUBLICATION supabase_realtime ADD TABLE friend_links;
-
--- Enable Realtime publication for mirror_shares
-ALTER PUBLICATION supabase_realtime ADD TABLE mirror_shares;
-
--- Verify publications
-SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
+SELECT COUNT(*) FROM journals
+WHERE custom_user_id = '[user_uuid]'
+  AND mirror_id IS NULL
+  AND transcription_status NOT IN ('pending', 'processing');
 ```
 
-### How Realtime Works in Oxbow
-
-#### 1. UnreadSharesContext (Mirror Shares)
-
-**Old Approach (Polling):**
-```javascript
-// Polled every 30 seconds
-setInterval(() => {
-  fetchUnreadCount();
-}, 30000);
-```
-
-**New Approach (Realtime):**
-```javascript
-const subscription = supabase
-  .channel(`mirror_shares:${user.id}`)
-  .on('postgres_changes', {
-    event: '*',  // INSERT, UPDATE, DELETE
-    schema: 'public',
-    table: 'mirror_shares',
-    filter: `recipient_user_id=eq.${user.id}`
-  }, (payload) => {
-    // Option B: Always fetch from database for consistency
-    refreshUnreadCount();
-  })
-  .subscribe();
-```
-
-**Cleanup:**
-```javascript
-return () => {
-  supabase.removeChannel(subscription);
-};
-```
-
-#### 2. FriendBadgeContext (Friend Links)
-
-**Challenge:** Supabase Realtime doesn't support OR filters like `user_a_id=eq.X OR user_b_id=eq.X`
-
-**Solution:** Two separate subscriptions
-
-```javascript
-// Subscription 1: Listen for user as user_a
-const subscriptionA = supabase
-  .channel(`friend_links_a:${user.id}`)
-  .on('postgres_changes', {
-    event: 'INSERT',
-    schema: 'public',
-    table: 'friend_links',
-    filter: `user_a_id=eq.${user.id}`
-  }, () => refreshNewFriendsCount())
-  .subscribe();
-
-// Subscription 2: Listen for user as user_b
-const subscriptionB = supabase
-  .channel(`friend_links_b:${user.id}`)
-  .on('postgres_changes', {
-    event: 'INSERT',
-    schema: 'public',
-    table: 'friend_links',
-    filter: `user_b_id=eq.${user.id}`
-  }, () => refreshNewFriendsCount())
-  .subscribe();
-```
-
-**Persistence:** Uses AsyncStorage to track last viewed timestamp
-
-```javascript
-const LAST_VIEWED_KEY = '@oxbow_friends_last_viewed';
-
-// Store last viewed timestamp when user opens Friends screen
-await AsyncStorage.setItem(LAST_VIEWED_KEY, new Date().toISOString());
-
-// Count friends created after last viewed
-const newFriends = allFriends.filter(friend =>
-  new Date(friend.created_at) > new Date(lastViewedTimestamp)
-);
-```
-
-#### 3. Friends Screen (Live Updates)
-
-Three Realtime subscriptions for instant updates:
-
-```javascript
-// 1. Mirror shares subscription
-const sharesSubscription = supabase
-  .channel(`mirror_shares:${userId}`)
-  .on('postgres_changes', {
-    event: '*',
-    schema: 'public',
-    table: 'mirror_shares',
-    filter: `recipient_user_id=eq.${userId}`
-  }, () => loadIncomingShares())
-  .subscribe();
-
-// 2. Friend links subscription (user_a)
-const friendsSubscriptionA = supabase
-  .channel(`friend_links_a:${userId}`)
-  .on('postgres_changes', {
-    event: '*',
-    schema: 'public',
-    table: 'friend_links',
-    filter: `user_a_id=eq.${userId}`
-  }, () => loadFriends())
-  .subscribe();
-
-// 3. Friend links subscription (user_b)
-const friendsSubscriptionB = supabase
-  .channel(`friend_links_b:${userId}`)
-  .on('postgres_changes', {
-    event: '*',
-    schema: 'public',
-    table: 'friend_links',
-    filter: `user_b_id=eq.${userId}`
-  }, () => loadFriends())
-  .subscribe();
-```
-
-### AppState Management
-
-Subscriptions automatically pause when app backgrounds:
-
-```javascript
-const appStateSubscription = AppState.addEventListener('change', (nextAppState) => {
-  if (nextAppState === 'background') {
-    console.log('📱 App backgrounded - Realtime will pause');
-    // Supabase handles this automatically
-  } else if (nextAppState === 'active') {
-    console.log('📱 App foregrounded - Realtime will reconnect');
-    // Fetch latest data on return
-    refreshData();
-  }
-});
-```
-
-### Row Level Security (RLS) and Realtime
-
-**Important:** RLS policies apply to Realtime events. Users only receive events for rows they have permission to access.
-
-Example for `mirror_shares`:
+### Check if all users have migrated to phone auth
 ```sql
--- Users can only see shares sent to them
-CREATE POLICY "Users can view shares sent to them"
-ON mirror_shares FOR SELECT
-USING (recipient_user_id = auth.uid());
+SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL;
+-- Must be 0 before enabling RLS (Phase 4 gate)
 ```
 
-This means Realtime events will only fire for shares where `recipient_user_id` matches the authenticated user.
-
-### Performance Metrics
-
-**Before (Polling):**
-- 2,880 API calls/day per user
-- ~500KB/day bandwidth
-- Background timer constantly running
-
-**After (Realtime):**
-- ~40 API calls/day per user (initial + reconnections)
-- ~7KB/day bandwidth
-- Event-driven, zero background processing
-
-**Result:**
-- 70x bandwidth reduction
-- 3x battery life improvement
-- Instant updates (no 30-second delay)
-
-### Debugging Realtime
-
-**Check subscription status:**
-```javascript
-console.log('Subscription state:', subscription.state);
-// States: 'subscribing', 'subscribed', 'closed', 'errored'
+### Reset journal mirror links (dev/testing only)
+```sql
+-- WARNING: dev only
+UPDATE journals SET mirror_id = NULL WHERE custom_user_id = '[user_uuid]';
 ```
 
-**Enable detailed logging (dev only):**
-```javascript
-if (__DEV__) {
-  supabase
-    .channel('test')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'friend_links' },
-      (payload) => console.log('Realtime event:', payload)
-    )
-    .subscribe();
-}
-```
-
-**Check database publication:**
+### Check Realtime publication
 ```sql
 SELECT * FROM pg_publication_tables WHERE pubname = 'supabase_realtime';
 ```
-
-Should show `friend_links` and `mirror_shares` in results.
-
----
-
-## 📖 Additional Resources
-
-- [Supabase Documentation](https://supabase.com/docs)
-- [Supabase Realtime Guide](https://supabase.com/docs/guides/realtime)
-- [PostgreSQL JSON Functions](https://www.postgresql.org/docs/current/functions-json.html)
-- [Row Level Security Guide](https://supabase.com/docs/guides/auth/row-level-security)
-
----
-
-Need to modify the schema? Discuss with the team and create a migration plan!
