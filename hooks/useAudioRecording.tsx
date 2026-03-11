@@ -398,13 +398,31 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             // --- New flow: create pending journal + trigger server-side transcription ---
             const customUserId = user?.id ?? null;
 
-            const journal = await createPendingJournal({
-              customUserId,
-              storagePath,
-              localPath: persistedLocalPath,
-              promptText: null,
-              entryType: 'voice',
-            });
+            let journal;
+            try {
+              journal = await createPendingJournal({
+                customUserId,
+                storagePath,
+                localPath: persistedLocalPath,
+                promptText: null,
+                entryType: 'voice',
+              });
+            } catch (journalError) {
+              // Journal creation failed (e.g. Supabase unreachable). Audio is safely
+              // uploaded to storage and the job is in AsyncStorage with storagePath set.
+              // Recovery will create the journal row on next launch.
+              Sentry.captureException(journalError, {
+                tags: { component: 'useAudioRecording', action: 'createPendingJournal' },
+                contexts: { recording: { jobId, storagePath } },
+              });
+              setIsProcessing(false);
+              Alert.alert(
+                'Recording Saved',
+                "Your recording is saved on your device. We'll finish processing it when you reopen the app.",
+                [{ text: 'OK' }]
+              );
+              return;
+            }
 
             // Update queued job with journalId for recovery
             const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
