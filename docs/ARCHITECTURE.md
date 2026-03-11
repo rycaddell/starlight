@@ -95,6 +95,7 @@ starlight/
 │   │   ├── day1.js             # Day 1 onboarding operations
 │   │   ├── profilePicture.js   # Profile picture upload/delete
 │   │   └── feedback.js         # Feedback handling
+│   ├── silenceLogsInProduction.ts  # No-ops console.log/warn in production builds
 │   ├── whisperService.ts        # OpenAI Whisper integration
 │   └── guidedPrompts.ts         # Journal prompt management
 │
@@ -233,14 +234,14 @@ components/
 
 **Implementation:** `hooks/useAudioRecording.tsx` + `lib/supabase/transcription.js`
 
-**Reliability pipeline** (see [VOICE_PIPELINE.md](./BULLETPROOF_VOICE_PLAN.md) for full details):
+**Reliability pipeline** (see [VOICE_JOURNALING_PRD.md](./VOICE_JOURNALING_PRD.md) for full details):
 1. Audio copied to permanent local storage immediately on stop
 2. Job enqueued in AsyncStorage
-3. Binary m4a uploaded to Supabase Storage
-4. Pending journal row inserted
+3. Binary m4a uploaded to Supabase Storage (30s timeout — returns error code `UPLOAD_TIMEOUT` on slow connections)
+4. Pending journal row inserted (failure shows "Recording Saved" and defers to recovery)
 5. Edge function triggered (fire-and-forget)
-6. Client polls `journals.transcription_status` every 3s until `'completed'`
-7. On next launch: `useVoiceRecovery` picks up any interrupted jobs
+6. Client polls `journals.transcription_status` every 3s until `'completed'`; network errors tracked separately from slow transcription for accurate timeout messaging
+7. On next launch: `useVoiceRecovery` picks up any interrupted jobs (max 3 attempts; zombie job protection)
 
 ### 3. Server-Side Mirror Generation
 

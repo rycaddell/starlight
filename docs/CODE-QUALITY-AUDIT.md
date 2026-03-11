@@ -32,6 +32,8 @@ Every tab focus triggers redundant parallel fetches. The two instances also have
 
 ### 2. 630 `console.log/warn/error` Calls Running in Production
 
+**Status: ✅ Fixed (March 2026) — `lib/silenceLogsInProduction.ts` shim**
+
 **Files:** Entire codebase — app/, components/, hooks/, contexts/, lib/
 **Impact:** HIGH — JS thread tax on every log call, especially on iOS where logs cross the bridge
 
@@ -43,10 +45,7 @@ Notable hot spots:
 - `lib/supabase/mirrors.js` — 31 console calls in network request paths
 - Three `useEffect` hooks in `mirror.tsx` (lines 55–66) exist solely to log state changes to console
 
-**Fix:**
-- Wrap debug logs in `if (__DEV__) { ... }` or use a `logger` utility that no-ops in production
-- Remove the three debug-only `useEffect` hooks in `mirror.tsx`
-- Remove the render-body `console.log` blocks entirely
+**Fix applied:** `lib/silenceLogsInProduction.ts` imported at the top of `app/_layout.tsx`. In `__DEV__` mode all console output works as before. In production builds, `console.log` and `console.warn` are no-ops. `console.error` is left untouched (used by React Native internals). The three debug-only `useEffect` hooks in `mirror.tsx` and render-body log blocks remain as candidates for future cleanup.
 
 **Gain:** Reduced JS thread jank during recording, polling, and navigation. Cleaner Sentry breadcrumb signal.
 
@@ -103,31 +102,16 @@ const { data: { session } } = await supabase.auth.getSession();
 
 ### 6. Test/Debug Infrastructure in Production Build
 
+**Status: ✅ Fixed (March 2026)**
+
 **Impact:** HIGH — security exposure, bundle bloat, real users could stumble on test routes
 
-Multiple test artifacts remain in production code:
+All test artifacts have been removed:
+- `app/button-test.tsx`, `app/components-test.tsx`, `app/design-test.tsx`, `app/phase3-test.tsx` — deleted
+- `components/mirror/MirrorTestPanel.tsx` — deleted
+- `lib/supabase/testData.js` — deleted
 
-**a) Live routable test screens** (accessible to any user who navigates to the route):
-- `app/button-test.tsx`
-- `app/components-test.tsx`
-- `app/design-test.tsx` (links to the above two)
-- `app/phase3-test.tsx`
-
-**b) `MirrorTestPanel` component** (`components/mirror/MirrorTestPanel.tsx`):
-- Displays "🧪 Testing (Remove Later)" as its title text
-- Imported in `mirror.tsx` but **never rendered** (dead import)
-- The supporting `insertTestData` function chains through `useMirrorData` → `lib/supabase/testData.js`
-
-**c) `testData.js`** re-exported from the barrel file `lib/supabase.js`, making `insertTestJournalData` available app-wide
-
-**Fix:**
-- Delete the four test screen files
-- Delete `MirrorTestPanel.tsx`
-- Delete `lib/supabase/testData.js`
-- Remove `testData` from `lib/supabase.js` barrel exports
-- Remove `insertTestData` / `insertTestJournalData` from `useMirrorData`
-
-**Gain:** Cleaner bundle, removed security exposure, eliminated dead code paths.
+Note: `testData` barrel export from `lib/supabase.js` and `insertTestData`/`insertTestJournalData` in `useMirrorData` should be verified and removed if still present.
 
 ---
 
@@ -317,12 +301,16 @@ Some functions return `{ success: false, error: string }`, others throw, others 
 
 ### 20. No Error Boundaries
 
+**Status: ✅ Fixed (March 2026)**
+
 **Files:** Entire component tree
 **Impact:** MEDIUM — any unhandled render error crashes the entire app
 
-No `ErrorBoundary` components exist. If any component throws during render (e.g., null access on mirror data), the whole app white-screens.
+`ErrorBoundary` component added at `components/ui/ErrorBoundary.tsx`. Wrappers applied to:
+- Root layout (`app/_layout.tsx`) — last-resort catch
+- All three tab screens (`index.tsx`, `mirror.tsx`, `friends.tsx`) — each wrapped so a crash in one tab doesn't kill the tab bar
 
-**Fix:** Add `ErrorBoundary` wrappers around major sections: each tab screen, each modal.
+Each tab exports a wrapped default that renders the tab inside an `ErrorBoundary` with a fallback UI.
 
 ---
 
@@ -430,11 +418,11 @@ This function exists to return the last journal entry type for default tab selec
 | # | Issue | Area | Impact |
 |---|-------|------|--------|
 | 1 | Duplicate `useMirrorData` instances | Architecture | 🔴 High |
-| 2 | 630 console.log calls in production | Performance | 🔴 High |
+| 2 | 630 console.log calls in production | Performance | ✅ Fixed |
 | 3 | Redundant journals fetch (`loadTodayAnsweredPrompts`) | Performance | 🔴 High |
 | 4 | 3-second polling interval too aggressive | Performance | 🔴 High |
 | 5 | `getSession()` called but result unused | Performance | 🟠 Med-High |
-| 6 | Test infrastructure in production | Code quality | 🟠 Med-High |
+| 6 | Test infrastructure in production | Code quality | ✅ Fixed |
 | 7 | Dead `MirrorCard`/`ReflectionDisplay` components | Code quality | 🟠 Med-High |
 | 8 | Dead imports (`MirrorStatusCard`, `MirrorTestPanel`) | Code quality | 🟡 Medium |
 | 9 | `GestureHandlerRootView` imported but unused | Code quality | 🟡 Medium |
@@ -448,7 +436,7 @@ This function exists to return the last journal entry type for default tab selec
 | 17 | Hardcoded Edge Function URLs | Maintainability | 🟡 Medium |
 | 18 | Data layer not TypeScript | Type safety | 🟡 Medium |
 | 19 | Inconsistent error handling | Architecture | 🟡 Medium |
-| 20 | No error boundaries | Reliability | 🟡 Medium |
+| 20 | No error boundaries | Reliability | ✅ Fixed |
 | 21 | React logo assets (Expo template) | Bundle size | 🟢 Low |
 | 22 | `Dimensions.get` at module level | Correctness | 🟢 Low |
 | 23 | Stale closure in `useFocusEffect` | Correctness | 🟢 Low |

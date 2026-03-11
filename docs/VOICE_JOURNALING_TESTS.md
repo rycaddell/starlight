@@ -80,7 +80,7 @@ Force-quitting at any point between [2] and [8] should result in recovery on nex
 
 **Pass:**
 - App reopens normally (no crash on launch)
-- A notification or alert appears indicating a recording was recovered (once Bug 4 is fixed)
+- A recovery banner appears at the top of the Journal tab: "Finishing a recent recording..." while recovery runs, then transitions to "Now transcribing your recording - ~2 mins." for ~5 seconds
 - Within 60 seconds of reopening, the journal appears in the list
 - Check AsyncStorage: the pending job should be cleared after recovery succeeds
 
@@ -229,14 +229,16 @@ Record 2–3 seconds of speech.
 2. **Before tapping Stop**, turn on Airplane Mode
 3. Tap Stop
 
-**Pass (after Bug 3 fix):**
-- Upload times out after ~30 seconds (not indefinitely)
-- User sees an appropriate message (not an infinite spinner)
-- Job is saved to AsyncStorage for recovery
-- Turning Airplane Mode off and relaunching → recovery completes
+**Pass:**
+- Upload times out after ~30 seconds
+- Alert appears: "Upload timed out. Your recording is saved on your device. Relaunch the app when you're on a better connection or WiFi."
+- Job is saved to AsyncStorage with `storagePath: null` for recovery
+- Turning Airplane Mode off and relaunching → recovery banner appears → journal transcribes
 
-**Fail (current behavior before fix):**
+**Fail signals:**
 - Infinite spinner with no timeout
+- Alert does not appear after ~30 seconds
+- Recording is not recoverable on relaunch
 
 ---
 

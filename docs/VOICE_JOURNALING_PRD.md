@@ -123,9 +123,8 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 #### 3c. Upload of 8-minute recording (~15MB) times out
 **Cause:** `FileSystem.uploadAsync` does not have an explicit timeout set. On a very slow connection, a large file could stall indefinitely.
-**Current behavior:** No explicit timeout — could hang forever, blocking the UI.
-**Status:** ❌ Not handled
-**Required change:** The `uploadAudioToStorage` function currently has no timeout. Consider using `FileSystem.createUploadTask()` with a timeout option, or add a `Promise.race` with a reasonable timeout (e.g., 120 seconds for large files). On timeout, treat as upload failure and fall through to inline path or recovery.
+**Status:** ✅ Fixed (March 2026)
+**Implementation:** `uploadAudioToStorage` in `lib/supabase/transcription.js` wraps `FileSystem.uploadAsync` in a `Promise.race` against a 30-second timeout. On timeout, returns `{ success: false, error: 'UPLOAD_TIMEOUT' }`. `handleStopRecording` detects this and shows: "Upload timed out. Your recording is saved on your device. Relaunch the app when you're on a better connection or WiFi." The job stays in AsyncStorage for recovery on relaunch.
 
 ---
 
@@ -133,11 +132,9 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 #### 4a. Network failure during INSERT (transient — the production incident)
 **Cause:** Cellular signal drop, network handoff, or iOS kills the in-flight request when app transitions state. Results in `status_code: 0`, `TypeError: Network request failed`.
-**Current behavior:** `createPendingJournal()` does `if (error) throw error`, throwing the raw Supabase error object `{ code, details, hint, message }`. This is caught by the outer try/catch in `handleStopRecording`. Sentry receives a plain object (not an Error instance), reporting it as "Object captured as exception with keys: code, details, hint, message". User sees `Alert.alert('Error', 'Failed to stop recording properly.')`. The AsyncStorage job has `storagePath` set and `journalId: null`. Recovery will create the journal on next app launch.
-**Status:** ⚠️ Partially covered — recovery works, but UX message is wrong and Sentry is noisy
-**Required changes (two separate fixes):**
-  1. In `lib/supabase/transcription.js` line 88, replace `throw error` with `throw new Error(error.message || 'Journal INSERT failed', { cause: error })`. Do the same in any other location in the codebase that throws a raw Supabase error object.
-  2. In the outer catch of `handleStopRecording`, check whether `storagePath` is set at the time of the catch. If it is, the upload succeeded and the job is queued — show: `"Your recording was saved. It will appear in your journal shortly."` (not an "Error" alert). If `storagePath` is null, show the existing error alert.
+**Status:** ✅ Partially fixed (March 2026) — UX message corrected; Sentry throw quality outstanding
+**Implementation:** `createPendingJournal()` is now wrapped in its own try/catch inside `handleStopRecording`. On failure, user sees: "Recording Saved — Your recording is saved on your device. We'll finish processing it when you reopen the app." The function returns early; the AsyncStorage job retains `storagePath` and `journalId: null`. Recovery creates the journal row on next launch.
+**Still outstanding:** `transcription.js:88` still does `throw error` (raw Supabase object). Sentry reports it as "Object captured as exception with keys: code, details, hint, message." Fix: replace with `throw new Error(error.message || 'Journal INSERT failed', { cause: error })`.
 
 #### 4b. INSERT fails with auth/RLS error (401, 403)
 **Cause:** Supabase JWT expired during a long recording session, or RLS policy rejects the insert.
@@ -176,8 +173,8 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 #### 6b. Poll query returns a network error
 **Cause:** Transient connectivity during the 3-minute polling window.
-**Current behavior:** Caught in the `tick()` try/catch (line 160–163). `pollCount` increments and polling retries after 3 seconds.
-**Status:** ✅ Handled
+**Current behavior:** Caught in the `tick()` try/catch. `pollCount` increments and polling retries after 3 seconds. A `hadNetworkErrors` flag is set to `true`. If MAX_POLLS is reached and `hadNetworkErrors` is true, the timeout alert says "Connection Issue — We lost connection while checking. Your recording was saved — check back shortly." rather than the generic "Still Transcribing" message.
+**Status:** ✅ Handled (March 2026 — network errors now distinguished from slow transcription)
 
 #### 6c. Polling times out (3-minute limit)
 **Cause:** Whisper is slow, edge function is processing a long recording, or Supabase Edge Functions are degraded.
@@ -276,8 +273,9 @@ Every user-visible message from the voice pipeline must follow these rules:
 
 | Situation | Message | Alert type |
 |-----------|---------|------------|
-| INSERT fails but recording is queued for recovery | "Your recording was saved. It will appear in your journal shortly." | Non-alarming info, auto-dismiss preferred |
-| Polling timeout after 3 minutes | "Your recording was saved. The transcription is still processing — check back in a moment." | Existing message — keep as-is |
+| INSERT fails but recording is queued for recovery | "Recording Saved — Your recording is saved on your device. We'll finish processing it when you reopen the app." | ✅ Implemented |
+| Polling timeout after 3 minutes (transcription slow) | "Still Transcribing — Your recording was saved. The transcription is still processing — check back in a moment." | ✅ Implemented |
+| Polling timeout after 3 minutes (network errors) | "Connection Issue — We lost connection while checking. Your recording was saved — check back shortly." | ✅ Implemented |
 | Transcription failed (system error) | "There was a problem transcribing your recording. We'll try again automatically." | Non-alarming — recovery will handle it |
 | Transcription failed (empty/silence) | "We couldn't hear your recording clearly. Please try again." | Actionable — no retry, user should re-record |
 | Upload failed entirely — no fallback | "Unable to save your recording right now. Please check your connection and try again." | Actionable |
