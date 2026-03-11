@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { View, Text, ScrollView, StyleSheet, Alert, Image, TouchableOpacity, AppState, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -23,7 +24,7 @@ import { colors, typography, spacing, borderRadius } from '@/theme/designTokens'
 
 const screenWidth = Dimensions.get('window').width;
 
-export default function JournalScreen() {
+function JournalScreen() {
   const router = useRouter();
   const promptRef = useRef<GuidedPromptSingleHandle>(null);
 
@@ -506,6 +507,10 @@ export default function JournalScreen() {
       />
     </SafeAreaView>
   );
+}
+
+export default function JournalScreenWithBoundary() {
+  return <ErrorBoundary><JournalScreen /></ErrorBoundary>;
 }
 
 const styles = StyleSheet.create({

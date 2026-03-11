@@ -1,6 +1,7 @@
 # Oxbow — Stability & QA Process Plan
 
 **Created:** March 2026
+**Updated:** March 2026 — incorporated gaps from CODE-QUALITY-AUDIT.md; clarified Tier 1 ordering; noted CI gate blind spot; retired TESTING_CHECKLIST.md in favor of PROD-VALIDATION.md.
 **Context:** App instability audit conducted ahead of broader rollout. Users reporting crashes and unreliable voice journaling.
 
 ---
@@ -57,16 +58,20 @@ The recovery system is well-designed and does successfully rescue interrupted re
 
 ### Tier 1 — Fix Now (Prevents Current Crashes)
 
-| Fix | What It Solves | Files Affected |
-|-----|---------------|----------------|
-| Add error boundaries to root layout + 3 tab screens | White-screen-of-death crashes | `app/_layout.tsx`, tab screens |
-| Bug 1: Ensure AsyncStorage job always writes `journalId` even on error path | Silent lost recordings | `hooks/useAudioRecording.tsx` |
-| Bug 2: Distinguish network error from transcription pending in poll | Misleading "Still Transcribing" | `hooks/useAudioRecording.tsx` |
-| Bug 3: Add AbortController timeout to audio upload (30s) | Infinite upload spinner | `lib/supabase/transcription.js` |
-| Bug 4: Show user notification when voice recovery succeeds | User uncertainty about lost recordings | `hooks/useVoiceRecovery.ts` |
-| Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely | `hooks/useAudioRecording.tsx` |
-| Fix `friends.js` unguarded DB queries in `acceptInvite()` | Silent friend invite crashes | `lib/supabase/friends.js` |
-| Set Sentry user context in AuthContext (not MirrorScreen) | Incomplete error attribution in Sentry | `contexts/AuthContext.tsx` |
+Implement in this order. Items 1–6 are targeted, localized fixes. Item 7 (Realtime) is architecturally heavier and should be done after the simpler fixes are proven stable.
+
+| # | Fix | What It Solves | Files Affected |
+|---|-----|---------------|----------------|
+| 1 | Add error boundaries to root layout + 3 tab screens | White-screen-of-death crashes | `app/_layout.tsx`, tab screens |
+| 2 | Bug 3: Add AbortController timeout to audio upload (30s) | Infinite upload spinner on bad connections — highest "works on my phone" risk | `lib/supabase/transcription.js` |
+| 3 | Bug 4: Show user notification when voice recovery succeeds | User uncertainty about lost recordings | `hooks/useVoiceRecovery.ts` |
+| 4 | Bug 1: Ensure AsyncStorage job always writes `journalId` even on error path | Silent lost recordings | `hooks/useAudioRecording.tsx` |
+| 5 | Bug 2: Distinguish network error from transcription pending in poll | Misleading "Still Transcribing" | `hooks/useAudioRecording.tsx` |
+| 6 | Fix `friends.js` unguarded DB queries in `acceptInvite()` | Silent friend invite crashes | `lib/supabase/friends.js` |
+| 7 | Delete test/debug screens and infrastructure | Live routable test screens accessible to real users; security exposure | `app/button-test.tsx`, `app/components-test.tsx`, `app/design-test.tsx`, `app/phase3-test.tsx`, `components/mirror/MirrorTestPanel.tsx`, `lib/supabase/testData.js` |
+| 8 | Wrap all `console.log` calls in `__DEV__` guard (or remove) | JS thread tax on every log; noisy Sentry — makes monitoring unreliable | Entire codebase (630 calls — see CODE-QUALITY-AUDIT.md #2) |
+| 9 | Set Sentry user context in AuthContext (not MirrorScreen) | Incomplete error attribution in Sentry | `contexts/AuthContext.tsx` |
+| 10 | Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely — do after items 1–9 are stable | `hooks/useAudioRecording.tsx` |
 
 ### Tier 2 — Process Gates (Prevents Future Regressions)
 
@@ -76,6 +81,8 @@ The recovery system is well-designed and does successfully rescue interrupted re
 | Add Husky pre-commit hook (lint + type-check) | Blocks broken code from being committed |
 | Add GitHub Actions CI workflow | Validates every push; blocks bad builds |
 | Set up edge function log monitoring (Logflare or Axiom) | Visibility into server-side transcription failures |
+
+**Important limitation:** The TypeScript gate only covers `.ts`/`.tsx` files. The entire `lib/supabase/` data layer is plain JavaScript (11 files). Type errors in the most critical network paths won't be caught by CI until those files are migrated to TypeScript (Tier 3, item 18 in CODE-QUALITY-AUDIT.md). The gate is still valuable — it just has a known blind spot.
 
 ### Tier 3 — Longer Term
 
@@ -226,7 +233,9 @@ Only build after CI is green. The preview profile builds an internal TestFlight 
 
 ### Step 5: Test the Changed Flow
 
-Using `TESTING_CHECKLIST.md` as your guide — but you don't need to run the full checklist every time. Focus on:
+Using `PROD-VALIDATION.md` as your guide (this is the current checklist — `TESTING_CHECKLIST.md` has been retired as it referenced the old access-code auth system). You don't need to run the full checklist every time. Focus on:
+
+**Always test on a second physical device**, not just your own phone. Network-condition bugs and device-specific rendering bugs are invisible on your own device. This is the primary cause of "works on my phone, breaks on theirs."
 
 1. **The specific flow you changed** (e.g., if you changed voice journaling, run Section 3 of the checklist)
 2. **Adjacent flows** (anything that shares code with your change)
@@ -303,8 +312,8 @@ The goal is to push the discovery of every class of error as early as possible i
 
 ## Related Documents
 
+- `docs/PROD-VALIDATION.md` — **Current** manual testing checklist (use this, not TESTING_CHECKLIST.md)
 - `docs/VOICE_JOURNALING_TESTS.md` — Full manual test protocol for voice journaling (tiered by change scope)
-- `docs/CODE-QUALITY-AUDIT.md` — 28-issue code quality audit (Feb 2026)
-- `docs/TESTING_CHECKLIST.md` — Manual testing checklist for all features
+- `docs/CODE-QUALITY-AUDIT.md` — 28-issue code quality audit (Feb 2026); items #2, #6, and #20 are incorporated into Tier 1 above
 - `docs/BULLETPROOF_VOICE_PLAN.md` — Prior voice journaling resilience work
 - `docs/SECURITY-PLAN.md` — App Store security hardening

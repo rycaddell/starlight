@@ -12,6 +12,7 @@ import { UnreadSharesProvider } from '../contexts/UnreadSharesContext';
 import { FriendBadgeProvider } from '../contexts/FriendBadgeContext';
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
+import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 
 // Initialize Sentry
 Sentry.init({
@@ -68,31 +69,33 @@ function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <UnreadSharesProvider>
-        <FriendBadgeProvider>
-          <OnboardingProvider>
-            <GlobalSettingsProvider>
-              <AuthNavigator>
-                <Stack>
-                  <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                  <Stack.Screen
-                    name="friend-invite/[token]"
-                    options={{
-                      headerShown: true,
-                      title: 'Friend Invite',
-                      presentation: 'modal',
-                    }}
-                  />
-                  <Stack.Screen name="+not-found" />
-                </Stack>
-              </AuthNavigator>
-              <StatusBar style="auto" />
-            </GlobalSettingsProvider>
-          </OnboardingProvider>
-        </FriendBadgeProvider>
-      </UnreadSharesProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <UnreadSharesProvider>
+          <FriendBadgeProvider>
+            <OnboardingProvider>
+              <GlobalSettingsProvider>
+                <AuthNavigator>
+                  <Stack>
+                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                    <Stack.Screen
+                      name="friend-invite/[token]"
+                      options={{
+                        headerShown: true,
+                        title: 'Friend Invite',
+                        presentation: 'modal',
+                      }}
+                    />
+                    <Stack.Screen name="+not-found" />
+                  </Stack>
+                </AuthNavigator>
+                <StatusBar style="auto" />
+              </GlobalSettingsProvider>
+            </OnboardingProvider>
+          </FriendBadgeProvider>
+        </UnreadSharesProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

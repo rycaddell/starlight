@@ -1,6 +1,7 @@
 // TRULY FIXED MIRROR.TSX - Simple focus handling
 
 import React, { useEffect, useState } from 'react';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import { View, Text, TouchableOpacity, ScrollView, Alert, StyleSheet, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
@@ -24,7 +25,7 @@ import { getDay1Mirror } from '../../lib/supabase/day1';
 import { Day1MirrorViewer } from '../../components/day1/Day1MirrorViewer';
 import * as Sentry from '@sentry/react-native';
 
-export default function MirrorScreen() {
+function MirrorScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user, signOut, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -664,6 +665,10 @@ export default function MirrorScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function MirrorScreenWithBoundary() {
+  return <ErrorBoundary><MirrorScreen /></ErrorBoundary>;
 }
 
 const styles = StyleSheet.create({

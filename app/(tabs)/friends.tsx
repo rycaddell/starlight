@@ -2,6 +2,7 @@
 // Friends tab - redesigned with inline invite and slots
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
 import {
   View,
   Text,
@@ -44,7 +45,7 @@ import { getDay1Mirror } from '@/lib/supabase/day1';
 
 const FRIEND_EMPTY_STATE_BG = require('@/assets/friends/friend-empty-state.jpg');
 
-export default function FriendsScreen() {
+function FriendsScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
   const { refreshUnreadCount } = useUnreadShares();
@@ -689,6 +690,10 @@ export default function FriendsScreen() {
       )}
     </SafeAreaView>
   );
+}
+
+export default function FriendsScreenWithBoundary() {
+  return <ErrorBoundary><FriendsScreen /></ErrorBoundary>;
 }
 
 const styles = StyleSheet.create({
