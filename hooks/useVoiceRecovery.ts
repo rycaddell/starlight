@@ -51,6 +51,7 @@ const incrementRecoveryAttempts = async (jobId: string): Promise<number> => {
 
 export const useVoiceRecovery = (userId: string | null) => {
   const [isRecovering, setIsRecovering] = useState(false);
+  const [recoveryMessage, setRecoveryMessage] = useState<string | null>(null);
   const hasRun = useRef(false);
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export const useVoiceRecovery = (userId: string | null) => {
   }, [userId]);
 
   const runRecovery = async (uid: string) => {
+    let anyHandedOff = false;
     try {
       const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
       if (!raw) return;
@@ -77,16 +79,22 @@ export const useVoiceRecovery = (userId: string | null) => {
       setIsRecovering(true);
 
       for (const job of jobs) {
-        await recoverJob(job, uid);
+        const handedOff = await recoverJob(job, uid);
+        if (handedOff) anyHandedOff = true;
       }
     } catch (error) {
       Sentry.captureException(error, { tags: { component: 'useVoiceRecovery' } });
     } finally {
       setIsRecovering(false);
+      if (anyHandedOff) {
+        setRecoveryMessage('Now transcribing your recording - ~2 mins.');
+        setTimeout(() => setRecoveryMessage(null), 5000);
+      }
     }
   };
 
-  const recoverJob = async (job: PendingVoiceJob, uid: string) => {
+  // Returns true if the job was successfully handed off to transcription
+  const recoverJob = async (job: PendingVoiceJob, uid: string): Promise<boolean> => {
     try {
       const attempts = await incrementRecoveryAttempts(job.jobId);
 
@@ -100,7 +108,7 @@ export const useVoiceRecovery = (userId: string | null) => {
         });
         FileSystem.deleteAsync(job.localPath, { idempotent: true }).catch(() => {});
         await dequeuePendingJob(job.jobId);
-        return;
+        return false;
       }
 
       console.log(`🔍 [RECOVERY] Processing job ${job.jobId} (attempt ${attempts}/${MAX_RECOVERY_ATTEMPTS}), journalId=${job.journalId}`);
@@ -113,43 +121,47 @@ export const useVoiceRecovery = (userId: string | null) => {
           .maybeSingle();
 
         if (!journal) {
-          // Row was never created — fall through to file-based recovery
           console.log(`⚠️ [RECOVERY] Journal ${job.journalId} not found in DB`);
-          await recoverFromFile(job, uid);
-          return;
+          // Before attempting recovery, check the local file still exists
+          const fileInfo = await FileSystem.getInfoAsync(job.localPath);
+          if (!fileInfo.exists) {
+            console.warn(`⚠️ [RECOVERY] Journal gone from DB and local file missing — dequeuing zombie job ${job.jobId}`);
+            await dequeuePendingJob(job.jobId);
+            return false;
+          }
+          return await recoverFromFile(job, uid);
         }
 
         if (journal.transcription_status === 'completed') {
           console.log(`✅ [RECOVERY] Job ${job.jobId} already completed, cleaning up`);
           FileSystem.deleteAsync(job.localPath, { idempotent: true }).catch(() => {});
           await dequeuePendingJob(job.jobId);
-          return;
+          return false;
         }
 
         if (journal.transcription_status === 'failed') {
           console.log(`🔁 [RECOVERY] Job ${job.jobId} failed — retrying from local file`);
           await retryFailedJob(job, uid);
-          return;
+          return true;
         }
 
         // pending or processing — re-fire edge function (idempotent)
         console.log(`🚀 [RECOVERY] Re-triggering transcription for job ${job.jobId}`);
         triggerTranscription(job.journalId);
-        // Ensure day_1_progress is linked in case the kill happened between journal creation and saveStepJournal
         if (job.day1Step) {
           await saveStepJournal(uid, job.day1Step, job.journalId);
         }
-        return;
+        return true;
       }
 
-      // No journalId yet — recover from file/storage
-      await recoverFromFile(job, uid);
+      return await recoverFromFile(job, uid);
     } catch (error) {
       console.error(`❌ [RECOVERY] Failed to recover job ${job.jobId}:`, error);
       Sentry.captureException(error, {
         tags: { component: 'useVoiceRecovery', action: 'recoverJob' },
         contexts: { job: { jobId: job.jobId, journalId: job.journalId } },
       });
+      return false;
     }
   };
 
@@ -157,22 +169,21 @@ export const useVoiceRecovery = (userId: string | null) => {
    * Job has a failed journal in DB. Re-upload local file to a new storage path,
    * update the journal's audio_url, reset status, re-trigger.
    */
-  const retryFailedJob = async (job: PendingVoiceJob, uid: string) => {
+  const retryFailedJob = async (job: PendingVoiceJob, uid: string): Promise<boolean> => {
     const fileInfo = await FileSystem.getInfoAsync(job.localPath);
     if (!fileInfo.exists) {
       console.warn(`⚠️ [RECOVERY] Local file gone for failed job ${job.jobId}, dequeuing`);
       await dequeuePendingJob(job.jobId);
-      return;
+      return false;
     }
 
     const newStoragePath = `${uid}/${generateUUID()}.m4a`;
     const uploadResult = await uploadAudioToStorage(job.localPath, newStoragePath);
     if (!uploadResult.success) {
       console.error(`❌ [RECOVERY] Re-upload failed for job ${job.jobId}, will retry next launch`);
-      return; // Leave in queue — retry on next launch
+      return false;
     }
 
-    // Reset journal status and point it at the new audio file
     await supabase
       .from('journals')
       .update({
@@ -187,6 +198,7 @@ export const useVoiceRecovery = (userId: string | null) => {
       await saveStepJournal(uid, job.day1Step, job.journalId!);
     }
     console.log(`🚀 [RECOVERY] Re-triggered failed job ${job.jobId}`);
+    return true;
   };
 
   /**
@@ -194,16 +206,15 @@ export const useVoiceRecovery = (userId: string | null) => {
    * If storagePath is set, audio is already in Storage — just create the journal.
    * If not, re-upload from local file first.
    */
-  const recoverFromFile = async (job: PendingVoiceJob, uid: string) => {
+  const recoverFromFile = async (job: PendingVoiceJob, uid: string): Promise<boolean> => {
     let storagePath = job.storagePath;
 
     if (!storagePath) {
-      // Audio was never uploaded — re-upload from local file
       const fileInfo = await FileSystem.getInfoAsync(job.localPath);
       if (!fileInfo.exists) {
         console.warn(`⚠️ [RECOVERY] Local file gone for job ${job.jobId}, dequeuing`);
         await dequeuePendingJob(job.jobId);
-        return;
+        return false;
       }
 
       storagePath = `${uid}/${job.jobId}.m4a`;
@@ -212,12 +223,11 @@ export const useVoiceRecovery = (userId: string | null) => {
       const alreadyExists = uploadResult.error?.includes('already exists');
       if (!uploadResult.success && !alreadyExists) {
         console.error(`❌ [RECOVERY] Re-upload failed for job ${job.jobId}, will retry next launch`);
-        return; // Leave in queue
+        return false;
       }
       // alreadyExists means a prior timed-out upload completed in the background — file is in Storage, proceed
     }
 
-    // Create the pending journal and trigger transcription
     console.log(`📝 [RECOVERY] Creating journal for job ${job.jobId}`);
     const journal = await createPendingJournal({
       customUserId: uid,
@@ -227,7 +237,6 @@ export const useVoiceRecovery = (userId: string | null) => {
       entryType: job.entryType,
     });
 
-    // Persist journalId back to AsyncStorage so the next launch doesn't create another journal
     const raw = await AsyncStorage.getItem(PENDING_JOBS_KEY);
     if (raw) {
       const jobs: PendingVoiceJob[] = JSON.parse(raw);
@@ -242,7 +251,8 @@ export const useVoiceRecovery = (userId: string | null) => {
       await saveStepJournal(uid, job.day1Step, journal.id);
     }
     console.log(`🚀 [RECOVERY] Triggered transcription for recovered job ${job.jobId}`);
+    return true;
   };
 
-  return { isRecovering };
+  return { isRecovering, recoveryMessage };
 };

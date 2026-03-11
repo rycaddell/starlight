@@ -18,7 +18,7 @@ export default function TabLayout() {
   const { user } = useAuth();
   const [hasMirrors, setHasMirrors] = useState(false);
   const insets = useSafeAreaInsets();
-  const { isRecovering } = useVoiceRecovery(user?.id ?? null);
+  const { isRecovering, recoveryMessage } = useVoiceRecovery(user?.id ?? null);
 
   // Combined badge count: unread shares + new friends
   const totalBadgeCount = unreadCount + newFriendsCount;
@@ -79,10 +79,12 @@ export default function TabLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      {isRecovering && (
+      {(isRecovering || recoveryMessage) && (
         <View style={[styles.recoveryBanner, { top: insets.top }]}>
           <ActivityIndicator size="small" color="#fff" />
-          <Text style={styles.recoveryText}>Finishing a recent recording...</Text>
+          <Text style={styles.recoveryText}>
+            {recoveryMessage ?? 'Finishing a recent recording...'}
+          </Text>
         </View>
       )}
       <Tabs
