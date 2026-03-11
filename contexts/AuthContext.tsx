@@ -80,6 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setIsNewUser(false);
       setIsLoading(false);
+      Sentry.setUser(null);
       return;
     }
 
@@ -96,6 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data) {
         setUser(data);
         setIsNewUser(false);
+        Sentry.setUser({ id: data.id });
         return;
       }
 
@@ -137,6 +139,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           setUser(migratedUser);
           setIsNewUser(false);
+          Sentry.setUser({ id: migratedUser.id });
           return;
         }
       }
@@ -177,6 +180,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (result.success && result.user) {
       setUser(result.user);
       setIsNewUser(false);
+      Sentry.setUser({ id: result.user.id });
     }
 
     return { success: result.success, error: result.error };
