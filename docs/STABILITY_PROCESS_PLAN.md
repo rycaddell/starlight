@@ -58,20 +58,20 @@ The recovery system is well-designed and does successfully rescue interrupted re
 
 ### Tier 1 — Fix Now (Prevents Current Crashes)
 
-Implement in this order. Items 1–6 are targeted, localized fixes. Item 7 (Realtime) is architecturally heavier and should be done after the simpler fixes are proven stable.
+Implement in this order. Items 1–6 are targeted, localized fixes. Item 10 (Realtime) is architecturally heavier and should be done after the simpler fixes are proven stable.
 
-| # | Fix | What It Solves | Files Affected |
-|---|-----|---------------|----------------|
-| 1 | Add error boundaries to root layout + 3 tab screens | White-screen-of-death crashes | `app/_layout.tsx`, tab screens |
-| 2 | Bug 3: Add AbortController timeout to audio upload (30s) | Infinite upload spinner on bad connections — highest "works on my phone" risk | `lib/supabase/transcription.js` |
-| 3 | Bug 4: Show user notification when voice recovery succeeds | User uncertainty about lost recordings | `hooks/useVoiceRecovery.ts` |
-| 4 | Bug 1: Ensure AsyncStorage job always writes `journalId` even on error path | Silent lost recordings | `hooks/useAudioRecording.tsx` |
-| 5 | Bug 2: Distinguish network error from transcription pending in poll | Misleading "Still Transcribing" | `hooks/useAudioRecording.tsx` |
-| 6 | Fix `friends.js` unguarded DB queries in `acceptInvite()` | Silent friend invite crashes | `lib/supabase/friends.js` |
-| 7 | Delete test/debug screens and infrastructure | Live routable test screens accessible to real users; security exposure | `app/button-test.tsx`, `app/components-test.tsx`, `app/design-test.tsx`, `app/phase3-test.tsx`, `components/mirror/MirrorTestPanel.tsx`, `lib/supabase/testData.js` |
-| 8 | Wrap all `console.log` calls in `__DEV__` guard (or remove) | JS thread tax on every log; noisy Sentry — makes monitoring unreliable | Entire codebase (630 calls — see CODE-QUALITY-AUDIT.md #2) |
-| 9 | Set Sentry user context in AuthContext (not MirrorScreen) | Incomplete error attribution in Sentry | `contexts/AuthContext.tsx` |
-| 10 | Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely — do after items 1–9 are stable | `hooks/useAudioRecording.tsx` |
+| # | Fix | What It Solves | Files Affected | Status |
+|---|-----|---------------|----------------|--------|
+| 1 | Add error boundaries to root layout + 3 tab screens | White-screen-of-death crashes | `app/_layout.tsx`, tab screens | ✅ Done |
+| 2 | Bug 3: Add 30s timeout to audio upload | Infinite upload spinner on bad connections — highest "works on my phone" risk | `lib/supabase/transcription.js` | ✅ Done |
+| 3 | Bug 4: Recovery banner with staged messaging | User uncertainty about lost recordings; zombie job protection added | `hooks/useVoiceRecovery.ts`, `app/(tabs)/_layout.tsx` | ✅ Done |
+| 4 | Bug 1: Ensure AsyncStorage job always writes `journalId` even on error path | Silent lost recordings | `hooks/useAudioRecording.tsx` | ⬜ Next |
+| 5 | Bug 2: Distinguish network error from transcription pending in poll | Misleading "Still Transcribing" | `hooks/useAudioRecording.tsx` | ⬜ Todo |
+| 6 | Fix `friends.js` unguarded DB queries in `acceptInvite()` | Silent friend invite crashes | `lib/supabase/friends.js` | ⬜ Todo |
+| 7 | Delete test/debug screens and infrastructure | Live routable test screens accessible to real users; security exposure | `app/button-test.tsx`, `app/components-test.tsx`, `app/design-test.tsx`, `app/phase3-test.tsx`, `components/mirror/MirrorTestPanel.tsx`, `lib/supabase/testData.js` | ⬜ Todo |
+| 8 | Wrap all `console.log` calls in `__DEV__` guard (or remove) | JS thread tax on every log; noisy Sentry — makes monitoring unreliable | Entire codebase (630 calls — see CODE-QUALITY-AUDIT.md #2) | ⬜ Todo |
+| 9 | Set Sentry user context in AuthContext (not MirrorScreen) | Incomplete error attribution in Sentry | `contexts/AuthContext.tsx` | ⬜ Todo |
+| 10 | Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely — do after items 1–9 are stable | `hooks/useAudioRecording.tsx` | ⬜ Todo |
 
 ### Tier 2 — Process Gates (Prevents Future Regressions)
 
