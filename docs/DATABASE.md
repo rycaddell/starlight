@@ -365,35 +365,128 @@ users (1) ──────────────────< journals (many
 
 ## 🔐 Row Level Security (RLS)
 
-**Current status:** RLS policies have been **written but not yet enabled**. Enforcement is gated on Phase 4 of the auth migration (all users must have `auth_user_id` set before enabling isolation).
+**Current status:** RLS is **enabled** on all tables. See `docs/AUTH_MIGRATION_PLAN.md` for full rollout history.
 
-**Gate condition:**
+---
+
+### Helper Function: `get_my_app_user_id()`
+
 ```sql
-SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL;
--- Must be 0 before enabling RLS
+create or replace function get_my_app_user_id()
+returns uuid
+language sql
+security definer
+stable
+as $$
+  select id from users where auth_user_id = auth.uid()
+$$;
 ```
 
-**Policies written (not yet active):**
+**Why this exists:** `friend_links` stores `public.users.id` (app UUIDs), not `auth.users.id`. RLS policies on `users` that contain an inline `SELECT id FROM users WHERE auth_user_id = auth.uid()` subquery cause **infinite RLS recursion** in PostgreSQL — the subquery triggers the policy again, infinitely. This `SECURITY DEFINER` function bypasses RLS for the inner lookup, breaking the recursion. It is safe because it is still filtered by `auth.uid()` and can only ever return the caller's own app UUID.
+
+**⚠️ Never** write `(select id from users where auth_user_id = auth.uid())` inline inside a `users` RLS policy. Always use `get_my_app_user_id()` instead.
+
+---
+
+### `users` Table Policies
+
+| Policy Name | Command | Expression | Notes |
+|---|---|---|---|
+| Users can select own profile | SELECT | `auth_user_id = auth.uid()` | Own profile reads |
+| Users can select friend profiles | SELECT | `id IN (select friend IDs via get_my_app_user_id())` | Friends list, mirror share names |
+| Users can select own unmigrated profile | SELECT | `auth_user_id IS NULL AND phone = ('+' \|\| auth.jwt() ->> 'phone')` | **Temporary** — migration window |
+| Users can select profiles of active inviters | SELECT | `id IN (select inviter_user_id from friend_invites where unaccepted + <72h)` | Invite acceptance screen |
+| Users can create own profile | INSERT | `auth_user_id = auth.uid()` | New user registration |
+| Users can update own profile | UPDATE | `auth_user_id = auth.uid()` (USING + WITH CHECK) | Normal profile updates |
+| Allow migration for unlinked users | UPDATE | USING: `auth_user_id IS NULL AND phone = ('+' \|\| auth.jwt() ->> 'phone')` / WITH CHECK: `auth_user_id = auth.uid()` | **Temporary** — migration window |
+
+**Temporary policies** (marked above) should be removed once:
+```sql
+SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL;
+-- Returns 0 → delete both migration policies
+```
+
+**Friend profile SELECT policy (full SQL):**
+```sql
+create policy "Users can select friend profiles"
+on users for select
+using (
+  id in (
+    select case
+      when user_a_id = get_my_app_user_id() then user_b_id
+      when user_b_id = get_my_app_user_id() then user_a_id
+    end
+    from friend_links
+    where status = 'active'
+    and (
+      user_a_id = get_my_app_user_id()
+      or user_b_id = get_my_app_user_id()
+    )
+  )
+);
+```
+
+---
+
+### ⚠️ Critical RLS Gotchas
+
+**1. Phone format mismatch between `auth.users` and `public.users`**
+
+`auth.users` stores phone numbers **without** the `+` prefix (e.g. `15551234567`). `public.users.phone` stores them **with** the `+` (e.g. `+15551234567`). When writing RLS policies that compare against the JWT phone claim, always prepend `+`:
+
+```sql
+phone = ('+' || (auth.jwt() ->> 'phone'))
+```
+
+**2. `friend_links` uses app UUIDs, not auth UUIDs**
+
+`friend_links.user_a_id` and `user_b_id` reference `public.users.id`, not `auth.users.id`. `auth.uid()` returns the auth UUID. Always translate via `get_my_app_user_id()`.
+
+**3. Migration catch-22**
+
+The UPDATE policy `auth_user_id = auth.uid()` blocks the migration UPDATE because unmigrated rows have `auth_user_id = null`. `null = auth.uid()` is always false. The "Allow migration for unlinked users" policy exists to allow this specific write. Without it, users with `auth_user_id IS NULL` can never be migrated via the client — their session exists but the UPDATE silently returns HTTP 406. See `docs/AUTH_MIGRATION_PLAN.md` for the full incident history.
+
+---
+
+### Other Table Policies
+
 ```sql
 -- journals: users can only access their own
 CREATE POLICY "Users can access own journals"
   ON journals FOR ALL
-  USING (auth.uid() = custom_user_id);
+  USING (custom_user_id = current_app_user_id());
 
 -- mirrors: users can only access their own
 CREATE POLICY "Users can access own mirrors"
   ON mirrors FOR ALL
-  USING (auth.uid() = custom_user_id);
+  USING (custom_user_id = current_app_user_id());
 
 -- mirror_shares: sender or recipient
-CREATE POLICY "Users can access own shares"
-  ON mirror_shares FOR ALL
-  USING (auth.uid() = sender_user_id OR auth.uid() = recipient_user_id);
+CREATE POLICY "Users can view shares they sent or received"
+  ON mirror_shares FOR SELECT
+  USING (
+    sender_user_id = current_app_user_id()
+    OR recipient_user_id = current_app_user_id()
+  );
 
 -- friend_links: either side of friendship
-CREATE POLICY "Users can access own friend links"
-  ON friend_links FOR ALL
-  USING (auth.uid() = user_a_id OR auth.uid() = user_b_id);
+CREATE POLICY "Users can view own friend links"
+  ON friend_links FOR SELECT
+  USING (
+    user_a_id = current_app_user_id()
+    OR user_b_id = current_app_user_id()
+  );
+
+-- friend_invites: own invites
+CREATE POLICY "Users can view own invites"
+  ON friend_invites FOR SELECT
+  USING (inviter_user_id = current_app_user_id());
+
+-- mirror_generation_requests: own requests
+CREATE POLICY "Users can manage own generation requests"
+  ON mirror_generation_requests FOR ALL
+  USING (custom_user_id = current_app_user_id())
+  WITH CHECK (custom_user_id = current_app_user_id());
 
 -- audio-recordings storage: path must start with user's own ID
 CREATE POLICY "Users can access own audio"
@@ -401,7 +494,7 @@ CREATE POLICY "Users can access own audio"
   USING (bucket_id = 'audio-recordings' AND (storage.foldername(name))[1] = auth.uid()::text);
 ```
 
-**See:** `docs/AUTH_MIGRATION_PLAN.md` Phase 4 for full rollout plan.
+**See:** `docs/AUTH_MIGRATION_PLAN.md` for full rollout history and incident log.
 
 ---
 

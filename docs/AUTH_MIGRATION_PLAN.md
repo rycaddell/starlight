@@ -15,7 +15,7 @@
 | Phase 2 testing | ✅ Verified | 2026-03-03 | New user sign-up, OTP, onboarding, returning user |
 | Phase 3: Pre-flight complete | ✅ Ready to ship | 2026-03-03 | 37 users, all phones validated E.164, access_code NOT NULL dropped |
 | Phase 3: TestFlight build pushed | ⏳ In progress | | Monitor: `SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL AND group_name != 'Demo Users'` |
-| Phase 4: Enable RLS | ✅ Complete | 2026-03-06 | Verified working on own account |
+| Phase 4: Enable RLS | ✅ Complete (with fixes) | 2026-03-06 / 2026-03-09 | Initial enable 2026-03-06; production incident found + fixed 2026-03-09 — see incident log below |
 | Phase 5: Edge function JWT auth | ✅ Complete | 2026-03-06 | All 5 functions updated and deployed |
 | Phase 6: Friend invite Universal Links | ⏳ Pending | | Required before App Store submission |
 
@@ -718,6 +718,132 @@ Anyone still at zero after 2 weeks: contact them directly.
 
 ### Migration window
 Keep a "trouble signing in? contact us" note visible for 3 weeks. After confirmed migration of all 30 users, remove the access code code path in the next release.
+
+---
+
+## Production Incident — 2026-03-09
+
+### What happened
+
+A TestFlight user (Tommy) signed in with the new phone OTP flow but was treated as a brand-new user — the app showed him the name-entry onboarding screen and he couldn't access his existing journals.
+
+### Root cause
+
+**RLS catch-22 on the migration UPDATE.**
+
+The migration path in `resolveAppUser` (AuthContext.tsx) works in two steps:
+1. SELECT: find the legacy row by `phone` where `auth_user_id IS NULL`
+2. UPDATE: stamp `auth_user_id` onto that row
+
+The SELECT succeeded (the old `USING (true)` access-code SELECT policy allowed it). But the UPDATE was blocked by the `Users can update own profile` policy:
+
+```sql
+USING (auth.uid() = auth_user_id)
+```
+
+Tommy's row had `auth_user_id = null`. `auth.uid() = null` is always false. Postgres filtered him out of the UPDATE, which returned 0 rows. `.single()` then threw HTTP 406. The error was caught, `isNewUser` remained in an indeterminate state, and the app routed him to onboarding. Sentry confirmed two 406 PATCH attempts on his row within milliseconds of each other (two `resolveAppUser` calls firing from `getSession()` and `onAuthStateChange`).
+
+**Second gotcha discovered during fix:** `auth.users` stores phone numbers without the `+` prefix (e.g. `15551234567`), while `public.users.phone` stores them with it (`+15551234567`). Any RLS policy comparing against `auth.jwt() ->> 'phone'` must prepend `+`:
+```sql
+phone = ('+' || (auth.jwt() ->> 'phone'))
+```
+
+**Third gotcha:** The old `Allow user lookup by access code` SELECT policy (`USING (true)`) was still active — a complete open read on the users table, left over from the access-code auth system. This was a security risk allowing any authenticated user to read any other user's profile.
+
+### Fix applied (2026-03-09)
+
+**1. Added migration UPDATE policy:**
+```sql
+create policy "Allow migration for unlinked users"
+on users for update
+using (
+  auth_user_id is null
+  and phone = ('+' || (auth.jwt() ->> 'phone'))
+)
+with check (
+  auth_user_id = auth.uid()
+);
+```
+
+**2. Replaced `USING (true)` SELECT with four scoped SELECT policies:**
+
+```sql
+-- Own profile
+create policy "Users can select own profile"
+on users for select
+using (auth_user_id = auth.uid());
+
+-- Friend profiles (via get_my_app_user_id() to avoid RLS recursion)
+create policy "Users can select friend profiles"
+on users for select
+using (
+  id in (
+    select case
+      when user_a_id = get_my_app_user_id() then user_b_id
+      when user_b_id = get_my_app_user_id() then user_a_id
+    end
+    from friend_links
+    where status = 'active'
+    and (user_a_id = get_my_app_user_id() or user_b_id = get_my_app_user_id())
+  )
+);
+
+-- Unmigrated own profile (migration window only — remove when auth_user_id IS NULL count = 0)
+create policy "Users can select own unmigrated profile"
+on users for select
+using (
+  auth_user_id is null
+  and phone = ('+' || (auth.jwt() ->> 'phone'))
+);
+
+-- Inviter profile on invite acceptance screen (read before friendship is confirmed)
+create policy "Users can select profiles of active inviters"
+on users for select
+using (
+  id in (
+    select inviter_user_id from friend_invites
+    where accepted_at is null
+    and created_at > now() - interval '72 hours'
+  )
+);
+```
+
+**3. Created `get_my_app_user_id()` security definer function:**
+
+Required for the friend profile policy. An inline `SELECT id FROM users WHERE auth_user_id = auth.uid()` inside a `users` RLS policy causes infinite recursion. The `SECURITY DEFINER` function bypasses RLS for its inner query, breaking the cycle.
+
+```sql
+create or replace function get_my_app_user_id()
+returns uuid
+language sql
+security definer
+stable
+as $$
+  select id from users where auth_user_id = auth.uid()
+$$;
+```
+
+**4. Deleted `Allow user lookup by access code` (`USING (true)`).**
+
+### Affected user data recovery
+
+The affected user's original row was intact — all journals and mirrors untouched, `auth_user_id` still null. Once the migration UPDATE policy was in place, their Supabase Auth session was stamped onto the row manually:
+
+```sql
+update users
+set
+  auth_user_id = '<auth_user_id from auth.users>',
+  auth_migrated_at = now()
+where id = '<app user id from public.users>';
+```
+
+No duplicate row was created — `completeProfileSetup`'s UPDATE also hit 406, so the INSERT fallback never ran.
+
+### Cleanup required (post-migration)
+
+Once `SELECT COUNT(*) FROM users WHERE auth_user_id IS NULL` returns 0:
+- Delete policy: `Allow migration for unlinked users` (UPDATE)
+- Delete policy: `Users can select own unmigrated profile` (SELECT)
 
 ---
 
