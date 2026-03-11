@@ -372,6 +372,15 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
                   );
                   await AsyncStorage.setItem(PENDING_JOBS_KEY, JSON.stringify(updated));
                 }
+              } else if (uploadResult.error === 'UPLOAD_TIMEOUT') {
+                // Connection too slow to upload — recording is safe locally, recovery handles retry
+                setIsProcessing(false);
+                Alert.alert(
+                  'Upload timed out.',
+                  'Your recording is saved on your device. Relaunch the app when you\'re on a better connection or WiFi.',
+                  [{ text: 'OK' }]
+                );
+                return;
               } else {
                 storagePath = null; // upload failed, fall through to old flow
               }

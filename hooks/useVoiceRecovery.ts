@@ -209,10 +209,12 @@ export const useVoiceRecovery = (userId: string | null) => {
       storagePath = `${uid}/${job.jobId}.m4a`;
       console.log(`⬆️ [RECOVERY] Re-uploading audio for job ${job.jobId}`);
       const uploadResult = await uploadAudioToStorage(job.localPath, storagePath);
-      if (!uploadResult.success) {
+      const alreadyExists = uploadResult.error?.includes('already exists');
+      if (!uploadResult.success && !alreadyExists) {
         console.error(`❌ [RECOVERY] Re-upload failed for job ${job.jobId}, will retry next launch`);
         return; // Leave in queue
       }
+      // alreadyExists means a prior timed-out upload completed in the background — file is in Storage, proceed
     }
 
     // Create the pending journal and trigger transcription
