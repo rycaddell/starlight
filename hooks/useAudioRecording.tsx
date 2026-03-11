@@ -117,6 +117,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     pollingActiveRef.current = true;
     let pollCount = 0;
     const MAX_POLLS = 60; // 3 min at 3s intervals
+    let hadNetworkErrors = false;
 
     const tick = async () => {
       if (!pollingActiveRef.current) return;
@@ -124,11 +125,19 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       if (pollCount >= MAX_POLLS) {
         setIsProcessing(false);
         stopPolling();
-        Alert.alert(
-          'Still Transcribing',
-          'Your recording was saved. The transcription is still processing — check back in a moment.',
-          [{ text: 'OK' }]
-        );
+        if (hadNetworkErrors) {
+          Alert.alert(
+            'Connection Issue',
+            'We lost connection while checking on your recording. It was saved — check back shortly.',
+            [{ text: 'OK' }]
+          );
+        } else {
+          Alert.alert(
+            'Still Transcribing',
+            'Your recording was saved. The transcription is still processing — check back in a moment.',
+            [{ text: 'OK' }]
+          );
+        }
         return;
       }
 
@@ -160,6 +169,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
           pollTimeoutRef.current = setTimeout(tick, 3000);
         }
       } catch {
+        hadNetworkErrors = true;
         pollCount++;
         pollTimeoutRef.current = setTimeout(tick, 3000);
       }
