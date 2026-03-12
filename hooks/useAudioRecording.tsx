@@ -142,6 +142,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       }
 
       try {
+        if (!supabase) return;
         const { data: journal } = await supabase
           .from('journals')
           .select('transcription_status, content, created_at')

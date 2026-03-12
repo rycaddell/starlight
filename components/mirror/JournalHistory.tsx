@@ -108,7 +108,7 @@ export const JournalHistory: React.FC<JournalHistoryProps> = ({
             {/* Prompt text for guided journals */}
             {journal.prompt_text && (
               <Text style={styles.promptText}>
-                <Text style={styles.promptTextBold}>"{journal.prompt_text}"</Text>
+                <Text style={styles.promptTextBold}>&quot;{journal.prompt_text}&quot;</Text>
               </Text>
             )}
             

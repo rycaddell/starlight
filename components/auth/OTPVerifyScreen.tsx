@@ -121,7 +121,7 @@ export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
             <View style={styles.headerSection}>
               <Text style={styles.title}>Enter your code</Text>
               <Text style={styles.subtitle}>
-                To verify it's you, we sent a 6-digit code to the number ending in {lastFour}
+                To verify it&apos;s you, we sent a 6-digit code to the number ending in {lastFour}
               </Text>
             </View>
 

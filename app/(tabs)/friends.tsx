@@ -58,21 +58,21 @@ function FriendsScreen() {
     // Reload friends data
     loadData();
   });
-  const [friends, setFriends] = useState([]);
-  const [incomingShares, setIncomingShares] = useState([]);
+  const [friends, setFriends] = useState<any[]>([]);
+  const [incomingShares, setIncomingShares] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
 
   // Shared mirror viewer state
   const [viewingMirror, setViewingMirror] = useState(false);
-  const [selectedMirror, setSelectedMirror] = useState(null);
-  const [selectedMirrorId, setSelectedMirrorId] = useState(null);
+  const [selectedMirror, setSelectedMirror] = useState<any>(null);
+  const [selectedMirrorId, setSelectedMirrorId] = useState<string | null>(null);
   const [loadingMirror, setLoadingMirror] = useState(false);
 
   // Day 1 mirror viewer state
   const [viewingDay1Mirror, setViewingDay1Mirror] = useState(false);
-  const [day1MirrorData, setDay1MirrorData] = useState(null);
+  const [day1MirrorData, setDay1MirrorData] = useState<any>(null);
   const [day1SpiritualPlace, setDay1SpiritualPlace] = useState('Resting');
   const [day1SenderName, setDay1SenderName] = useState('friend');
 
@@ -303,7 +303,7 @@ function FriendsScreen() {
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'long',
@@ -312,14 +312,14 @@ function FriendsScreen() {
     });
   };
 
-  const handleViewSharedMirror = async (share) => {
+  const handleViewSharedMirror = async (share: any) => {
     if (!user?.id) return;
 
     setLoadingMirror(true);
 
     try {
       // Fetch full mirror details
-      const result = await getSharedMirrorDetails(share.shareId, user.id);
+      const result = await getSharedMirrorDetails(share.shareId, user.id) as any;
 
       if (!result.success) {
         Alert.alert('Error', result.error || 'Failed to load mirror');
@@ -342,14 +342,14 @@ function FriendsScreen() {
         let spiritualPlace = 'Resting'; // Default
         if (result.mirror.custom_user_id) {
           const day1Result = await getDay1Mirror(result.mirror.custom_user_id);
-          if (day1Result.success && day1Result.progress?.spiritualPlace) {
-            spiritualPlace = day1Result.progress.spiritualPlace;
+          if (day1Result.success && (day1Result.progress as any)?.spiritualPlace) {
+            spiritualPlace = (day1Result.progress as any).spiritualPlace;
           }
         }
 
         setDay1MirrorData(result.mirror);
         setDay1SpiritualPlace(spiritualPlace);
-        setDay1SenderName(result.senderName);
+        setDay1SenderName(result.senderName ?? 'friend');
         setViewingDay1Mirror(true);
         setLoadingMirror(false);
       } else {

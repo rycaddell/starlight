@@ -54,6 +54,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   //    The onAuthStateChange callback is intentionally synchronous — no async
   //    Supabase calls inside it. That avoids the Supabase client deadlock.
   useEffect(() => {
+    if (!supabase) return;
+
     supabase.auth.getSession().then(({ data: { session: initial } }) => {
       setSession(initial);
       setInitialized(true);
@@ -76,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resolveAppUser = async () => {
     setIsLoading(true); // Show spinner while DB lookup is in flight, even on re-resolve
-    if (!session?.user?.id) {
+    if (!supabase || !session?.user?.id) {
       setUser(null);
       setIsNewUser(false);
       setIsLoading(false);

@@ -68,7 +68,7 @@ export const Card: React.FC<CardProps> = (props) => {
 
         {/* Body text */}
         <Text style={styles.journalBody} numberOfLines={2} ellipsizeMode="tail">
-          "{props.bodyText}"
+          &quot;{props.bodyText}&quot;
         </Text>
       </TouchableOpacity>
     );

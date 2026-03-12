@@ -29,7 +29,7 @@ export function NotificationPitchCard({ onEnablePress }: NotificationPitchCardPr
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.heading}>Don't miss out</Text>
+        <Text style={styles.heading}>Don&apos;t miss out</Text>
         <Text style={styles.description}>
           Allow Oxbow to send you push notifications to notify you when friends send their Mirrors to you and to remind you to journal.
         </Text>

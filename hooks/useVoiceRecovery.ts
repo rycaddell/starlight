@@ -113,7 +113,7 @@ export const useVoiceRecovery = (userId: string | null) => {
 
       console.log(`🔍 [RECOVERY] Processing job ${job.jobId} (attempt ${attempts}/${MAX_RECOVERY_ATTEMPTS}), journalId=${job.journalId}`);
 
-      if (job.journalId) {
+      if (job.journalId && supabase) {
         const { data: journal } = await supabase
           .from('journals')
           .select('transcription_status, audio_url')
@@ -184,6 +184,7 @@ export const useVoiceRecovery = (userId: string | null) => {
       return false;
     }
 
+    if (!supabase) return false;
     await supabase
       .from('journals')
       .update({

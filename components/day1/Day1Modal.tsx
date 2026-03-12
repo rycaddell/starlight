@@ -65,7 +65,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     const result = await getDay1Progress(user.id);
 
     if (result.success && result.progress) {
-      const progress = result.progress;
+      const progress = result.progress as any;
 
       // If already completed, don't show modal
       if (progress.completed_at) {
@@ -154,7 +154,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     const tick = async () => {
       try {
         const result = await getDay1Progress(user.id);
-        if (result.success && result.progress?.[field]) {
+        if (result.success && (result.progress as any)?.[field]) {
           // Recovery has linked the journal — reload progress to advance to correct step
           setIsWaitingForRecovery(false);
           await loadProgress();
@@ -183,7 +183,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     if (!user) return;
     setIsGenerating(true);
     try {
-      const generateResult = await generateMiniMirror(user.id);
+      const generateResult = await generateMiniMirror(user.id) as any;
       if (generateResult.success) {
         setMiniMirrorId(generateResult.mirror.id);
         await completeDay1(user.id);

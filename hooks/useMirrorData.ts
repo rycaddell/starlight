@@ -5,7 +5,6 @@ import { useAuth } from '../contexts/AuthContext';
 import {
   getUserJournals,
   getUserJournalCount,
-  insertTestJournalData,
   requestMirrorGeneration,
   checkMirrorGenerationStatus,
   checkCanGenerateMirror,
@@ -17,17 +16,17 @@ type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing'
 
 export const useMirrorData = () => {
   const { user, isAuthenticated } = useAuth();
-  const [journals, setJournals] = useState([]);
+  const [journals, setJournals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [journalCount, setJournalCount] = useState(0);
   const [mirrorState, setMirrorState] = useState<MirrorState>('progress');
-  const [generatedMirror, setGeneratedMirror] = useState(null);
+  const [generatedMirror, setGeneratedMirror] = useState<any>(null);
   const [generationStartTime, setGenerationStartTime] = useState<number | null>(null);
 
   const [hasViewedCurrentMirror, setHasViewedCurrentMirror] = useState(false);
 
   // Polling control
-  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isPollingRef = useRef(false);
   const appState = useRef(AppState.currentState);
 
@@ -48,11 +47,11 @@ export const useMirrorData = () => {
       ]);
 
       if (journalsResult.success) {
-        setJournals(journalsResult.data);
+        setJournals(journalsResult.data ?? []);
       }
 
       if (countResult.success) {
-        setJournalCount(countResult.count);
+        setJournalCount(countResult.count ?? 0);
       }
     } catch (error) {
       console.error('Error loading journals:', error);
@@ -75,21 +74,21 @@ export const useMirrorData = () => {
       ]);
 
       if (journalsResult.success) {
-        setJournals(journalsResult.data);
+        setJournals(journalsResult.data ?? []);
       } else {
         console.error('Failed to load journals:', journalsResult.error);
         Alert.alert('Error', 'Failed to load journal entries. Please try again.');
       }
 
       if (countResult.success) {
-        setJournalCount(countResult.count);
+        setJournalCount(countResult.count ?? 0);
 
         if (!skipStateUpdate &&
             mirrorStateRef.current !== 'generating' &&
             mirrorStateRef.current !== 'completed' &&
             mirrorStateRef.current !== 'viewing') {
-          const threshold = getMirrorThreshold(user);
-          const newState = countResult.count >= threshold ? 'ready' : 'progress';
+          const threshold = getMirrorThreshold(user as any);
+          const newState = (countResult.count ?? 0) >= threshold ? 'ready' : 'progress';
           setMirrorState(newState);
         }
       }
@@ -243,7 +242,7 @@ export const useMirrorData = () => {
             }
 
             const countResult = await getUserJournalCount(user.id);
-            const count = countResult.success ? countResult.count : 0;
+            const count = countResult.success ? (countResult.count ?? 0) : 0;
             const threshold = getMirrorThreshold(user);
             const newState = count >= threshold ? 'ready' : 'progress';
 
@@ -350,7 +349,7 @@ export const useMirrorData = () => {
       return;
     }
 
-    const eligibilityCheck = await checkCanGenerateMirror(user.id, user);
+    const eligibilityCheck = await checkCanGenerateMirror(user.id, user as any);
 
     if (!eligibilityCheck.canGenerate) {
       Alert.alert('Cannot Generate Mirror', eligibilityCheck.reason, [{ text: 'OK' }]);
@@ -362,7 +361,14 @@ export const useMirrorData = () => {
     pollMirrorStatus();
 
     try {
-      const result = await requestMirrorGeneration(user.id);
+      const result = await requestMirrorGeneration(user.id) as {
+      success: boolean;
+      error?: string;
+      mirror?: any;
+      message?: string;
+      errorType?: string;
+      timestamp?: string;
+    };
 
       if (result.success) {
         if (result.mirror) {
@@ -465,7 +471,7 @@ export const useMirrorData = () => {
     setLoading(true);
     try {
       const countResult = await getUserJournalCount(user.id);
-      const count = countResult.success ? countResult.count : 0;
+      const count = countResult.success ? (countResult.count ?? 0) : 0;
 
       const threshold = getMirrorThreshold(user);
       const newState = count >= threshold ? 'ready' : 'progress';
@@ -478,24 +484,6 @@ export const useMirrorData = () => {
       loadJournals();
     } finally {
       setLoading(false);
-    }
-  };
-
-  const insertTestData = async () => {
-    if (!user) {
-      Alert.alert('Error', 'Please sign in to insert test data.');
-      return { success: false };
-    }
-
-    try {
-      const result = await insertTestJournalData(user.id);
-
-      if (result.success) {
-        await loadJournals();
-      }
-      return result;
-    } catch (error) {
-      return { success: false, error: error.message };
     }
   };
 
@@ -517,7 +505,6 @@ export const useMirrorData = () => {
     generateMirror,
     viewMirror,
     closeMirrorViewer,
-    insertTestData,
     setMirrorState,
     setGeneratedMirror,
     stopPolling,

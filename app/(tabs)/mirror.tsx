@@ -42,7 +42,7 @@ function MirrorScreen() {
     try {
       const result = await getUserMirrors(user.id);
       if (result.success) {
-        setUserMirrors(result.data);
+        setUserMirrors(result.data ?? []);
       }
     } catch (error) {
       console.error('❌ Error loading user mirrors:', error);
@@ -71,7 +71,6 @@ function MirrorScreen() {
     generateMirror,
     viewMirror,
     closeMirrorViewer,
-    insertTestData,
     setMirrorState,
     setGeneratedMirror,
     checkGenerationStatusOnFocus,
@@ -443,7 +442,7 @@ function MirrorScreen() {
 
   // All mirrors for the modal (sorted most recent first), derived directly from the mirrors table
   const allMirrors = React.useMemo(() => {
-    const regularMirrors = userMirrors
+    const regularMirrors: any[] = userMirrors
       .filter(m => m.mirror_type !== 'day_1')
       .map(m => {
         let biblicalCharacter = null;

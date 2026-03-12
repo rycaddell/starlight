@@ -124,6 +124,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
 
     console.log('🔄 Extracting focus theme...');
     try {
+      if (!supabase) return;
       const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
       const edgeFunctionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/extract-focus-theme`;
       const { data: { session } } = await supabase.auth.getSession();
@@ -133,7 +134,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${session?.access_token}`,
-          'apikey': anonKey,
+          'apikey': anonKey ?? '',
         },
         body: JSON.stringify({ focusText: focusAreasText }),
       });

@@ -35,7 +35,7 @@ function JournalScreen() {
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
 
   const { journalCount, loadJournals, mirrorState, generateMirror, viewMirror, generatedMirror, checkGenerationStatusOnFocus } = useMirrorData();
-  const mirrorThreshold = getMirrorThreshold(user);
+  const mirrorThreshold = getMirrorThreshold(user as any);
 
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
   const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
@@ -272,7 +272,7 @@ function JournalScreen() {
             [{ text: 'OK' }]
           );
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ [MAIN-PERMISSION] Error requesting permission:', error);
         Alert.alert(
           'Permission Error',

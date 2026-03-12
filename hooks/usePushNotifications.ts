@@ -10,6 +10,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -17,8 +19,8 @@ export function usePushNotifications(userId: string | null) {
   const [expoPushToken, setExpoPushToken] = useState<string | null>(null);
   const [notification, setNotification] = useState<Notifications.Notification | null>(null);
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied' | 'undetermined'>('undetermined');
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription | undefined>(undefined);
+  const responseListener = useRef<Notifications.Subscription | undefined>(undefined);
 
   // Register for push notifications
   const registerForPushNotificationsAsync = async () => {
@@ -70,6 +72,7 @@ export function usePushNotifications(userId: string | null) {
   // Save push token to database
   const savePushTokenToDatabase = async (token: string, userId: string) => {
     try {
+      if (!supabase) return false;
       const { error } = await supabase
         .from('users')
         .update({ push_token: token })

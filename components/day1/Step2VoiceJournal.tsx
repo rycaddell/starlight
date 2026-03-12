@@ -185,7 +185,7 @@ export const Step2VoiceJournal: React.FC<Step2VoiceJournalProps> = ({
       {/* Bottom half: Question and voice recording */}
       <ScrollView style={styles.bottomHalf} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.question}>
-          What's going on?
+          What&apos;s going on?
         </Text>
         <Text style={styles.subtext}>Share why you chose your answer.</Text>
 

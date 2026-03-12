@@ -27,7 +27,6 @@ export const TextJournalInput: React.FC<TextJournalInputProps> = ({
         onChangeText={setJournalText}
         returnKeyType="default"
         scrollEnabled={true}
-        showsVerticalScrollIndicator={false}
         textAlignVertical="top"
       />
     </View>

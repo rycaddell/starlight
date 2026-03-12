@@ -37,7 +37,7 @@ const JournalCard: React.FC<JournalCardProps> = ({ date, text }) => {
       style={styles.journalCard}
     >
       <Text style={styles.journalLabel}>Journal Entry - {date}</Text>
-      <Text style={styles.journalText}>"{text}"</Text>
+      <Text style={styles.journalText}>&quot;{text}&quot;</Text>
     </Animated.View>
   );
 };
@@ -47,7 +47,7 @@ export const NarrativeOnboardingScreen: React.FC = () => {
     useOnboarding();
   const { user, isNewUser, completeProfileSetup } = useAuth();
   const [nameInput, setNameInput] = useState(userName);
-  const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [autoAdvanceTimer, setAutoAdvanceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
   const [stepStartTime, setStepStartTime] = useState<number>(Date.now());
 
   // Track when step changes
@@ -114,6 +114,7 @@ export const NarrativeOnboardingScreen: React.FC = () => {
 
     // Existing user — update display_name only (no AsyncStorage needed, session is in SecureStore)
     try {
+      if (!supabase) return;
       console.log('💾 Saving display name for user:', user.id);
       const { error } = await supabase
         .from('users')
@@ -275,7 +276,7 @@ export const NarrativeOnboardingScreen: React.FC = () => {
       case 'pattern-revealed':
         return (
           <Animated.View entering={FadeIn.duration(400)} style={styles.contentContainer}>
-            <Text style={styles.header}>We can see God's leading across our moments</Text>
+            <Text style={styles.header}>We can see God&apos;s leading across our moments</Text>
             <Animated.Image
               source={PRODUCT_SCREENSHOT}
               style={styles.productScreenshot}

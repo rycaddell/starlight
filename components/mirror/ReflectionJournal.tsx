@@ -69,7 +69,7 @@ export const ReflectionJournal: React.FC<ReflectionJournalProps> = ({
           {/* Question 1: Focus */}
           <View style={styles.questionBlock}>
             <Text style={styles.questionLabel}>
-              What's standing out as your next step to become more like Jesus?
+              What&apos;s standing out as your next step to become more like Jesus?
             </Text>
             <View style={styles.readOnlyBox}>
               <Text style={styles.readOnlyText}>{initialFocus}</Text>
@@ -107,7 +107,7 @@ export const ReflectionJournal: React.FC<ReflectionJournalProps> = ({
         {/* Question 1: Focus */}
         <View style={styles.questionBlock}>
           <Text style={styles.questionLabel}>
-            What's standing out as your next step to become more like Jesus?
+            What&apos;s standing out as your next step to become more like Jesus?
           </Text>
           <TextInput
             style={styles.input}

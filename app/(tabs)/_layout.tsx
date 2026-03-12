@@ -26,7 +26,7 @@ export default function TabLayout() {
   // Check if user has any mirrors
   useEffect(() => {
     const checkForMirrors = async () => {
-      if (!user) {
+      if (!user || !supabase) {
         setHasMirrors(false);
         return;
       }
@@ -51,7 +51,7 @@ export default function TabLayout() {
     checkForMirrors();
 
     // Set up real-time subscription for new mirrors
-    if (user) {
+    if (user && supabase) {
       const subscription = supabase
         .channel('mirrors_changes')
         .on(
