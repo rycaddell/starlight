@@ -75,12 +75,12 @@ Implement in this order. Items 1–6 are targeted, localized fixes. Item 10 (Rea
 
 ### Tier 2 — Process Gates (Prevents Future Regressions)
 
-| Fix | What It Solves |
-|-----|---------------|
-| Add `tsc --noEmit` script to `package.json` | Catches TypeScript type errors before builds |
-| Add Husky pre-commit hook (lint + type-check) | Blocks broken code from being committed |
-| Add GitHub Actions CI workflow | Validates every push; blocks bad builds |
-| Set up edge function log monitoring (Logflare or Axiom) | Visibility into server-side transcription failures |
+| Fix | What It Solves | Status |
+|-----|---------------|--------|
+| Add `tsc --noEmit` script to `package.json` | Catches TypeScript type errors before builds | ✅ Done |
+| Add Husky pre-commit hook (lint + type-check) | Blocks broken code from being committed | ✅ Done |
+| Add GitHub Actions CI workflow | Validates every push; blocks bad builds | ✅ Done |
+| Set up edge function log monitoring (Logflare or Axiom) | Visibility into server-side transcription failures | ⬜ Manual setup required (see below) |
 
 **Important limitation:** The TypeScript gate only covers `.ts`/`.tsx` files. The entire `lib/supabase/` data layer is plain JavaScript (11 files). Type errors in the most critical network paths won't be caught by CI until those files are migrated to TypeScript (Tier 3, item 18 in CODE-QUALITY-AUDIT.md). The gate is still valuable — it just has a known blind spot.
 
