@@ -1,4 +1,4 @@
-// lib/supabase/mirrorShares.js
+// lib/supabase/mirrorShares.ts
 // Service layer for sharing mirrors with friends
 
 import { supabase } from './client';
@@ -6,16 +6,17 @@ import * as Sentry from '@sentry/react-native';
 
 /**
  * Share a mirror with a friend
- * @param {string} mirrorId - UUID of mirror to share
- * @param {string} senderUserId - UUID of user sharing the mirror
- * @param {string} recipientUserId - UUID of friend receiving the mirror
- * @returns {Promise<{success: boolean, shareId?: string, error?: string}>}
  */
-export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
+export async function shareMirror(
+  mirrorId: string,
+  senderUserId: string,
+  recipientUserId: string
+): Promise<{ success: boolean; shareId?: string; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('📤 Sharing mirror:', mirrorId, 'to:', recipientUserId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'mirrorShares',
       message: 'Sharing mirror with friend',
@@ -33,7 +34,6 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
     if (mirrorError || !mirror) {
       console.error('❌ Mirror not found:', mirrorError);
 
-      // Capture error
       Sentry.captureException(new Error('Mirror not found during share'), {
         tags: { component: 'mirrorShares', action: 'shareMirror' },
         contexts: {
@@ -51,7 +51,6 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
     if (mirror.custom_user_id !== senderUserId) {
       console.error('❌ User does not own this mirror');
 
-      // Capture unauthorized share attempt
       Sentry.captureException(new Error('Unauthorized mirror share attempt'), {
         tags: { component: 'mirrorShares', action: 'shareMirror' },
         contexts: {
@@ -72,7 +71,7 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
       .select('id')
       .or(
         `and(user_a_id.eq.${senderUserId},user_b_id.eq.${recipientUserId}),` +
-        `and(user_a_id.eq.${recipientUserId},user_b_id.eq.${senderUserId})`
+          `and(user_a_id.eq.${recipientUserId},user_b_id.eq.${senderUserId})`
       )
       .eq('status', 'active')
       .maybeSingle();
@@ -115,7 +114,6 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
     if (shareError) {
       console.error('❌ Error creating share:', shareError);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to create mirror share'), {
         tags: { component: 'mirrorShares', action: 'shareMirror' },
         contexts: {
@@ -133,7 +131,6 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
 
     console.log('✅ Mirror shared successfully:', share.id);
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'mirrorShares',
       message: 'Mirror shared successfully',
@@ -160,8 +157,8 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${anonKey}`,
-            'apikey': anonKey,
+            Authorization: `Bearer ${anonKey}`,
+            apikey: anonKey ?? '',
           },
           body: JSON.stringify({
             userId: recipientUserId,
@@ -181,16 +178,15 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
       } else {
         console.log('✅ Push notification sent');
       }
-    } catch (notifError) {
+    } catch (notifError: any) {
       // Don't fail the share if notification fails
       console.warn('⚠️ Error sending push notification:', notifError.message);
     }
 
     return { success: true, shareId: share.id };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in shareMirror:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'mirrorShares', action: 'shareMirror', type: 'unexpected' },
       contexts: {
@@ -208,10 +204,12 @@ export async function shareMirror(mirrorId, senderUserId, recipientUserId) {
 
 /**
  * Get mirrors shared with the user (incoming)
- * @param {string} userId - UUID of user
- * @returns {Promise<{success: boolean, shares?: Array, error?: string}>}
  */
-export async function fetchIncomingShares(userId) {
+export async function fetchIncomingShares(
+  userId: string
+): Promise<{ success: boolean; shares?: any[]; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('📥 Fetching incoming shares for:', userId);
 
@@ -244,7 +242,6 @@ export async function fetchIncomingShares(userId) {
     if (error) {
       console.error('❌ Error fetching incoming shares:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to fetch incoming shares'), {
         tags: { component: 'mirrorShares', action: 'fetchIncoming' },
         contexts: {
@@ -258,7 +255,7 @@ export async function fetchIncomingShares(userId) {
       return { success: false, error: error.message };
     }
 
-    const formattedShares = (shares || []).map((share) => ({
+    const formattedShares = (shares || []).map((share: any) => ({
       shareId: share.id,
       mirrorId: share.mirror_id,
       senderId: share.sender_user_id,
@@ -278,7 +275,7 @@ export async function fetchIncomingShares(userId) {
 
     console.log(`✅ Found ${formattedShares.length} incoming shares`);
     return { success: true, shares: formattedShares };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in fetchIncomingShares:', error);
     return { success: false, error: error.message };
   }
@@ -286,10 +283,12 @@ export async function fetchIncomingShares(userId) {
 
 /**
  * Get mirrors the user has shared with others (outgoing)
- * @param {string} userId - UUID of user
- * @returns {Promise<{success: boolean, shares?: Array, error?: string}>}
  */
-export async function fetchSentShares(userId) {
+export async function fetchSentShares(
+  userId: string
+): Promise<{ success: boolean; shares?: any[]; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('📤 Fetching sent shares for:', userId);
 
@@ -320,7 +319,7 @@ export async function fetchSentShares(userId) {
       return { success: false, error: error.message };
     }
 
-    const formattedShares = (shares || []).map((share) => {
+    const formattedShares = (shares || []).map((share: any) => {
       // Extract first theme title for preview
       const firstTheme = share.mirrors.screen_1_themes?.themes?.[0];
       const mirrorPreview = firstTheme?.name || 'Mirror';
@@ -338,7 +337,7 @@ export async function fetchSentShares(userId) {
 
     console.log(`✅ Found ${formattedShares.length} sent shares`);
     return { success: true, shares: formattedShares };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in fetchSentShares:', error);
     return { success: false, error: error.message };
   }
@@ -346,10 +345,12 @@ export async function fetchSentShares(userId) {
 
 /**
  * Get count of unviewed incoming shares (for badge)
- * @param {string} userId - UUID of user
- * @returns {Promise<{success: boolean, count?: number, error?: string}>}
  */
-export async function getUnviewedSharesCount(userId) {
+export async function getUnviewedSharesCount(
+  userId: string
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { count, error } = await supabase
       .from('mirror_shares')
@@ -363,7 +364,7 @@ export async function getUnviewedSharesCount(userId) {
     }
 
     return { success: true, count: count || 0 };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getUnviewedSharesCount:', error);
     return { success: false, error: error.message };
   }
@@ -371,11 +372,13 @@ export async function getUnviewedSharesCount(userId) {
 
 /**
  * Get full mirror details for a shared mirror
- * @param {string} shareId - UUID of mirror_share
- * @param {string} userId - UUID of requesting user (must be sender or recipient)
- * @returns {Promise<{success: boolean, mirror?: Object, senderName?: string, error?: string}>}
  */
-export async function getSharedMirrorDetails(shareId, userId) {
+export async function getSharedMirrorDetails(
+  shareId: string,
+  userId: string
+): Promise<{ success: boolean; mirror?: any; senderName?: string; sharedAt?: string; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🔍 Fetching shared mirror details:', shareId);
 
@@ -411,7 +414,6 @@ export async function getSharedMirrorDetails(shareId, userId) {
     if (error || !share) {
       console.error('❌ Share not found:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Shared mirror not found'), {
         tags: { component: 'mirrorShares', action: 'getDetails' },
         contexts: {
@@ -427,13 +429,9 @@ export async function getSharedMirrorDetails(shareId, userId) {
     }
 
     // Verify user is sender or recipient
-    if (
-      share.sender_user_id !== userId &&
-      share.recipient_user_id !== userId
-    ) {
+    if (share.sender_user_id !== userId && share.recipient_user_id !== userId) {
       console.error('❌ User not authorized to view this share');
 
-      // Capture unauthorized access attempt
       Sentry.captureException(new Error('Unauthorized shared mirror access'), {
         tags: { component: 'mirrorShares', action: 'getDetails' },
         contexts: {
@@ -450,24 +448,26 @@ export async function getSharedMirrorDetails(shareId, userId) {
     }
 
     console.log('✅ Shared mirror details retrieved');
+    const m = share.mirrors as any;
+    const u = share.users as any;
     return {
       success: true,
       mirror: {
-        id: share.mirrors.id,
-        custom_user_id: share.mirrors.custom_user_id,
-        mirror_type: share.mirrors.mirror_type,
-        screen_1_themes: share.mirrors.screen_1_themes,
-        screen_2_biblical: share.mirrors.screen_2_biblical,
-        screen_3_observations: share.mirrors.screen_3_observations,
-        screen_4_suggestions: share.mirrors.screen_4_suggestions,
-        created_at: share.mirrors.created_at,
-        journal_count: share.mirrors.journal_count,
-        focus_areas: share.mirrors.focus_areas,
+        id: m.id,
+        custom_user_id: m.custom_user_id,
+        mirror_type: m.mirror_type,
+        screen_1_themes: m.screen_1_themes,
+        screen_2_biblical: m.screen_2_biblical,
+        screen_3_observations: m.screen_3_observations,
+        screen_4_suggestions: m.screen_4_suggestions,
+        created_at: m.created_at,
+        journal_count: m.journal_count,
+        focus_areas: m.focus_areas,
       },
-      senderName: share.users?.display_name || 'Unknown',
+      senderName: u?.display_name || 'Unknown',
       sharedAt: share.created_at,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getSharedMirrorDetails:', error);
     return { success: false, error: error.message };
   }
@@ -475,15 +475,16 @@ export async function getSharedMirrorDetails(shareId, userId) {
 
 /**
  * Mark a shared mirror as viewed by recipient
- * @param {string} shareId - UUID of mirror_share
- * @param {string} userId - UUID of user viewing (must be recipient)
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function markShareAsViewed(shareId, userId) {
+export async function markShareAsViewed(
+  shareId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('👁️ Marking share as viewed:', shareId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'mirrorShares',
       message: 'Marking share as viewed',
@@ -501,7 +502,6 @@ export async function markShareAsViewed(shareId, userId) {
     if (error) {
       console.error('❌ Error marking share as viewed:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to mark share as viewed'), {
         tags: { component: 'mirrorShares', action: 'markViewed' },
         contexts: {
@@ -518,10 +518,9 @@ export async function markShareAsViewed(shareId, userId) {
 
     console.log('✅ Share marked as viewed');
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in markShareAsViewed:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'mirrorShares', action: 'markViewed', type: 'unexpected' },
       contexts: { mirrorShares: { shareId, userId } },
@@ -533,12 +532,14 @@ export async function markShareAsViewed(shareId, userId) {
 
 /**
  * Check if user can share a specific mirror with a specific friend
- * @param {string} mirrorId - UUID of mirror
- * @param {string} senderUserId - UUID of sender
- * @param {string} recipientUserId - UUID of recipient
- * @returns {Promise<{canShare: boolean, reason?: string}>}
  */
-export async function canShareMirror(mirrorId, senderUserId, recipientUserId) {
+export async function canShareMirror(
+  mirrorId: string,
+  senderUserId: string,
+  recipientUserId: string
+): Promise<{ canShare: boolean; reason?: string }> {
+  if (!supabase) return { canShare: false, reason: 'Supabase not initialized' };
+
   try {
     // Check if already shared
     const { data: existingShare } = await supabase
@@ -561,7 +562,7 @@ export async function canShareMirror(mirrorId, senderUserId, recipientUserId) {
       .select('id')
       .or(
         `and(user_a_id.eq.${senderUserId},user_b_id.eq.${recipientUserId}),` +
-        `and(user_a_id.eq.${recipientUserId},user_b_id.eq.${senderUserId})`
+          `and(user_a_id.eq.${recipientUserId},user_b_id.eq.${senderUserId})`
       )
       .eq('status', 'active')
       .maybeSingle();
@@ -574,7 +575,7 @@ export async function canShareMirror(mirrorId, senderUserId, recipientUserId) {
     }
 
     return { canShare: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in canShareMirror:', error);
     return { canShare: false, reason: error.message };
   }

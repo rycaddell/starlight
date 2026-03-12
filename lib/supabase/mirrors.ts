@@ -1,7 +1,7 @@
-// lib/supabase/mirrors.js - UPDATED FOR SERVER-SIDE GENERATION
+// lib/supabase/mirrors.ts - UPDATED FOR SERVER-SIDE GENERATION
 import { supabase } from './client';
 import * as Sentry from '@sentry/react-native';
-import { MIRROR_THRESHOLD, getMirrorThreshold } from '../config/constants';
+import { getMirrorThreshold } from '../config/constants';
 
 // Edge Function URL
 const EDGE_FUNCTION_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-mirror';
@@ -14,7 +14,11 @@ const EDGE_FUNCTION_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1
  * Request Mirror generation from Edge Function
  * Returns immediately - generation happens in background
  */
-export const requestMirrorGeneration = async (customUserId) => {
+export const requestMirrorGeneration = async (
+  customUserId: string
+): Promise<{ success: boolean; mirror?: any; message?: string; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   // Add Sentry breadcrumb
   Sentry.addBreadcrumb({
     category: 'mirror',
@@ -24,7 +28,9 @@ export const requestMirrorGeneration = async (customUserId) => {
   });
 
   try {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
     // Call Edge Function
@@ -32,8 +38,8 @@ export const requestMirrorGeneration = async (customUserId) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-        'apikey': anonKey,
+        Authorization: `Bearer ${session?.access_token}`,
+        apikey: anonKey ?? '',
       },
       body: JSON.stringify({}),
     });
@@ -42,14 +48,13 @@ export const requestMirrorGeneration = async (customUserId) => {
     const responseText = await response.text();
 
     // Try to parse as JSON
-    let data;
+    let data: any;
     try {
       data = responseText ? JSON.parse(responseText) : null;
-    } catch (parseError) {
+    } catch (parseError: any) {
       console.error('❌ Failed to parse response as JSON:', parseError);
       console.error('Response text was:', responseText);
 
-      // Capture JSON parse error
       Sentry.captureException(parseError, {
         tags: { component: 'mirrors', action: 'requestGeneration' },
         contexts: {
@@ -63,14 +68,13 @@ export const requestMirrorGeneration = async (customUserId) => {
 
       return {
         success: false,
-        error: `Server returned invalid response: ${responseText.substring(0, 100)}`
+        error: `Server returned invalid response: ${responseText.substring(0, 100)}`,
       };
     }
 
     if (!response.ok) {
       console.error('❌ Edge Function error:', data);
 
-      // Capture generation request failure
       Sentry.captureException(new Error('Mirror generation request failed'), {
         tags: { component: 'mirrors', action: 'requestGeneration' },
         contexts: {
@@ -84,11 +88,10 @@ export const requestMirrorGeneration = async (customUserId) => {
 
       return {
         success: false,
-        error: data?.error || 'Mirror generation request failed'
+        error: data?.error || 'Mirror generation request failed',
       };
     }
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'mirror',
       message: 'Mirror generation requested successfully',
@@ -101,11 +104,9 @@ export const requestMirrorGeneration = async (customUserId) => {
       mirror: data?.mirror,
       message: 'Mirror generated successfully!',
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error requesting Mirror generation:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'mirrors', action: 'requestGeneration', type: 'unexpected' },
       contexts: { mirror: { customUserId } },
@@ -113,7 +114,7 @@ export const requestMirrorGeneration = async (customUserId) => {
 
     return {
       success: false,
-      error: error.message || 'Failed to request Mirror generation'
+      error: error.message || 'Failed to request Mirror generation',
     };
   }
 };
@@ -121,7 +122,20 @@ export const requestMirrorGeneration = async (customUserId) => {
 /**
  * Check Mirror generation status by polling the latest request
  */
-export const checkMirrorGenerationStatus = async (customUserId) => {
+export const checkMirrorGenerationStatus = async (
+  customUserId: string
+): Promise<{
+  success: boolean;
+  status?: string;
+  mirror?: any;
+  content?: any;
+  requestedAt?: string;
+  completedAt?: string;
+  error?: string | null;
+  errorType?: string | null;
+}> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     // Get the latest generation request for this user
     const { data, error } = await supabase
@@ -134,7 +148,6 @@ export const checkMirrorGenerationStatus = async (customUserId) => {
     if (error) {
       console.error('❌ Error checking status:', error);
 
-      // Capture status check error
       Sentry.captureException(new Error('Failed to check mirror generation status'), {
         tags: { component: 'mirrors', action: 'checkStatus' },
         contexts: {
@@ -187,14 +200,15 @@ export const checkMirrorGenerationStatus = async (customUserId) => {
       status: requestData.status, // 'pending', 'processing', 'completed', 'failed'
       requestedAt: requestData.requested_at,
       completedAt: requestData.completed_at,
-      error: requestData.status === 'failed' ? (requestData.error_message || 'Mirror generation failed') : null,
+      error:
+        requestData.status === 'failed'
+          ? requestData.error_message || 'Mirror generation failed'
+          : null,
       errorType: requestData.error_type || null,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error checking Mirror status:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'mirrors', action: 'checkStatus', type: 'unexpected' },
       contexts: { mirror: { customUserId } },
@@ -208,7 +222,12 @@ export const checkMirrorGenerationStatus = async (customUserId) => {
  * Check if user can generate a Mirror
  * Returns: { canGenerate: boolean, reason: string, journalCount: number }
  */
-export const checkCanGenerateMirror = async (customUserId, user = null) => {
+export const checkCanGenerateMirror = async (
+  customUserId: string,
+  user: { group_name?: string | null } | null = null
+): Promise<{ canGenerate: boolean; reason: string; journalCount: number }> => {
+  if (!supabase) return { canGenerate: false, reason: 'Supabase not initialized', journalCount: 0 };
+
   try {
     // Get user data if not provided (for group threshold)
     let userData = user;
@@ -263,8 +282,7 @@ export const checkCanGenerateMirror = async (customUserId, user = null) => {
       reason: 'Ready to generate Mirror',
       journalCount,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in checkCanGenerateMirror:', error);
     return {
       canGenerate: false,
@@ -281,7 +299,11 @@ export const checkCanGenerateMirror = async (customUserId, user = null) => {
 /**
  * Get existing Mirror by ID
  */
-export const getMirrorById = async (mirrorId) => {
+export const getMirrorById = async (
+  mirrorId: string
+): Promise<{ success: boolean; mirror?: any; content?: any; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { data: mirror, error } = await supabase
       .from('mirrors')
@@ -292,7 +314,6 @@ export const getMirrorById = async (mirrorId) => {
     if (error) {
       console.error('❌ Error loading Mirror:', error);
 
-      // Capture mirror loading error
       Sentry.captureException(new Error('Failed to load mirror'), {
         tags: { component: 'mirrors', action: 'load' },
         contexts: {
@@ -307,7 +328,6 @@ export const getMirrorById = async (mirrorId) => {
     }
 
     if (!mirror) {
-      // Capture mirror not found
       Sentry.captureException(new Error('Mirror not found'), {
         tags: { component: 'mirrors', action: 'load' },
         contexts: { mirror: { mirrorId } },
@@ -321,19 +341,17 @@ export const getMirrorById = async (mirrorId) => {
       screen1_themes: mirror.screen_1_themes,
       screen2_biblical: mirror.screen_2_biblical,
       screen3_observations: mirror.screen_3_observations,
-      screen4_suggestions: mirror.screen_4_suggestions
+      screen4_suggestions: mirror.screen_4_suggestions,
     };
 
     return {
       success: true,
       mirror: mirror,
-      content: mirrorContent
+      content: mirrorContent,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getMirrorById:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'mirrors', action: 'load', type: 'unexpected' },
       contexts: { mirror: { mirrorId } },
@@ -348,25 +366,30 @@ export const getMirrorById = async (mirrorId) => {
 // ============================================================================
 
 // Edge Function URL for onboarding preview
-const ONBOARDING_PREVIEW_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-onboarding-preview';
+const ONBOARDING_PREVIEW_URL =
+  'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-onboarding-preview';
 
 /**
  * Generate onboarding preview using Edge Function
  * Returns preview content or fallback on error
  */
-export const generateOnboardingPreview = async (journalContent) => {
+export const generateOnboardingPreview = async (
+  journalContent: string
+): Promise<{ success: boolean; content: any; usedFallback: boolean; error?: string }> => {
+  if (!supabase) {
+    return { success: false, content: null, usedFallback: true, error: 'Supabase not initialized' };
+  }
+
   try {
-    // Get the anon key for authentication
-    const { data: { session } } = await supabase.auth.getSession();
     const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-    
+
     // Call Edge Function
     const response = await fetch(ONBOARDING_PREVIEW_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${anonKey}`,
-        'apikey': anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey ?? '',
       },
       body: JSON.stringify({ journalContent }),
     });
@@ -377,37 +400,38 @@ export const generateOnboardingPreview = async (journalContent) => {
       return {
         success: true,
         content: data.content,
-        usedFallback: false
+        usedFallback: false,
       };
     }
 
     // If not successful, use fallback content
     console.error('⚠️ Edge Function returned error, using fallback');
-    return { 
-      success: true, 
+    return {
+      success: true,
       content: data.fallback,
-      usedFallback: true 
+      usedFallback: true,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error requesting preview generation:', error);
-    
+
     // Return fallback content on network error
-    return { 
-      success: true, 
+    return {
+      success: true,
       content: {
         biblical_profile: {
-          character: "David",
-          connection: "Like David in the Psalms, you're bringing your honest thoughts and feelings to God. David didn't hide his struggles or doubts - he brought them into the light through writing and prayer. Your willingness to reflect like this is already a step toward spiritual growth."
+          character: 'David',
+          connection:
+            "Like David in the Psalms, you're bringing your honest thoughts and feelings to God. David didn't hide his struggles or doubts - he brought them into the light through writing and prayer. Your willingness to reflect like this is already a step toward spiritual growth.",
         },
         encouraging_verse: {
-          reference: "Psalm 139:23-24",
-          text: "Search me, God, and know my heart; test me and know my anxious thoughts. See if there is any offensive way in me, and lead me in the way everlasting.",
-          application: "This verse reminds us that honest self-reflection before God is not just acceptable - it's invited. As you continue journaling, you're creating space for God to reveal patterns, growth areas, and His leading in your life."
-        }
+          reference: 'Psalm 139:23-24',
+          text: 'Search me, God, and know my heart; test me and know my anxious thoughts. See if there is any offensive way in me, and lead me in the way everlasting.',
+          application:
+            "This verse reminds us that honest self-reflection before God is not just acceptable - it's invited. As you continue journaling, you're creating space for God to reveal patterns, growth areas, and His leading in your life.",
+        },
       },
       usedFallback: true,
-      error: error.message 
+      error: error.message,
     };
   }
 };
@@ -416,11 +440,17 @@ export const generateOnboardingPreview = async (journalContent) => {
  * Get all completed mirrors for a user, ordered by most recent first.
  * Queries the mirrors table directly — independent of whether journals still exist.
  */
-export const getUserMirrors = async (userId) => {
+export const getUserMirrors = async (
+  userId: string
+): Promise<{ success: boolean; data?: any[]; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { data, error } = await supabase
       .from('mirrors')
-      .select('id, created_at, screen_2_biblical, reflection_focus, reflection_action, mirror_type, focus_areas, status, has_been_viewed')
+      .select(
+        'id, created_at, screen_2_biblical, reflection_focus, reflection_action, mirror_type, focus_areas, status, has_been_viewed'
+      )
       .eq('custom_user_id', userId)
       .eq('status', 'completed')
       .order('created_at', { ascending: false });
@@ -431,13 +461,17 @@ export const getUserMirrors = async (userId) => {
     }
 
     return { success: true, data: data || [] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Exception loading user mirrors:', error);
     return { success: false, error: error.message };
   }
 };
 
-export async function markMirrorAsViewed(mirrorId) {
+export async function markMirrorAsViewed(
+  mirrorId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { error } = await supabase
       .from('mirrors')
@@ -450,22 +484,27 @@ export async function markMirrorAsViewed(mirrorId) {
     }
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Exception marking mirror as viewed:', error);
     return { success: false, error: error.message };
   }
-};
+}
 
 /**
  * Save reflection focus for a mirror
  */
-export const saveReflectionFocus = async (mirrorId, reflectionText) => {
+export const saveReflectionFocus = async (
+  mirrorId: string,
+  reflectionText: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { error } = await supabase
       .from('mirrors')
       .update({
         reflection_focus: reflectionText,
-        reflection_completed_at: new Date().toISOString()
+        reflection_completed_at: new Date().toISOString(),
       })
       .eq('id', mirrorId);
 
@@ -475,7 +514,7 @@ export const saveReflectionFocus = async (mirrorId, reflectionText) => {
     }
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Exception saving reflection:', error);
     return { success: false, error: error.message };
   }

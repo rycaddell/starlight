@@ -1,4 +1,4 @@
-// lib/supabase/transcription.js
+// lib/supabase/transcription.ts
 import { supabase } from './client';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sentry from '@sentry/react-native';
@@ -13,12 +13,11 @@ const TRANSCRIBE_URL = `${SUPABASE_URL}/functions/v1/transcribe-audio`;
  * Upload a local audio file to Supabase Storage.
  * Uses FileSystem.uploadAsync (iOS URL loading system) instead of fetch,
  * which is more resilient to app backgrounding mid-upload.
- *
- * @param {string} localPath - Persistent local file path
- * @param {string} storagePath - Destination path in bucket: "{customUserId}/{jobId}.m4a"
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export const uploadAudioToStorage = async (localPath, storagePath) => {
+export const uploadAudioToStorage = async (
+  localPath: string,
+  storagePath: string
+): Promise<{ success: boolean; error?: string }> => {
   console.log('☁️ Uploading audio to Storage:', storagePath);
 
   Sentry.addBreadcrumb({
@@ -32,7 +31,7 @@ export const uploadAudioToStorage = async (localPath, storagePath) => {
     const uploadUrl = `${SUPABASE_URL}/storage/v1/object/audio-recordings/${storagePath}`;
 
     const UPLOAD_TIMEOUT_MS = 30000;
-    const timeoutPromise = new Promise((_, reject) =>
+    const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), UPLOAD_TIMEOUT_MS)
     );
 
@@ -42,7 +41,7 @@ export const uploadAudioToStorage = async (localPath, storagePath) => {
         uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
         headers: {
           Authorization: `Bearer ${ANON_KEY}`,
-          apikey: ANON_KEY,
+          apikey: ANON_KEY ?? '',
           'Content-Type': 'audio/m4a',
         },
       }),
@@ -63,7 +62,7 @@ export const uploadAudioToStorage = async (localPath, storagePath) => {
     });
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     const isTimeout = error.message === 'UPLOAD_TIMEOUT';
     Sentry.captureException(error, {
       tags: { component: 'transcription', action: 'upload', isTimeout },
@@ -77,8 +76,21 @@ export const uploadAudioToStorage = async (localPath, storagePath) => {
  * Create a pending journal row before transcription starts.
  * The edge function will populate content and mark it completed.
  */
-export const createPendingJournal = async ({ customUserId, storagePath, localPath, promptText, entryType }) => {
-  const { supabase } = await import('./client');
+export const createPendingJournal = async ({
+  customUserId,
+  storagePath,
+  localPath,
+  promptText,
+  entryType,
+}: {
+  customUserId: string;
+  storagePath: string;
+  localPath: string;
+  promptText: string | null;
+  entryType: string | null;
+}): Promise<any> => {
+  if (!supabase) throw new Error('Supabase not initialized');
+
   const { data, error } = await supabase
     .from('journals')
     .insert({
@@ -110,18 +122,22 @@ export const createPendingJournal = async ({ customUserId, storagePath, localPat
  * Fire the transcribe-audio edge function with a journalId.
  * Does NOT await the result — server handles everything.
  */
-export const triggerTranscription = async (journalId) => {
+export const triggerTranscription = async (journalId: string): Promise<void> => {
+  if (!supabase) return;
+
   console.log('🚀 Triggering transcription for journal:', journalId);
-  const { data: { session } } = await supabase.auth.getSession();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   fetch(TRANSCRIBE_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${session?.access_token}`,
-      apikey: ANON_KEY,
+      apikey: ANON_KEY ?? '',
     },
     body: JSON.stringify({ journalId }),
-  }).catch((err) => {
+  }).catch((err: any) => {
     // Non-fatal — client polling will detect pending status and can retry
     console.warn('⚠️ Failed to trigger transcription edge function:', err.message);
   });
@@ -129,14 +145,13 @@ export const triggerTranscription = async (journalId) => {
 
 /**
  * Transcribe audio using Edge Function (server-side Whisper)
- * @param {string} audioUri - Local file URI of the audio recording
- * @returns {Promise<{success: boolean, text?: string, error?: string}>}
  */
-export const transcribeAudio = async (audioUri) => {
+export const transcribeAudio = async (
+  audioUri: string
+): Promise<{ success: boolean; text?: string; error?: string }> => {
   console.log('🎤 Transcribing audio via Edge Function...');
   console.log('📁 Audio URI:', audioUri);
 
-  // Add Sentry breadcrumb
   Sentry.addBreadcrumb({
     category: 'transcription',
     message: 'Starting audio transcription',
@@ -150,10 +165,10 @@ export const transcribeAudio = async (audioUri) => {
     const blob = await response.blob();
 
     // Convert blob to base64
-    const base64 = await new Promise((resolve, reject) => {
+    const base64 = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = reader.result.split(',')[1]; // Remove data:audio/m4a;base64, prefix
+        const base64String = (reader.result as string).split(',')[1]; // Remove data:audio/m4a;base64, prefix
         resolve(base64String);
       };
       reader.onerror = reject;
@@ -162,7 +177,6 @@ export const transcribeAudio = async (audioUri) => {
 
     console.log(`📊 Audio converted to base64: ${base64.length} chars`);
 
-    // Add breadcrumb for conversion success
     Sentry.addBreadcrumb({
       category: 'transcription',
       message: 'Audio converted to base64',
@@ -178,8 +192,8 @@ export const transcribeAudio = async (audioUri) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${anonKey}`,
-        'apikey': anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        apikey: anonKey ?? '',
       },
       body: JSON.stringify({ audioBase64: base64 }),
     });
@@ -187,7 +201,6 @@ export const transcribeAudio = async (audioUri) => {
     const data = await edgeResponse.json();
     console.log('Edge function response status:', edgeResponse.status);
 
-    // Add breadcrumb for API response
     Sentry.addBreadcrumb({
       category: 'transcription',
       message: 'Received Edge Function response',
@@ -201,7 +214,6 @@ export const transcribeAudio = async (audioUri) => {
     if (!edgeResponse.ok || !data.success) {
       console.error('❌ Transcription failed:', data.error);
 
-      // Capture transcription failure in Sentry
       Sentry.captureException(new Error('Transcription failed'), {
         tags: { component: 'transcription', action: 'transcribe' },
         contexts: {
@@ -215,14 +227,13 @@ export const transcribeAudio = async (audioUri) => {
 
       return {
         success: false,
-        error: data.error || 'Transcription failed'
+        error: data.error || 'Transcription failed',
       };
     }
 
     console.log('✅ Transcription successful');
     console.log(`📝 Transcribed text length: ${data.text?.length || 0}`);
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'transcription',
       message: 'Transcription successful',
@@ -234,11 +245,9 @@ export const transcribeAudio = async (audioUri) => {
       success: true,
       text: data.text,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error transcribing audio:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'transcription', action: 'transcribe', type: 'unexpected' },
       contexts: {
@@ -250,7 +259,7 @@ export const transcribeAudio = async (audioUri) => {
 
     return {
       success: false,
-      error: error.message || 'Failed to transcribe audio'
+      error: error.message || 'Failed to transcribe audio',
     };
   }
 };

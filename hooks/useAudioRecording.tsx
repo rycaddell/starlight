@@ -407,7 +407,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
           if (storagePath) {
             // --- New flow: create pending journal + trigger server-side transcription ---
-            const customUserId = user?.id ?? null;
+            const customUserId = user?.id ?? '';
 
             let journal;
             try {

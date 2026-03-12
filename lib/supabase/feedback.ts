@@ -1,7 +1,13 @@
 import { supabase } from './client';
 
 // Save feedback to database
-export const saveFeedback = async (customUserId, feedbackType, message) => {
+export const saveFeedback = async (
+  customUserId: string,
+  feedbackType: string,
+  message: string
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { data, error } = await supabase
       .from('feedback')
@@ -10,8 +16,8 @@ export const saveFeedback = async (customUserId, feedbackType, message) => {
           custom_user_id: customUserId,
           feedback_type: feedbackType,
           message: message,
-          created_at: new Date().toISOString()
-        }
+          created_at: new Date().toISOString(),
+        },
       ])
       .select();
 
@@ -22,14 +28,19 @@ export const saveFeedback = async (customUserId, feedbackType, message) => {
 
     console.log('✅ Feedback saved successfully:', data[0]);
     return { success: true, data: data[0] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving feedback:', error);
     return { success: false, error: 'Failed to save feedback' };
   }
 };
 
 // Get user's feedback (for admin purposes)
-export const getUserFeedback = async (customUserId, limit = null) => {
+export const getUserFeedback = async (
+  customUserId: string,
+  limit: number | null = null
+): Promise<{ success: boolean; data?: any[]; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     let query = supabase
       .from('feedback')
@@ -49,7 +60,7 @@ export const getUserFeedback = async (customUserId, limit = null) => {
     }
 
     return { success: true, data: data || [] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching feedback:', error);
     return { success: false, error: 'Failed to fetch feedback' };
   }
