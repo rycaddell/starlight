@@ -4,7 +4,7 @@ import * as Sentry from '@sentry/react-native';
 import { getMirrorThreshold } from '../config/constants';
 
 // Edge Function URL
-const EDGE_FUNCTION_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-mirror';
+const EDGE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-mirror`;
 
 // ============================================================================
 // SERVER-SIDE GENERATION (New Flow)
@@ -366,8 +366,7 @@ export const getMirrorById = async (
 // ============================================================================
 
 // Edge Function URL for onboarding preview
-const ONBOARDING_PREVIEW_URL =
-  'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-onboarding-preview';
+const ONBOARDING_PREVIEW_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-onboarding-preview`;
 
 /**
  * Generate onboarding preview using Edge Function

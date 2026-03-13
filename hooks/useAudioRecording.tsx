@@ -658,9 +658,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
           }
           
-          // Always track latest duration in ref
+          // Only update state when the second value changes (callback fires ~10x/sec)
+          const prevDuration = latestDurationRef.current;
           latestDurationRef.current = durationInSeconds;
-          setRecordingDuration(durationInSeconds);
+          if (durationInSeconds !== prevDuration) {
+            setRecordingDuration(durationInSeconds);
+          }
 
           // Auto-stop at max duration to prevent data loss
           if (durationInSeconds >= MAX_RECORDING_DURATION && !hasHitMaxDurationRef.current) {

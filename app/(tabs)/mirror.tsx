@@ -9,10 +9,8 @@ import { colors, typography, spacing } from '@/theme/designTokens';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../contexts/AuthContext';
 import { useMirrorData } from '../../hooks/useMirrorData';
-import { MirrorProgress } from '../../components/journal/MirrorProgress';
 import { MirrorViewer } from '../../components/mirror/MirrorViewer';
 import { ShareMirrorSheet } from '../../components/mirror/ShareMirrorSheet';
-import { JournalHistory } from '../../components/mirror/JournalHistory';
 import { LastMirrorCard } from '../../components/mirror/LastMirrorCard';
 import { LastJournalCard } from '../../components/mirror/LastJournalCard';
 import { PastMirrorsModal } from '../../components/mirror/PastMirrorsModal';
@@ -55,6 +53,7 @@ function MirrorScreen() {
   const [shareSheetVisible, setShareSheetVisible] = React.useState(false);
   const [selectedMirrorIdForShare, setSelectedMirrorIdForShare] = React.useState<string | null>(null);
   const [checkingFriendsForMirror, setCheckingFriendsForMirror] = React.useState<Record<string, boolean>>({});
+  const [hasFriends, setHasFriends] = React.useState<boolean | null>(null);
   const [shouldRestorePastMirrorsModal, setShouldRestorePastMirrorsModal] = React.useState(false);
   const [shouldRestorePastJournalsModal, setShouldRestorePastJournalsModal] = React.useState(false);
   const [day1ViewerVisible, setDay1ViewerVisible] = React.useState(false);
@@ -121,6 +120,9 @@ function MirrorScreen() {
 
       loadJournals();
       loadUserMirrors();
+      fetchFriends(user.id).then(result => {
+        setHasFriends(result.success && (result.friends?.length ?? 0) > 0);
+      }).catch(() => { /* leave null; fallback fires on press */ });
     }
   }, [isAuthenticated, user]);
 
@@ -355,32 +357,38 @@ function MirrorScreen() {
 
   // Handler for share button on last mirror card
   const handleShareLastMirror = async (mirrorId: string) => {
-    setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: true }));
+    // Use cached friend status from mount fetch; only hit network if not yet loaded
+    let userHasFriends = hasFriends;
 
-    try {
-      const result = await fetchFriends(user!.id);
-
-      if (result.success && result.friends && result.friends.length > 0) {
-        if (pastMirrorsModalVisible) {
-          setPastMirrorsModalVisible(false);
-          setShouldRestorePastMirrorsModal(true);
-        }
-
-        setTimeout(() => {
-          setSelectedMirrorIdForShare(mirrorId);
-          setShareSheetVisible(true);
-        }, 300);
-      } else {
-        if (pastMirrorsModalVisible) {
-          setPastMirrorsModalVisible(false);
-        }
-        router.push('/(tabs)/friends');
+    if (userHasFriends === null) {
+      setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: true }));
+      try {
+        const result = await fetchFriends(user!.id);
+        userHasFriends = result.success && (result.friends?.length ?? 0) > 0;
+        setHasFriends(userHasFriends);
+      } catch (error) {
+        console.error('❌ [SHARE] Error checking friends:', error);
+        Alert.alert('Error', 'Failed to check friends. Please try again.');
+        setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: false }));
+        return;
       }
-    } catch (error) {
-      console.error('❌ [SHARE] Error checking friends:', error);
-      Alert.alert('Error', 'Failed to check friends. Please try again.');
-    } finally {
       setCheckingFriendsForMirror(prev => ({ ...prev, [mirrorId]: false }));
+    }
+
+    if (userHasFriends) {
+      if (pastMirrorsModalVisible) {
+        setPastMirrorsModalVisible(false);
+        setShouldRestorePastMirrorsModal(true);
+      }
+      setTimeout(() => {
+        setSelectedMirrorIdForShare(mirrorId);
+        setShareSheetVisible(true);
+      }, 300);
+    } else {
+      if (pastMirrorsModalVisible) {
+        setPastMirrorsModalVisible(false);
+      }
+      router.push('/(tabs)/friends');
     }
   };
 

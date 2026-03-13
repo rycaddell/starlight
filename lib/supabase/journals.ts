@@ -255,36 +255,3 @@ export const deleteJournalEntry = async (
   }
 };
 
-// Get user's last journal entry type (for default tab selection)
-export const getLastJournalType = async (
-  customUserId: string
-): Promise<{ success: boolean; journalType?: string | null; error?: string }> => {
-  if (!supabase) return { success: false, error: 'Supabase not initialized' };
-
-  try {
-    const { data, error } = await supabase
-      .from('journals')
-      .select('journal_entry_type')
-      .eq('custom_user_id', customUserId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      // User might have no journals yet (404 error)
-      if (error.code === 'PGRST116') {
-        return { success: true, journalType: null }; // New user
-      }
-      console.error('Error fetching last journal type:', error);
-      return { success: false, error: error.message };
-    }
-
-    return {
-      success: true,
-      journalType: data?.journal_entry_type || null,
-    };
-  } catch (error: any) {
-    console.error('Error fetching last journal type:', error);
-    return { success: false, error: 'Failed to fetch last journal type' };
-  }
-};

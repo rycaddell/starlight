@@ -108,17 +108,18 @@ function FriendsScreen() {
     loadData();
   }, [loadData]);
 
-  // Mark friends as viewed when screen is focused
+  // Reload data and mark as viewed on every focus
   // Dismiss all "new friend" statuses when user navigates away
   useFocusEffect(
     useCallback(() => {
       markFriendsAsViewed();
+      loadData();
 
       return () => {
         // Dismiss all new friends when leaving the screen
         dismissAllNewFriends();
       };
-    }, [markFriendsAsViewed, dismissAllNewFriends])
+    }, [markFriendsAsViewed, dismissAllNewFriends, loadData])
   );
 
   // Realtime subscription for incoming mirror shares
@@ -167,75 +168,6 @@ function FriendsScreen() {
     };
   }, [user?.id, loadData]);
 
-  // Realtime subscriptions for friend_links (two subscriptions for user_a and user_b)
-  useEffect(() => {
-    if (!user?.id || !supabase) return;
-
-    let isMounted = true;
-
-    if (__DEV__) {
-      console.log('📡 [FriendsScreen] Setting up friend_links subscriptions');
-    }
-
-    const friendsSubscriptionA = supabase
-      .channel(`friends_screen_links_a:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friend_links',
-          filter: `user_a_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [FriendsScreen] New friend link (user_a)');
-          }
-
-          // Reload friends list from database
-          loadData();
-        }
-      )
-      .subscribe();
-
-    const friendsSubscriptionB = supabase
-      .channel(`friends_screen_links_b:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friend_links',
-          filter: `user_b_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [FriendsScreen] New friend link (user_b)');
-          }
-
-          // Reload friends list from database
-          loadData();
-        }
-      )
-      .subscribe((status) => {
-        if (__DEV__ && status === 'SUBSCRIBED') {
-          console.log('✅ [FriendsScreen] Connected to friend_links Realtime');
-        }
-      });
-
-    return () => {
-      isMounted = false;
-      if (__DEV__) {
-        console.log('🔌 [FriendsScreen] Cleaning up friend_links subscriptions');
-      }
-      friendsSubscriptionA.unsubscribe();
-      friendsSubscriptionB.unsubscribe();
-    };
-  }, [user?.id, loadData]);
 
   // Track new friends - mark friends as "new" if they were linked within the last 5 seconds
   const previousFriendIdsRef = useRef<Set<string>>(new Set());

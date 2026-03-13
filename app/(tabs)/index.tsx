@@ -8,7 +8,7 @@ import * as Sentry from '@sentry/react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { saveJournalEntry, getUserJournals } from '../../lib/supabase';
+import { saveJournalEntry, getTodaysAnsweredPrompts } from '../../lib/supabase';
 import { useGlobalSettings } from '../../components/GlobalSettingsContext';
 import { MirrorStatus } from '../../components/ui/MirrorStatus';
 import { GuidedPromptSingle, GuidedPromptSingleHandle } from '../../components/journal/GuidedPromptSingle';
@@ -113,34 +113,11 @@ function JournalScreen() {
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
   const loadTodayAnsweredPrompts = React.useCallback(async () => {
-    if (!isAuthenticated || !user) {
-      console.log('⏭️ Skipping loadTodayAnsweredPrompts - user not authenticated');
-      return;
-    }
+    if (!isAuthenticated || !user) return;
 
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const todayISO = today.toISOString();
-
-      const result = await getUserJournals(user.id);
-
-      if (result.success && result.data) {
-        const todayJournals = result.data.filter(journal => {
-          const journalDate = new Date(journal.created_at);
-          journalDate.setHours(0, 0, 0, 0);
-          return journalDate.toISOString() === todayISO && journal.prompt_text;
-        });
-
-        const promptTexts = todayJournals
-          .map(journal => journal.prompt_text)
-          .filter(text => text);
-
-        console.log('📝 Today answered prompts:', promptTexts.length);
-        setTodayAnsweredPrompts(promptTexts);
-      }
-    } catch (error) {
-      console.error('Error loading today answered prompts:', error);
+    const result = await getTodaysAnsweredPrompts(user.id);
+    if (result.success && result.data) {
+      setTodayAnsweredPrompts(result.data);
     }
   }, [isAuthenticated, user]);
 
