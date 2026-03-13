@@ -62,7 +62,7 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
                   style: 'destructive',
                   onPress: async () => {
                     setIsDeletingAccount(true);
-                    const result = await deleteAccount(user?.id);
+                    const result = await deleteAccount(user!.id);
                     setIsDeletingAccount(false);
                     if (result.success) {
                       onClose();
@@ -106,7 +106,7 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const result = await saveFeedback(user?.id, feedbackType, feedbackText);
+      const result = await saveFeedback(user!.id, feedbackType, feedbackText);
 
       if (result.success) {
         Alert.alert(

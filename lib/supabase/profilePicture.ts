@@ -1,4 +1,4 @@
-// lib/supabase/profilePicture.js
+// lib/supabase/profilePicture.ts
 // Service layer for managing profile pictures
 
 import * as ImagePicker from 'expo-image-picker';
@@ -10,13 +10,15 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 /**
  * Pick an image from the device's photo library
- * @returns {Promise<{success: boolean, uri?: string, error?: string}>}
  */
-export async function pickProfilePicture() {
+export async function pickProfilePicture(): Promise<{
+  success: boolean;
+  uri?: string;
+  error?: string;
+}> {
   try {
     console.log('📱 Requesting media library permissions...');
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'profile',
       message: 'Picking profile picture',
@@ -27,7 +29,6 @@ export async function pickProfilePicture() {
     if (!ImagePicker || typeof ImagePicker.requestMediaLibraryPermissionsAsync !== 'function') {
       console.error('❌ ImagePicker not available');
 
-      // Capture ImagePicker unavailable error
       Sentry.captureException(new Error('ImagePicker not available'), {
         tags: { component: 'profilePicture', action: 'pick' },
       });
@@ -39,12 +40,12 @@ export async function pickProfilePicture() {
     }
 
     // Request permissions with comprehensive error handling
-    let permissionResult;
+    let permissionResult: ImagePicker.MediaLibraryPermissionResponse | undefined;
     try {
       console.log('📱 Calling requestMediaLibraryPermissionsAsync...');
       permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       console.log('📱 Permission result:', JSON.stringify(permissionResult, null, 2));
-    } catch (permError) {
+    } catch (permError: any) {
       console.error('❌ Permission request failed:', permError);
       console.error('❌ Permission error message:', permError?.message);
       console.error('❌ Permission error code:', permError?.code);
@@ -52,11 +53,10 @@ export async function pickProfilePicture() {
       console.error('❌ Permission error type:', typeof permError);
       console.error('❌ Permission error keys:', permError ? Object.keys(permError) : 'none');
 
-      // Capture permission request failure
       Sentry.captureException(permError, {
         tags: { component: 'profilePicture', action: 'requestPermission' },
         contexts: {
-          profile: {
+          profilePic: {
             errorMessage: permError?.message,
             errorCode: permError?.code,
           },
@@ -112,7 +112,7 @@ export async function pickProfilePicture() {
     }
 
     return { success: true, uri: asset.uri };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error picking image:', error);
     console.error('❌ Error message:', error?.message);
     console.error('❌ Error stack:', error?.stack);
@@ -122,15 +122,16 @@ export async function pickProfilePicture() {
 
 /**
  * Upload profile picture to Supabase Storage and update user profile
- * @param {string} userId - User's ID
- * @param {string} imageUri - Local URI of the image to upload
- * @returns {Promise<{success: boolean, url?: string, error?: string}>}
  */
-export async function uploadProfilePicture(userId, imageUri) {
+export async function uploadProfilePicture(
+  userId: string,
+  imageUri: string
+): Promise<{ success: boolean; url?: string; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('📸 Uploading profile picture for user:', userId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'profile',
       message: 'Uploading profile picture',
@@ -166,11 +167,10 @@ export async function uploadProfilePicture(userId, imageUri) {
     if (uploadError) {
       console.error('❌ Upload error:', uploadError);
 
-      // Capture upload error
       Sentry.captureException(new Error('Profile picture upload failed'), {
         tags: { component: 'profilePicture', action: 'upload' },
         contexts: {
-          profile: {
+          profilePic: {
             userId,
             fileName,
             error: uploadError.message,
@@ -182,9 +182,7 @@ export async function uploadProfilePicture(userId, imageUri) {
     }
 
     // Get public URL with cache-busting timestamp
-    const { data: urlData } = supabase.storage
-      .from('profile-pictures')
-      .getPublicUrl(fileName);
+    const { data: urlData } = supabase.storage.from('profile-pictures').getPublicUrl(fileName);
 
     // Add timestamp to URL to bust image cache when profile picture changes
     const publicUrl = `${urlData.publicUrl}?updated=${Date.now()}`;
@@ -200,11 +198,10 @@ export async function uploadProfilePicture(userId, imageUri) {
     if (updateError) {
       console.error('❌ Database update error:', updateError);
 
-      // Capture database update error
       Sentry.captureException(new Error('Failed to update user profile picture URL'), {
         tags: { component: 'profilePicture', action: 'updateDatabase' },
         contexts: {
-          profile: {
+          profilePic: {
             userId,
             publicUrl,
             error: updateError.message,
@@ -220,7 +217,6 @@ export async function uploadProfilePicture(userId, imageUri) {
 
     console.log('✅ Profile picture uploaded successfully');
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'profile',
       message: 'Profile picture uploaded successfully',
@@ -228,13 +224,12 @@ export async function uploadProfilePicture(userId, imageUri) {
     });
 
     return { success: true, url: publicUrl };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error uploading profile picture:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'profilePicture', action: 'upload', type: 'unexpected' },
-      contexts: { profile: { userId } },
+      contexts: { profilePic: { userId } },
     });
 
     return { success: false, error: error.message };
@@ -243,10 +238,12 @@ export async function uploadProfilePicture(userId, imageUri) {
 
 /**
  * Delete profile picture from storage and database
- * @param {string} userId - User's ID
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function deleteProfilePicture(userId) {
+export async function deleteProfilePicture(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🗑️ Deleting profile picture for user:', userId);
 
@@ -297,7 +294,7 @@ export async function deleteProfilePicture(userId) {
 
     console.log('✅ Profile picture deleted successfully');
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error deleting profile picture:', error);
     return { success: false, error: error.message };
   }

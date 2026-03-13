@@ -9,7 +9,8 @@ import {
   checkMirrorGenerationStatus,
   checkCanGenerateMirror,
 } from '../lib/supabase';
-import { markMirrorAsViewed } from '../lib/supabase/mirrors';
+import { markMirrorAsViewed, getMirrorById } from '../lib/supabase/mirrors';
+import { supabase } from '../lib/supabase/client';
 import { MIRROR_THRESHOLD, getMirrorThreshold } from '../lib/config/constants';
 
 type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing';
@@ -25,9 +26,10 @@ export const useMirrorData = () => {
 
   const [hasViewedCurrentMirror, setHasViewedCurrentMirror] = useState(false);
 
-  // Polling control
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isPollingRef = useRef(false);
+  // Realtime subscription control
+  const realtimeChannelRef = useRef<any>(null);
+  const generationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resolvedRef = useRef(false);
   const appState = useRef(AppState.currentState);
 
   const mirrorStateRef = useRef<MirrorState>(mirrorState);
@@ -100,121 +102,141 @@ export const useMirrorData = () => {
     }
   };
 
-  const stopPolling = () => {
-    if (pollingIntervalRef.current) {
-      clearInterval(pollingIntervalRef.current);
-      pollingIntervalRef.current = null;
+  const stopWaiting = () => {
+    if (generationTimeoutRef.current) {
+      clearTimeout(generationTimeoutRef.current);
+      generationTimeoutRef.current = null;
     }
-    isPollingRef.current = false;
+    if (realtimeChannelRef.current && supabase) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
   };
 
-  const pollMirrorStatus = async () => {
-    if (!user || isPollingRef.current) {
-      return;
-    }
+  // notBefore: unix ms timestamp — ignore completed requests older than this.
+  // Prevents a previous generation's completed request from triggering an early false resolution.
+  const subscribeForMirrorCompletion = (notBefore = 0) => {
+    if (!user || !supabase || realtimeChannelRef.current) return;
 
-    isPollingRef.current = true;
+    resolvedRef.current = false;
 
-    let attempts = 0;
-    const maxAttempts = 80;
+    const onResolved = async (status: string, mirrorId: string | null, errorMessage: string | null) => {
+      if (resolvedRef.current) return;
+      resolvedRef.current = true;
 
-    pollingIntervalRef.current = setInterval(async () => {
-      attempts++;
+      // Defer channel removal so we're not removing the channel from within its own callback
+      setTimeout(() => stopWaiting(), 0);
 
-      try {
-        const statusResult = await checkMirrorGenerationStatus(user.id);
-
-        if (!statusResult.success) {
-          console.error('❌ Mirror status check failed:', statusResult.error);
-          return;
-        }
-
-        const { status, mirror } = statusResult;
-
-        switch (status) {
-          case 'completed':
-            console.log('✅ Mirror generation completed');
-            stopPolling();
-
-            const dbHasBeenViewed = mirror.has_been_viewed || false;
-
-            if (dbHasBeenViewed && mirrorStateRef.current !== 'generating') {
-              return;
-            }
-
-            setGeneratedMirror(mirror);
-            setMirrorState('completed');
-            setGenerationStartTime(null);
-            setHasViewedCurrentMirror(dbHasBeenViewed);
-            await loadJournalsOnly();
-            break;
-
-          case 'failed':
-            console.error('❌ Mirror generation failed:', statusResult.error);
-            stopPolling();
-            setMirrorState('ready');
-            setGenerationStartTime(null);
-
-            const errorMsg = statusResult.error || 'Mirror generation encountered an error. Please try again.';
-            const isContentFilter = errorMsg.includes('Content filter');
-
-            if (isContentFilter) {
-              Alert.alert(
-                'Content Policy Issue',
-                errorMsg,
-                [
-                  { text: 'OK' },
-                  {
-                    text: 'More Info',
-                    onPress: () => {
-                      Alert.alert(
-                        'What This Means',
-                        'OpenAI flagged your journal content as potentially violating their content policy. This can happen if journals contain:\n\n• Explicit violence or graphic content\n• Self-harm references\n• Explicit sexual content\n• Hate speech or discrimination\n• Other sensitive topics\n\nYour journals are private and safe. This is just an AI safety filter.',
-                        [{ text: 'Close' }]
-                      );
-                    },
-                  },
-                ]
-              );
-            } else {
-              Alert.alert(
-                'Generation Failed',
-                errorMsg,
-                [{ text: 'OK' }]
-              );
-            }
-            break;
-
-          case 'processing':
-          case 'pending':
-            if (mirrorState !== 'generating') {
-              setMirrorState('generating');
-            }
-            break;
-
-          case 'none':
-            stopPolling();
-            setMirrorState('ready');
-            setGenerationStartTime(null);
-            break;
-        }
-
-        if (attempts >= maxAttempts) {
-          console.error('❌ Mirror polling timeout');
-          stopPolling();
+      if (status === 'completed' && mirrorId) {
+        const mirrorResult = await getMirrorById(mirrorId);
+        if (mirrorResult.success && mirrorResult.mirror) {
+          const dbHasBeenViewed = mirrorResult.mirror.has_been_viewed || false;
+          setGeneratedMirror(mirrorResult.mirror);
+          setMirrorState('completed');
+          setGenerationStartTime(null);
+          setHasViewedCurrentMirror(dbHasBeenViewed);
+          await loadJournalsOnly();
+        } else {
           setMirrorState('ready');
           setGenerationStartTime(null);
-          Alert.alert(
-            'Generation Taking Longer Than Expected',
-            'Your Mirror is still being generated. Please check back in a few minutes.',
-            [{ text: 'OK' }]
-          );
+          Alert.alert('Generation Failed', 'Mirror was generated but could not be loaded. Please try again.', [{ text: 'OK' }]);
         }
+      } else if (status === 'failed') {
+        setMirrorState('ready');
+        setGenerationStartTime(null);
 
-      } catch (error) {
-        console.error('❌ Error polling mirror status:', error);
+        const errorMsg = errorMessage || 'Mirror generation encountered an error. Please try again.';
+        const isContentFilter = errorMsg.includes('Content filter');
+
+        if (isContentFilter) {
+          Alert.alert(
+            'Content Policy Issue',
+            errorMsg,
+            [
+              { text: 'OK' },
+              {
+                text: 'More Info',
+                onPress: () => {
+                  Alert.alert(
+                    'What This Means',
+                    'OpenAI flagged your journal content as potentially violating their content policy. This can happen if journals contain:\n\n• Explicit violence or graphic content\n• Self-harm references\n• Explicit sexual content\n• Hate speech or discrimination\n• Other sensitive topics\n\nYour journals are private and safe. This is just an AI safety filter.',
+                    [{ text: 'Close' }]
+                  );
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert('Generation Failed', errorMsg, [{ text: 'OK' }]);
+        }
       }
-    }, 3000);
+    };
+
+    const channel = supabase
+      .channel(`mirror-generation-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'mirror_generation_requests',
+          filter: `custom_user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const { status, mirror_id, error_message } = payload.new as {
+            status: string;
+            mirror_id: string | null;
+            error_message: string | null;
+          };
+          if (status === 'completed' || status === 'failed') {
+            onResolved(status, mirror_id, error_message);
+          }
+        }
+      )
+      .subscribe(async (subStatus) => {
+        if (subStatus !== 'SUBSCRIBED' || !supabase) return;
+        // Immediate check: generation may have finished before subscription connected.
+        // Only resolve if this is the CURRENT generation (requested after notBefore),
+        // not a previously-completed request from an earlier session.
+        const statusResult = await checkMirrorGenerationStatus(user.id);
+        if (statusResult.success) {
+          const { status, mirror, requestedAt } = statusResult;
+          const requestTime = requestedAt ? new Date(requestedAt).getTime() : 0;
+          const isCurrentGeneration = requestTime >= notBefore;
+          if (status === 'completed' && mirror && isCurrentGeneration) {
+            onResolved('completed', mirror.id, null);
+          } else if (status === 'failed' && isCurrentGeneration) {
+            onResolved('failed', null, statusResult.error ?? null);
+          }
+        }
+      });
+
+    realtimeChannelRef.current = channel;
+
+    // 4-minute safety net: if Realtime doesn't deliver an update, poll once then give up
+    generationTimeoutRef.current = setTimeout(async () => {
+      if (resolvedRef.current) return;
+      if (!supabase) {
+        setMirrorState('ready');
+        setGenerationStartTime(null);
+        return;
+      }
+      const statusResult = await checkMirrorGenerationStatus(user.id);
+      if (statusResult.success && statusResult.status === 'completed' && statusResult.mirror) {
+        onResolved('completed', statusResult.mirror.id, null);
+      } else if (statusResult.success && statusResult.status === 'failed') {
+        onResolved('failed', null, statusResult.error ?? null);
+      } else {
+        stopWaiting();
+        setMirrorState('ready');
+        setGenerationStartTime(null);
+        Alert.alert(
+          'Generation Taking Longer Than Expected',
+          'Your Mirror is still being generated. Please check back in a few minutes.',
+          [{ text: 'OK' }]
+        );
+      }
+    }, 4 * 60 * 1000);
   };
 
   const checkGenerationStatusOnFocus = async () => {
@@ -255,10 +277,14 @@ export const useMirrorData = () => {
             setMirrorState('completed');
             setGenerationStartTime(null);
             setHasViewedCurrentMirror(false);
-            stopPolling();
+            stopWaiting();
             await loadJournalsOnly();
           }
         } else if (status === 'processing' || status === 'pending') {
+          const notBefore = statusResult.requestedAt
+            ? new Date(statusResult.requestedAt).getTime()
+            : 0;
+
           if (currentState !== 'generating') {
             setMirrorState('generating');
 
@@ -267,25 +293,25 @@ export const useMirrorData = () => {
               setGenerationStartTime(requestTime);
             }
 
-            if (!isPollingRef.current) {
-              pollMirrorStatus();
+            if (!realtimeChannelRef.current) {
+              subscribeForMirrorCompletion(notBefore);
             }
           } else {
-            if (!isPollingRef.current) {
-              pollMirrorStatus();
+            if (!realtimeChannelRef.current) {
+              subscribeForMirrorCompletion(notBefore);
             }
           }
         } else if (status === 'failed') {
           if (currentState === 'generating') {
             setMirrorState('ready');
             setGenerationStartTime(null);
-            stopPolling();
+            stopWaiting();
           }
         } else {
           // status === 'none'
           if (currentState === 'generating') {
-            if (!isPollingRef.current) {
-              pollMirrorStatus();
+            if (!realtimeChannelRef.current) {
+              subscribeForMirrorCompletion();
             }
           }
         }
@@ -305,7 +331,7 @@ export const useMirrorData = () => {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       if (nextAppState.match(/inactive|background/)) {
-        stopPolling();
+        stopWaiting();
       }
 
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
@@ -313,8 +339,8 @@ export const useMirrorData = () => {
           checkGenerationStatusOnFocus();
 
           const currentState = mirrorStateRef.current;
-          if (!isPollingRef.current && currentState === 'generating') {
-            pollMirrorStatus();
+          if (!realtimeChannelRef.current && currentState === 'generating') {
+            subscribeForMirrorCompletion();
           }
         }
       }
@@ -345,7 +371,9 @@ export const useMirrorData = () => {
     if (statusCheck.success && (statusCheck.status === 'processing' || statusCheck.status === 'pending')) {
       setMirrorState('generating');
       setGenerationStartTime(Date.now());
-      pollMirrorStatus();
+      // Use the request's actual requestedAt so the immediate check doesn't catch older generations
+      const notBefore = statusCheck.requestedAt ? new Date(statusCheck.requestedAt).getTime() : 0;
+      subscribeForMirrorCompletion(notBefore);
       return;
     }
 
@@ -356,9 +384,10 @@ export const useMirrorData = () => {
       return;
     }
 
+    const generationStartedAt = Date.now();
     setMirrorState('generating');
-    setGenerationStartTime(Date.now());
-    pollMirrorStatus();
+    setGenerationStartTime(generationStartedAt);
+    subscribeForMirrorCompletion(generationStartedAt);
 
     try {
       const result = await requestMirrorGeneration(user.id) as {
@@ -372,6 +401,9 @@ export const useMirrorData = () => {
 
       if (result.success) {
         if (result.mirror) {
+          // HTTP response delivered the mirror directly — mark resolved and cancel subscription
+          resolvedRef.current = true;
+          stopWaiting();
           const dbHasBeenViewed = result.mirror.has_been_viewed || false;
           setGeneratedMirror(result.mirror);
           setMirrorState('completed');
@@ -385,11 +417,15 @@ export const useMirrorData = () => {
         const msg = result.error || '';
 
         if (msg.includes('Network request failed') || msg.includes('Network request')) {
-          if (!isPollingRef.current) {
-            pollMirrorStatus();
+          // Keep the subscription alive — edge function may have succeeded server-side
+          if (!realtimeChannelRef.current) {
+            subscribeForMirrorCompletion();
           }
           return;
         }
+
+        // Definitive failure — edge function rejected the request before creating a DB record
+        stopWaiting();
 
         Sentry.captureException(new Error(`Mirror generation failed: ${msg}`), {
           tags: { component: 'useMirrorData', action: 'generateMirror' },
@@ -436,12 +472,15 @@ export const useMirrorData = () => {
       const msg = error?.message || '';
 
       if (msg.includes('Network request failed') || msg.includes('Network request')) {
-        if (!isPollingRef.current) {
-          pollMirrorStatus();
+        // Keep the subscription alive — edge function may have succeeded server-side
+        if (!realtimeChannelRef.current) {
+          subscribeForMirrorCompletion();
         }
         return;
       }
 
+      // Unexpected error — clean up and reset
+      stopWaiting();
       Alert.alert('Error', `Unexpected error: ${msg}`);
       setMirrorState('ready');
       setGenerationStartTime(null);
@@ -489,7 +528,7 @@ export const useMirrorData = () => {
 
   useEffect(() => {
     return () => {
-      stopPolling();
+      stopWaiting();
     };
   }, []);
 
@@ -507,7 +546,7 @@ export const useMirrorData = () => {
     closeMirrorViewer,
     setMirrorState,
     setGeneratedMirror,
-    stopPolling,
+    stopPolling: stopWaiting,
     checkGenerationStatusOnFocus,
     isReady: mirrorState === 'ready',
     isGenerating: mirrorState === 'generating',

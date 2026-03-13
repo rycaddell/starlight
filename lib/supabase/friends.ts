@@ -1,4 +1,4 @@
-// lib/supabase/friends.js
+// lib/supabase/friends.ts
 // Service layer for friend linking functionality
 
 import { supabase } from './client';
@@ -7,25 +7,26 @@ import * as Sentry from '@sentry/react-native';
 /**
  * Generate a UUID v4 (works in React Native)
  */
-function generateUUID() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0;
-    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
 
 /**
  * Generate a unique invite link for a user to share with friends
- * @param {string} inviterUserId - UUID of user creating the invite
- * @param {string} inviterName - Display name of inviter (for deep link)
- * @returns {Promise<{success: boolean, deepLink?: string, inviteId?: string, error?: string}>}
  */
-export async function createInviteLink(inviterUserId, inviterName) {
+export async function createInviteLink(
+  inviterUserId: string,
+  inviterName: string
+): Promise<{ success: boolean; deepLink?: string; inviteId?: string; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🔗 Creating friend invite link for:', inviterUserId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'friends',
       message: 'Creating friend invite link',
@@ -49,7 +50,6 @@ export async function createInviteLink(inviterUserId, inviterName) {
     if (error) {
       console.error('❌ Error creating invite:', error);
 
-      // Capture error in Sentry
       Sentry.captureException(new Error('Failed to create friend invite link'), {
         tags: { component: 'friends', action: 'createInvite' },
         contexts: {
@@ -72,10 +72,9 @@ export async function createInviteLink(inviterUserId, inviterName) {
       deepLink,
       inviteId: data.id,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in createInviteLink:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'friends', action: 'createInvite', type: 'unexpected' },
       contexts: { friends: { inviterUserId } },
@@ -87,15 +86,22 @@ export async function createInviteLink(inviterUserId, inviterName) {
 
 /**
  * Accept a friend invite and create friend link
- * @param {string} token - Invite token from deep link
- * @param {string} inviteeUserId - UUID of user accepting invite
- * @returns {Promise<{success: boolean, linkId?: string, inviterName?: string, error?: string}>}
  */
-export async function acceptInvite(token, inviteeUserId) {
+export async function acceptInvite(
+  token: string,
+  inviteeUserId: string
+): Promise<{
+  success: boolean;
+  linkId?: string;
+  inviterName?: string | null;
+  inviterProfilePicUrl?: string | null;
+  error?: string;
+}> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🤝 Accepting invite with token:', token);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'friends',
       message: 'Accepting friend invite',
@@ -114,7 +120,6 @@ export async function acceptInvite(token, inviteeUserId) {
     if (inviteError || !invite) {
       console.error('❌ Invalid invite:', inviteError);
 
-      // Capture invalid invite error
       Sentry.captureException(new Error('Invalid or used invite token'), {
         tags: { component: 'friends', action: 'acceptInvite' },
         contexts: {
@@ -157,7 +162,7 @@ export async function acceptInvite(token, inviteeUserId) {
       .select('id')
       .or(
         `and(user_a_id.eq.${invite.inviter_user_id},user_b_id.eq.${inviteeUserId}),` +
-        `and(user_a_id.eq.${inviteeUserId},user_b_id.eq.${invite.inviter_user_id})`
+          `and(user_a_id.eq.${inviteeUserId},user_b_id.eq.${invite.inviter_user_id})`
       )
       .eq('status', 'active')
       .maybeSingle();
@@ -172,13 +177,9 @@ export async function acceptInvite(token, inviteeUserId) {
 
     // 5. Create friend link (normalize IDs: lower UUID = user_a, higher UUID = user_b)
     const userAId =
-      invite.inviter_user_id < inviteeUserId
-        ? invite.inviter_user_id
-        : inviteeUserId;
+      invite.inviter_user_id < inviteeUserId ? invite.inviter_user_id : inviteeUserId;
     const userBId =
-      invite.inviter_user_id < inviteeUserId
-        ? inviteeUserId
-        : invite.inviter_user_id;
+      invite.inviter_user_id < inviteeUserId ? inviteeUserId : invite.inviter_user_id;
 
     const { data: link, error: linkError } = await supabase
       .from('friend_links')
@@ -193,7 +194,6 @@ export async function acceptInvite(token, inviteeUserId) {
     if (linkError) {
       console.error('❌ Error creating friend link:', linkError);
 
-      // Capture link creation error
       Sentry.captureException(new Error('Failed to create friend link'), {
         tags: { component: 'friends', action: 'acceptInvite' },
         contexts: {
@@ -230,7 +230,6 @@ export async function acceptInvite(token, inviteeUserId) {
 
     console.log('✅ Friend link created:', link.id);
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'friends',
       message: 'Friend invite accepted successfully',
@@ -241,13 +240,12 @@ export async function acceptInvite(token, inviteeUserId) {
     return {
       success: true,
       linkId: link.id,
-      inviterName: invite.users?.display_name ?? null,
-      inviterProfilePicUrl: invite.users?.profile_picture_url ?? null,
+      inviterName: (invite.users as any)?.display_name ?? null,
+      inviterProfilePicUrl: (invite.users as any)?.profile_picture_url ?? null,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in acceptInvite:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'friends', action: 'acceptInvite', type: 'unexpected' },
       contexts: { friends: { inviteeUserId } },
@@ -259,10 +257,12 @@ export async function acceptInvite(token, inviteeUserId) {
 
 /**
  * Get list of user's active friends
- * @param {string} userId - UUID of user
- * @returns {Promise<{success: boolean, friends?: Array, error?: string}>}
  */
-export async function fetchFriends(userId) {
+export async function fetchFriends(
+  userId: string
+): Promise<{ success: boolean; friends?: any[]; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('👥 Fetching friends for:', userId);
 
@@ -303,7 +303,7 @@ export async function fetchFriends(userId) {
     // Combine link data with user data
     const friends = links.map((link) => {
       const friendId = link.user_a_id === userId ? link.user_b_id : link.user_a_id;
-      const friendUser = friendUsers.find((u) => u.id === friendId);
+      const friendUser = (friendUsers ?? []).find((u: any) => u.id === friendId);
 
       return {
         linkId: link.id,
@@ -317,7 +317,7 @@ export async function fetchFriends(userId) {
 
     console.log(`✅ Found ${friends.length} friends`);
     return { success: true, friends };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in fetchFriends:', error);
     return { success: false, error: error.message };
   }
@@ -325,10 +325,12 @@ export async function fetchFriends(userId) {
 
 /**
  * Unlink a friend (soft delete - sets status to 'revoked')
- * @param {string} linkId - UUID of friend_link
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function unlinkFriend(linkId) {
+export async function unlinkFriend(
+  linkId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('💔 Unlinking friend:', linkId);
 
@@ -344,7 +346,7 @@ export async function unlinkFriend(linkId) {
 
     console.log('✅ Friend unlinked successfully');
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in unlinkFriend:', error);
     return { success: false, error: error.message };
   }
@@ -352,10 +354,10 @@ export async function unlinkFriend(linkId) {
 
 /**
  * Check if user can create more invites (future: add rate limiting)
- * @param {string} userId - UUID of user
- * @returns {Promise<{canInvite: boolean, reason?: string}>}
  */
-export async function checkCanInvite(userId) {
+export async function checkCanInvite(
+  _userId: string
+): Promise<{ canInvite: boolean; reason?: string }> {
   // For MVP, always allow invites
   // Future: Add rate limiting, max pending invites, etc.
   return { canInvite: true };
@@ -363,10 +365,12 @@ export async function checkCanInvite(userId) {
 
 /**
  * Count user's active friends
- * @param {string} userId - UUID of user
- * @returns {Promise<{success: boolean, count?: number, error?: string}>}
  */
-export async function countFriends(userId) {
+export async function countFriends(
+  userId: string
+): Promise<{ success: boolean; count?: number; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { count, error } = await supabase
       .from('friend_links')
@@ -380,7 +384,7 @@ export async function countFriends(userId) {
     }
 
     return { success: true, count: count || 0 };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in countFriends:', error);
     return { success: false, error: error.message };
   }
@@ -388,10 +392,15 @@ export async function countFriends(userId) {
 
 /**
  * Get inviter information from an invite token
- * @param {string} token - Invite token
- * @returns {Promise<{success: boolean, inviterName?: string, inviterProfilePicUrl?: string, error?: string}>}
  */
-export async function getInviterInfo(token) {
+export async function getInviterInfo(token: string): Promise<{
+  success: boolean;
+  inviterName?: string;
+  inviterProfilePicUrl?: string | null;
+  error?: string;
+}> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { data: invite, error } = await supabase
       .from('friend_invites')
@@ -411,10 +420,10 @@ export async function getInviterInfo(token) {
 
     return {
       success: true,
-      inviterName: invite.users.display_name,
-      inviterProfilePicUrl: invite.users.profile_picture_url,
+      inviterName: (invite.users as any).display_name,
+      inviterProfilePicUrl: (invite.users as any).profile_picture_url,
     };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getInviterInfo:', error);
     return { success: false, error: error.message };
   }

@@ -2,7 +2,11 @@ import * as Sentry from '@sentry/react-native';
 import { supabase } from './client';
 
 // Send OTP to phone number (must be E.164 format, e.g. +15551234567)
-export const sendPhoneOTP = async (phone) => {
+export const sendPhoneOTP = async (
+  phone: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   Sentry.addBreadcrumb({
     category: 'auth',
     message: 'Sending phone OTP',
@@ -20,7 +24,7 @@ export const sendPhoneOTP = async (phone) => {
     }
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error sending OTP:', error);
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'sendOTP', type: 'unexpected' },
@@ -30,7 +34,12 @@ export const sendPhoneOTP = async (phone) => {
 };
 
 // Verify 6-digit OTP — returns Supabase session on success
-export const verifyPhoneOTP = async (phone, token) => {
+export const verifyPhoneOTP = async (
+  phone: string,
+  token: string
+): Promise<{ success: boolean; session?: any; authUser?: any; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   Sentry.addBreadcrumb({
     category: 'auth',
     message: 'Verifying phone OTP',
@@ -59,7 +68,7 @@ export const verifyPhoneOTP = async (phone, token) => {
     });
 
     return { success: true, session: data.session, authUser: data.user };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error verifying OTP:', error);
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'verifyOTP', type: 'unexpected' },
@@ -75,7 +84,13 @@ export const verifyPhoneOTP = async (phone, token) => {
 // NOTE: This runs while RLS is still disabled (Phase 2-3). Once RLS is enabled
 // (Phase 4) only new users reach this path; the INSERT policy is satisfied because
 // we write auth_user_id = authUserId which equals auth.uid() at call time.
-export const completeProfileSetup = async (authUserId, phone, displayName) => {
+export const completeProfileSetup = async (
+  authUserId: string,
+  phone: string,
+  displayName: string | null
+): Promise<{ success: boolean; user?: any; isExistingUser?: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   // Supabase strips the leading + from session.user.phone on the way out.
   // Normalize to E.164 (with +) so it matches what we stored in users.phone.
   const normalizedPhone = phone?.startsWith('+') ? phone : `+${phone}`;
@@ -148,7 +163,7 @@ export const completeProfileSetup = async (authUserId, phone, displayName) => {
     });
 
     return { success: true, user: data, isExistingUser: false };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error in completeProfileSetup:', error);
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'completeProfileSetup', type: 'unexpected' },
@@ -158,7 +173,9 @@ export const completeProfileSetup = async (authUserId, phone, displayName) => {
 };
 
 // Sign out — Supabase clears the SecureStore session automatically
-export const signOut = async () => {
+export const signOut = async (): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   Sentry.addBreadcrumb({
     category: 'auth',
     message: 'Signing out',
@@ -169,7 +186,7 @@ export const signOut = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error signing out:', error);
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'signOut' },
@@ -179,7 +196,12 @@ export const signOut = async () => {
 };
 
 // Mark onboarding as completed for a user
-export const completeUserOnboarding = async (userId, spiritualStateId = null) => {
+export const completeUserOnboarding = async (
+  userId: string,
+  spiritualStateId: string | null = null
+): Promise<{ success: boolean; user?: any; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🎯 Completing onboarding for user:', userId);
 
@@ -190,7 +212,7 @@ export const completeUserOnboarding = async (userId, spiritualStateId = null) =>
       level: 'info',
     });
 
-    const updateData = {
+    const updateData: Record<string, string> = {
       onboarding_completed_at: new Date().toISOString(),
     };
 
@@ -217,7 +239,7 @@ export const completeUserOnboarding = async (userId, spiritualStateId = null) =>
     });
 
     return { success: true, user: data };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error completing onboarding:', error);
 
     Sentry.captureException(error, {
@@ -230,17 +252,23 @@ export const completeUserOnboarding = async (userId, spiritualStateId = null) =>
 };
 
 // Check if user has completed onboarding
-export const hasUserCompletedOnboarding = (user) => {
+export const hasUserCompletedOnboarding = (user: any): boolean => {
   return user && user.onboarding_completed_at !== null;
 };
 
-export const deleteAccount = async (userId) => {
+export const deleteAccount = async (
+  userId: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
     // Use the authenticated session JWT so the edge function can verify identity
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     const token = session?.access_token ?? anonKey;
 
     const response = await fetch(`${supabaseUrl}/functions/v1/delete-account`, {
@@ -248,7 +276,7 @@ export const deleteAccount = async (userId) => {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
-        apikey: anonKey,
+        apikey: anonKey ?? '',
       },
       body: JSON.stringify({}),
     });
@@ -263,7 +291,7 @@ export const deleteAccount = async (userId) => {
     await signOut();
 
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting account:', error);
     return { success: false, error: error.message };
   }

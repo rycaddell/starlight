@@ -2,20 +2,15 @@ import { supabase } from './client';
 import * as Sentry from '@sentry/react-native';
 
 // Save a new journal entry (UPDATED FOR PROMPT TEXT)
-/**
- * @param {string} content
- * @param {string} customUserId
- * @param {string | null} entryType - 'text' or 'voice'
- * @param {string | null} promptText
- * @param {string | null} transcriptionStatus
- */
 export const saveJournalEntry = async (
-  content,
-  customUserId,
-  entryType = null,
-  promptText = null,
-  transcriptionStatus = null
-) => {
+  content: string,
+  customUserId: string,
+  entryType: string | null = null,
+  promptText: string | null = null,
+  transcriptionStatus: string | null = null
+): Promise<{ success: boolean; data?: any; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
@@ -31,12 +26,12 @@ export const saveJournalEntry = async (
       level: 'info',
     });
 
-    const journalEntry = {
+    const journalEntry: Record<string, any> = {
       content: content,
       custom_user_id: customUserId,
       journal_entry_type: entryType,
       prompt_text: promptText,
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
 
     // Only set transcription_status if explicitly provided
@@ -55,7 +50,6 @@ export const saveJournalEntry = async (
     if (error) {
       console.error('❌ [saveJournalEntry] Error saving journal:', error);
 
-      // Capture error in Sentry
       Sentry.captureException(new Error('Failed to save journal entry'), {
         tags: { component: 'journals', action: 'save' },
         contexts: {
@@ -73,7 +67,6 @@ export const saveJournalEntry = async (
 
     console.log('✅ [saveJournalEntry] Journal saved successfully:', JSON.stringify(data[0], null, 2));
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'journal',
       message: 'Journal entry saved successfully',
@@ -82,10 +75,9 @@ export const saveJournalEntry = async (
     });
 
     return { success: true, data: data[0] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error saving journal:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'journals', action: 'save', type: 'unexpected' },
       contexts: {
@@ -102,7 +94,12 @@ export const saveJournalEntry = async (
 };
 
 // Get user's journal entries (UPDATED FOR CUSTOM USERS)
-export const getUserJournals = async (customUserId, limit = null) => {
+export const getUserJournals = async (
+  customUserId: string,
+  limit: number | null = null
+): Promise<{ success: boolean; data?: any[]; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     let query = supabase
       .from('journals')
@@ -122,7 +119,6 @@ export const getUserJournals = async (customUserId, limit = null) => {
     if (error) {
       console.error('Error fetching journals:', error);
 
-      // Capture error in Sentry
       Sentry.captureException(new Error('Failed to fetch journals'), {
         tags: { component: 'journals', action: 'fetch' },
         contexts: {
@@ -138,10 +134,9 @@ export const getUserJournals = async (customUserId, limit = null) => {
     }
 
     return { success: true, data: data || [] };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching journals:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'journals', action: 'fetch', type: 'unexpected' },
       contexts: { journal: { customUserId, limit } },
@@ -152,7 +147,11 @@ export const getUserJournals = async (customUserId, limit = null) => {
 };
 
 // Get today's answered guided prompts
-export const getTodaysAnsweredPrompts = async (customUserId) => {
+export const getTodaysAnsweredPrompts = async (
+  customUserId: string
+): Promise<{ success: boolean; data?: string[]; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     // Get start of today in user's timezone
     const today = new Date();
@@ -167,24 +166,28 @@ export const getTodaysAnsweredPrompts = async (customUserId) => {
       .gte('created_at', todayISO);
 
     if (error) {
-      console.error('Error fetching today\'s prompts:', error);
+      console.error("Error fetching today's prompts:", error);
       return { success: false, error: error.message };
     }
 
     // Extract just the prompt text strings
     const promptTexts = (data || [])
-      .map(entry => entry.prompt_text)
-      .filter(text => text !== null);
+      .map((entry) => entry.prompt_text)
+      .filter((text): text is string => text !== null);
 
     return { success: true, data: promptTexts };
-  } catch (error) {
-    console.error('Error fetching today\'s prompts:', error);
-    return { success: false, error: 'Failed to fetch today\'s prompts' };
+  } catch (error: any) {
+    console.error("Error fetching today's prompts:", error);
+    return { success: false, error: "Failed to fetch today's prompts" };
   }
 };
 
 // Count user's journal entries (UPDATED FOR CUSTOM USERS)
-export const getUserJournalCount = async (customUserId) => {
+export const getUserJournalCount = async (
+  customUserId: string
+): Promise<{ success: boolean; count?: number; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { count, error } = await supabase
       .from('journals')
@@ -199,17 +202,20 @@ export const getUserJournalCount = async (customUserId) => {
     }
 
     return { success: true, count: count || 0 };
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error counting journals:', error);
     return { success: false, error: 'Failed to count journals' };
   }
 };
 
-export const deleteJournalEntry = async (journalId) => {
+export const deleteJournalEntry = async (
+  journalId: string
+): Promise<{ success: boolean; error?: string }> => {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🗑️ Deleting journal entry:', journalId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'journal',
       message: 'Deleting journal entry',
@@ -217,15 +223,11 @@ export const deleteJournalEntry = async (journalId) => {
       level: 'info',
     });
 
-    const { error } = await supabase
-      .from('journals')
-      .delete()
-      .eq('id', journalId);
+    const { error } = await supabase.from('journals').delete().eq('id', journalId);
 
     if (error) {
       console.error('❌ Error deleting journal:', error);
 
-      // Capture error in Sentry
       Sentry.captureException(new Error('Failed to delete journal entry'), {
         tags: { component: 'journals', action: 'delete' },
         contexts: {
@@ -241,11 +243,9 @@ export const deleteJournalEntry = async (journalId) => {
 
     console.log('✅ Journal entry deleted successfully');
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in deleteJournalEntry:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'journals', action: 'delete', type: 'unexpected' },
       contexts: { journal: { journalId } },
@@ -255,32 +255,3 @@ export const deleteJournalEntry = async (journalId) => {
   }
 };
 
-// Get user's last journal entry type (for default tab selection)
-export const getLastJournalType = async (customUserId) => {
-  try {
-    const { data, error } = await supabase
-      .from('journals')
-      .select('journal_entry_type')
-      .eq('custom_user_id', customUserId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      // User might have no journals yet (404 error)
-      if (error.code === 'PGRST116') {
-        return { success: true, journalType: null }; // New user
-      }
-      console.error('Error fetching last journal type:', error);
-      return { success: false, error: error.message };
-    }
-
-    return {
-      success: true,
-      journalType: data?.journal_entry_type || null
-    };
-  } catch (error) {
-    console.error('Error fetching last journal type:', error);
-    return { success: false, error: 'Failed to fetch last journal type' };
-  }
-};

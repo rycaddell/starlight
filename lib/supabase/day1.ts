@@ -1,4 +1,4 @@
-// lib/supabase/day1.js
+// lib/supabase/day1.ts
 // Service layer for Day 1 onboarding flow
 // Manages progress through 5-step journey ending with mini-mirror generation
 
@@ -7,10 +7,12 @@ import * as Sentry from '@sentry/react-native';
 
 /**
  * Get or create Day 1 progress for user
- * @param {string} userId - UUID of the user
- * @returns {Promise<{success: boolean, progress?: object, error?: string}>}
  */
-export async function getDay1Progress(userId) {
+export async function getDay1Progress(
+  userId: string
+): Promise<{ success: boolean; progress?: any; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('📊 Fetching Day 1 progress for user:', userId);
 
@@ -24,7 +26,6 @@ export async function getDay1Progress(userId) {
     if (error && error.code === 'PGRST116') {
       console.log('📝 No progress found, creating initial record');
 
-      // Add Sentry breadcrumb
       Sentry.addBreadcrumb({
         category: 'day1',
         message: 'Creating initial Day 1 progress',
@@ -45,7 +46,6 @@ export async function getDay1Progress(userId) {
       if (createError) {
         console.error('❌ Error creating progress:', createError);
 
-        // Capture error
         Sentry.captureException(new Error('Failed to create Day 1 progress'), {
           tags: { component: 'day1', action: 'createProgress' },
           contexts: {
@@ -65,7 +65,6 @@ export async function getDay1Progress(userId) {
     if (error) {
       console.error('❌ Error fetching progress:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to fetch Day 1 progress'), {
         tags: { component: 'day1', action: 'getProgress' },
         contexts: {
@@ -81,11 +80,9 @@ export async function getDay1Progress(userId) {
 
     console.log('✅ Progress loaded:', data);
     return { success: true, progress: data };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getDay1Progress:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'getProgress', type: 'unexpected' },
       contexts: { day1: { userId } },
@@ -97,11 +94,13 @@ export async function getDay1Progress(userId) {
 
 /**
  * Update current step in Day 1 flow
- * @param {string} userId - UUID of the user
- * @param {number} step - Step number (1-5)
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateCurrentStep(userId, step) {
+export async function updateCurrentStep(
+  userId: string,
+  step: number
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log(`📍 Updating current step to ${step} for user:`, userId);
 
@@ -117,8 +116,7 @@ export async function updateCurrentStep(userId, step) {
 
     console.log('✅ Step updated successfully');
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in updateCurrentStep:', error);
     return { success: false, error: error.message };
   }
@@ -126,15 +124,16 @@ export async function updateCurrentStep(userId, step) {
 
 /**
  * Save spiritual place selection (Step 1)
- * @param {string} userId - UUID of the user
- * @param {string} spiritualPlace - Selected spiritual place
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function saveSpiritualPlace(userId, spiritualPlace) {
+export async function saveSpiritualPlace(
+  userId: string,
+  spiritualPlace: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('💾 Saving spiritual place:', spiritualPlace, 'for user:', userId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Saving spiritual place',
@@ -153,7 +152,6 @@ export async function saveSpiritualPlace(userId, spiritualPlace) {
     if (error) {
       console.error('❌ Error saving spiritual place:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to save spiritual place'), {
         tags: { component: 'day1', action: 'saveSpiritualPlace' },
         contexts: {
@@ -170,11 +168,9 @@ export async function saveSpiritualPlace(userId, spiritualPlace) {
 
     console.log('✅ Spiritual place saved');
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in saveSpiritualPlace:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'saveSpiritualPlace', type: 'unexpected' },
       contexts: { day1: { userId, spiritualPlace } },
@@ -186,16 +182,17 @@ export async function saveSpiritualPlace(userId, spiritualPlace) {
 
 /**
  * Save journal ID for a specific step (Steps 2 or 3)
- * @param {string} userId - UUID of the user
- * @param {number} step - Step number (2 or 3)
- * @param {string} journalId - UUID of the created journal
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function saveStepJournal(userId, step, journalId) {
+export async function saveStepJournal(
+  userId: string,
+  step: number,
+  journalId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log(`💾 Saving journal for step ${step}:`, journalId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: `Saving step ${step} journal`,
@@ -217,7 +214,6 @@ export async function saveStepJournal(userId, step, journalId) {
     if (error) {
       console.error('❌ Error saving step journal:', error);
 
-      // Capture error
       Sentry.captureException(new Error(`Failed to save step ${step} journal`), {
         tags: { component: 'day1', action: 'saveStepJournal' },
         contexts: {
@@ -235,11 +231,9 @@ export async function saveStepJournal(userId, step, journalId) {
 
     console.log('✅ Step journal saved');
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in saveStepJournal:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'saveStepJournal', type: 'unexpected' },
       contexts: { day1: { userId, step, journalId } },
@@ -251,10 +245,15 @@ export async function saveStepJournal(userId, step, journalId) {
 
 /**
  * Check if both transcriptions are ready for mini-mirror generation
- * @param {string} userId - UUID of the user
- * @returns {Promise<{ready: boolean, step2Ready: boolean, step3Ready: boolean, error?: string}>}
  */
-export async function checkBothTranscriptionsReady(userId) {
+export async function checkBothTranscriptionsReady(userId: string): Promise<{
+  ready: boolean;
+  step2Ready: boolean;
+  step3Ready: boolean;
+  error?: string;
+}> {
+  if (!supabase) return { ready: false, step2Ready: false, step3Ready: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🔍 [DEBUG] Checking transcription status for user:', userId);
 
@@ -294,11 +293,17 @@ export async function checkBothTranscriptionsReady(userId) {
     console.log('📄 [DEBUG] Journals fetched:', journals?.length, 'journals');
     console.log('📄 [DEBUG] Raw journals data:', JSON.stringify(journals, null, 2));
 
-    const step2Journal = journals.find(j => j.id === progress.step_2_journal_id);
-    const step3Journal = journals.find(j => j.id === progress.step_3_journal_id);
+    const step2Journal = (journals ?? []).find((j: any) => j.id === progress.step_2_journal_id);
+    const step3Journal = (journals ?? []).find((j: any) => j.id === progress.step_3_journal_id);
 
-    console.log('🔎 [DEBUG] Step 2 journal:', step2Journal ? `Found (status: ${step2Journal.transcription_status})` : 'NOT FOUND');
-    console.log('🔎 [DEBUG] Step 3 journal:', step3Journal ? `Found (status: ${step3Journal.transcription_status})` : 'NOT FOUND');
+    console.log(
+      '🔎 [DEBUG] Step 2 journal:',
+      step2Journal ? `Found (status: ${step2Journal.transcription_status})` : 'NOT FOUND'
+    );
+    console.log(
+      '🔎 [DEBUG] Step 3 journal:',
+      step3Journal ? `Found (status: ${step3Journal.transcription_status})` : 'NOT FOUND'
+    );
 
     const step2Ready = step2Journal?.transcription_status === 'completed';
     const step3Ready = step3Journal?.transcription_status === 'completed';
@@ -311,8 +316,7 @@ export async function checkBothTranscriptionsReady(userId) {
     });
 
     return { ready: bothReady, step2Ready, step3Ready };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [DEBUG] Error in checkBothTranscriptionsReady:', error);
     return { ready: false, step2Ready: false, step3Ready: false, error: error.message };
   }
@@ -320,14 +324,18 @@ export async function checkBothTranscriptionsReady(userId) {
 
 /**
  * Trigger mini-mirror generation (synchronous with timeout fallback)
- * @param {string} userId - UUID of the user
- * @returns {Promise<{success: boolean, mirror?: object, summaries?: object, error?: string}>}
  */
-export async function generateMiniMirror(userId) {
+export async function generateMiniMirror(userId: string): Promise<{
+  success: boolean;
+  mirror?: any;
+  summaries?: any;
+  error?: string;
+}> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🚀 Triggering mini-mirror generation for user:', userId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Generating mini-mirror',
@@ -344,7 +352,9 @@ export async function generateMiniMirror(userId) {
     // Call edge function
     const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
     const edgeFunctionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-day-1-mirror`;
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
     console.log('📡 Calling edge function:', edgeFunctionUrl);
 
@@ -352,8 +362,8 @@ export async function generateMiniMirror(userId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-        'apikey': anonKey,
+        Authorization: `Bearer ${session?.access_token}`,
+        apikey: anonKey ?? '',
       },
       body: JSON.stringify({}),
     });
@@ -361,13 +371,12 @@ export async function generateMiniMirror(userId) {
     const responseText = await response.text();
     console.log('📥 Edge function response status:', response.status);
 
-    let data;
+    let data: any;
     try {
       data = responseText ? JSON.parse(responseText) : null;
-    } catch (parseError) {
+    } catch (parseError: any) {
       console.error('❌ Failed to parse response:', parseError);
 
-      // Capture JSON parse error
       Sentry.captureException(parseError, {
         tags: { component: 'day1', action: 'generateMiniMirror' },
         contexts: {
@@ -394,7 +403,6 @@ export async function generateMiniMirror(userId) {
     if (!response.ok || !data.success) {
       console.error('❌ Generation failed:', data);
 
-      // Capture generation failure
       Sentry.captureException(new Error('Mini-mirror generation failed'), {
         tags: { component: 'day1', action: 'generateMiniMirror' },
         contexts: {
@@ -420,7 +428,6 @@ export async function generateMiniMirror(userId) {
 
     console.log('✅ Mini-mirror generated successfully');
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Mini-mirror generated successfully',
@@ -433,11 +440,9 @@ export async function generateMiniMirror(userId) {
       mirror: data.mirror,
       summaries: data.summaries,
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in generateMiniMirror:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'generateMiniMirror', type: 'unexpected' },
       contexts: { day1: { userId } },
@@ -455,16 +460,17 @@ export async function generateMiniMirror(userId) {
 
 /**
  * Save focus areas input (Step 5)
- * @param {string} userId - UUID of the user
- * @param {string} mirrorId - UUID of the mini-mirror
- * @param {string} focusAreas - User-entered focus areas
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function saveFocusAreas(userId, mirrorId, focusAreas) {
+export async function saveFocusAreas(
+  userId: string,
+  mirrorId: string,
+  focusAreas: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('💾 Saving focus areas for mirror:', mirrorId);
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Saving focus areas',
@@ -480,7 +486,6 @@ export async function saveFocusAreas(userId, mirrorId, focusAreas) {
     if (error) {
       console.error('❌ Error saving focus areas:', error);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to save focus areas'), {
         tags: { component: 'day1', action: 'saveFocusAreas' },
         contexts: {
@@ -497,11 +502,9 @@ export async function saveFocusAreas(userId, mirrorId, focusAreas) {
 
     console.log('✅ Focus areas saved');
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in saveFocusAreas:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'saveFocusAreas', type: 'unexpected' },
       contexts: { day1: { userId, mirrorId } },
@@ -513,18 +516,19 @@ export async function saveFocusAreas(userId, mirrorId, focusAreas) {
 
 /**
  * Complete Day 1 flow
- * @param {string} userId - UUID of the user
- * @param {string} focusTheme - Optional 1-2 word theme from focus areas
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function completeDay1(userId, focusTheme = null) {
+export async function completeDay1(
+  userId: string,
+  focusTheme: string | null = null
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     console.log('🎉 Completing Day 1 for user:', userId);
     if (focusTheme) {
       console.log('🎯 Focus theme:', focusTheme);
     }
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Completing Day 1',
@@ -543,7 +547,6 @@ export async function completeDay1(userId, focusTheme = null) {
     if (progressError) {
       console.error('❌ Error updating progress:', progressError);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to update Day 1 progress'), {
         tags: { component: 'day1', action: 'completeDay1' },
         contexts: {
@@ -558,7 +561,7 @@ export async function completeDay1(userId, focusTheme = null) {
     }
 
     // Update users table with completion time and theme
-    const updateData = { day_1_completed_at: now };
+    const updateData: Record<string, string> = { day_1_completed_at: now };
     if (focusTheme) {
       updateData.day_1_focus_theme = focusTheme;
     }
@@ -571,7 +574,6 @@ export async function completeDay1(userId, focusTheme = null) {
     if (userError) {
       console.error('❌ Error updating user:', userError);
 
-      // Capture error
       Sentry.captureException(new Error('Failed to update user Day 1 completion'), {
         tags: { component: 'day1', action: 'completeDay1' },
         contexts: {
@@ -587,7 +589,6 @@ export async function completeDay1(userId, focusTheme = null) {
 
     console.log('✅ Day 1 completed successfully');
 
-    // Add success breadcrumb
     Sentry.addBreadcrumb({
       category: 'day1',
       message: 'Day 1 completed successfully',
@@ -596,11 +597,9 @@ export async function completeDay1(userId, focusTheme = null) {
     });
 
     return { success: true };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in completeDay1:', error);
 
-    // Capture unexpected error
     Sentry.captureException(error, {
       tags: { component: 'day1', action: 'completeDay1', type: 'unexpected' },
       contexts: { day1: { userId } },
@@ -613,11 +612,13 @@ export async function completeDay1(userId, focusTheme = null) {
 /**
  * Save focus theme to user record (called after focus is submitted in Step 5)
  * completeDay1() is called at generation time; this just adds the theme.
- * @param {string} userId - UUID of the user
- * @param {string} theme - 1-2 word theme extracted from focus text
- * @returns {Promise<{success: boolean, error?: string}>}
  */
-export async function updateFocusTheme(userId, theme) {
+export async function updateFocusTheme(
+  userId: string,
+  theme: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     const { error } = await supabase
       .from('users')
@@ -631,7 +632,7 @@ export async function updateFocusTheme(userId, theme) {
 
     console.log('✅ Focus theme updated:', theme);
     return { success: true };
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in updateFocusTheme:', error);
     return { success: false, error: error.message };
   }
@@ -639,10 +640,15 @@ export async function updateFocusTheme(userId, theme) {
 
 /**
  * Get Day 1 mirror for user
- * @param {string} userId - UUID of the user
- * @returns {Promise<{success: boolean, mirror?: object, progress?: object, error?: string}>}
  */
-export async function getDay1Mirror(userId) {
+export async function getDay1Mirror(userId: string): Promise<{
+  success: boolean;
+  mirror?: any;
+  progress?: { spiritualPlace: string; completedAt: string } | null;
+  error?: string;
+}> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
   try {
     // Get progress to find mirror_id and spiritual place
     const { data: progress, error: progressError } = await supabase
@@ -680,8 +686,7 @@ export async function getDay1Mirror(userId) {
         completedAt: progress.completed_at,
       },
     };
-
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error in getDay1Mirror:', error);
     return { success: false, error: error.message };
   }

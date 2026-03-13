@@ -8,13 +8,13 @@ Welcome to Oxbow! This guide will help you understand the core features, workflo
 
 Oxbow is a **spiritual journaling mobile app** that:
 1. Lets users capture journal entries via **text or voice**
-2. Transcribes voice recordings automatically using **OpenAI Whisper**
+2. Transcribes voice recordings automatically using **OpenAI Whisper** (server-side via Edge Function)
 3. Generates **AI-powered spiritual reflections** ("Mirrors") after 10+ journal entries
 4. Enables **friend connections** via invite links for shared spiritual growth
 5. Allows users to **share mirrors** with friends for mutual encouragement
 6. Provides a progression system that encourages regular journaling
 
-**Target Platforms:** iOS, Android, Web
+**Target Platforms:** iOS (primary; App Store target), Android and Web supported by Expo
 
 ---
 
@@ -41,9 +41,10 @@ Oxbow is a **spiritual journaling mobile app** that:
    # Press 'i' for iOS, 'a' for Android, 'w' for web
 ```
 
-4. **Get an access code:**
-   - Ask your team lead for a test access code
-   - Access codes are pre-created in the `users` table
+4. **Sign in:**
+   - Use a test phone number (E.164 format, e.g. `+15551234567`)
+   - Enter the OTP sent via SMS
+   - Complete the narrative onboarding (or skip via database if needed for testing)
 
 ---
 
@@ -54,8 +55,8 @@ Oxbow is a **spiritual journaling mobile app** that:
 ### What's Different for Mens Group Users:
 
 1. **Mirror Threshold: 6 journals instead of 10**
-   - Location: `lib/config/constants.js:getMirrorThreshold()`
-   - Client check: `hooks/useMirrorData.ts` + `lib/supabase/mirrors.js:checkCanGenerateMirror()`
+   - Location: `lib/config/constants.ts:getMirrorThreshold()`
+   - Client check: `hooks/useMirrorData.ts` + `lib/supabase/mirrors.ts:checkCanGenerateMirror()`
    - Server check: `supabase/functions/generate-mirror/index.ts`
    - UI: Progress shows "X/6" instead of "X/10"
 
@@ -104,8 +105,9 @@ Users can create journal entries in two ways:
 #### Voice Journaling
 - Tap microphone to start recording
 - Speak naturally (up to 8 minutes)
-- Automatic transcription via Whisper API
-- Auto-submit after transcription
+- Audio uploaded to Supabase Storage → transcribed server-side via Whisper Edge Function
+- Transcription delivered via Supabase Realtime (WebSocket) — no polling
+- Auto-submit after transcription completes
 
 **Flow:**
 ```
@@ -118,7 +120,7 @@ User Input → Save to Supabase → Navigate to Mirror Screen → Track Progress
 - `components/journal/TextJournalInput.tsx` - Text input UI
 - `components/voice/VoiceRecordingTab.tsx` - Voice recording UI
 - `hooks/useAudioRecording.tsx` - Recording logic
-- `lib/supabase/journals.js` - Database operations
+- `lib/supabase/journals.ts` - Database operations
 
 ---
 
@@ -134,54 +136,78 @@ isRecording: boolean    // Is recording active?
 isPaused: boolean       // Is recording paused?
 recordingDuration: number // Current duration in seconds
 recording: Audio.Recording | null // The recording object
+isProcessing: boolean   // Is transcription in progress?
 ```
 
 #### Control Functions
-- `handleStartRecording()` - Creates recording instance
+- `handleStartRecording()` - Creates recording instance, activates wake lock
 - `handlePauseRecording()` - Pauses recording
 - `handleResumeRecording()` - Resumes from pause
-- `handleStopRecording()` - Stops, saves, and initiates transcription
+- `handleStopRecording()` - Stops, uploads to Supabase Storage, creates pending journal, triggers server-side transcription
+- `handleDiscardRecording()` - Discards recording without saving
+- `formatDuration()` - Utility to format seconds as MM:SS
 
 #### Recording Flow
 ```
-Start → Configure Audio Mode → Create Recording → Track Duration
+Start → Configure Audio Mode → Create Recording → Activate Wake Lock → Track Duration
   ↓
-Pause (optional) → Store current state
+Pause (optional) → Store current duration → Deactivate wake lock
   ↓
 Resume (optional) → Continue recording
   ↓
-Stop → Extract URI → Send to Whisper → Save to Database
+Stop → Extract URI → Copy to persistent local storage → Upload to Supabase Storage
+  ↓
+Create pending journal row (transcription_status: 'pending')
+  ↓
+Fire transcribe-audio Edge Function (async, don't await)
+  ↓
+Subscribe to journal row via Supabase Realtime
+  ↓
+Realtime delivers transcription_status: 'completed' → invoke onTranscriptionComplete callback
 ```
 
 **Important Notes:**
-- 8-minute maximum recording length (enforced)
-- Automatic cleanup on errors
-- Duration tracking via 1-second interval
-- Permissions checked before recording
+- 8-minute maximum recording length (enforced, auto-stops with alert)
+- Audio file persisted to `documentDirectory/pending_recordings/` immediately to survive app backgrounding
+- Pending jobs tracked in AsyncStorage queue (`oxbow_pending_voice_jobs`) for crash recovery
+- App backgrounding while recording: auto-pauses, resumes on foreground
+- Fallback if Storage upload fails: legacy inline transcription (base64 audio sent to Edge Function directly)
+- 3-minute safety net timeout if Realtime doesn't deliver an update
 
 ---
 
 ### 3. Voice Transcription
 
-**Service:** `lib/whisperService.ts`
+**Service:** `lib/supabase/transcription.ts`
 
-Uses OpenAI's Whisper API to convert audio to text:
+Transcription is handled **server-side** via the `transcribe-audio` Supabase Edge Function:
+
 ```typescript
-const transcription = await transcribeAudio(recordingUri);
-// Returns transcribed text or throws error
+// Primary path: server-side via Realtime
+const journal = await createPendingJournal({ customUserId, storagePath, ... });
+triggerTranscription(journal.id); // non-blocking
+subscribeForCompletion(journal.id, ...); // Realtime WebSocket
+
+// Fallback path (if Storage upload failed): legacy inline transcription
+const result = await transcribeAudio(audioUri); // sends base64 audio to Edge Function
 ```
 
-**Flow:**
-1. Recording stopped → URI extracted
-2. Audio file sent to Whisper API
-3. Transcription received
-4. Text used to create journal entry
-5. User navigated to Mirror screen
+**Primary Flow:**
+1. Audio recorded → URI extracted
+2. Audio copied to persistent local path
+3. Audio uploaded to Supabase Storage bucket (`audio-recordings/`)
+4. Pending journal row created in DB (`transcription_status: 'pending'`)
+5. `transcribe-audio` Edge Function fired (async, server handles Whisper API call)
+6. Client subscribes to journal row via Supabase Realtime WebSocket
+7. Realtime delivers update when `transcription_status` → `'completed'`
+8. `content` field populated with transcribed text
+9. Journal saved; user navigated to Mirror screen
 
 **Error Handling:**
-- Network failures show user alert
-- Recording preserved even if transcription fails
-- User can retry or manually enter text
+- Upload timeout (30s): recording stays in local queue; user prompted to relaunch on better connection
+- Journal creation failure: audio safely in Storage, AsyncStorage queue enables recovery on next launch
+- Transcription failure: Realtime delivers `transcription_status: 'failed'`; user alerted
+- 3-minute Realtime timeout: one final poll, then user told to "check back in a moment"
 
 ---
 
@@ -192,12 +218,13 @@ const transcription = await transcribeAudio(recordingUri);
 Mirrors are **AI-generated spiritual reflections** based on 10+ journal entries (configurable server-side).
 
 #### The Mirror Concept
-After collecting enough journals (default: 10), users can "unlock" a Mirror containing:
-- **Screen 1 (Themes):** Identified patterns and recurring themes from journals
-- **Screen 2 (Biblical Mirror):** Relevant biblical stories, verses, and connections
-- **Screen 3 (Observations):** Observations about self-perception, God-perception, others, and blind spots
+After collecting enough journals (default: 10), users can "unlock" a Mirror. The Mirror is a single scrollable experience with four navigable sections, accessed via a tab bar:
+- **Mirror tab:** Biblical character parallel story + encouraging verse + invitation to growth (from `screen_2_biblical`)
+- **Themes tab:** Identified patterns and recurring themes from journals (from `screen_1_themes`, max 4 shown)
+- **Observations tab:** Observations about self-perception, God-perception, others, and blind spots (from `screen_3_observations`)
+- **Reflection tab:** User's personal written reflection (text input, saved as `reflection_focus`; hidden for shared mirrors)
 
-**Note:** ALL mirrors use a 3-screen format. Screen 4 (Suggestions) was deprecated - we now focus on observations rather than prescriptive advice
+**Note:** The MirrorViewer (`components/mirror/MirrorViewer.tsx`) is a single scrollable view with scroll-linked tab navigation — not a swipeable carousel. Shared mirrors hide the Reflection tab.
 
 #### Technical Implementation
 
@@ -209,39 +236,46 @@ Mirrors are generated using a Supabase Edge Function (`generate-mirror`) that:
 4. Saves Mirror to database with generation timestamps
 5. Updates `mirror_generation_requests` table with status
 
-**Client-Side Polling:**
+**Client-Side Realtime (not polling):**
 ```typescript
-// Client polls for status updates
-const { data } = await supabase
-  .from('mirror_generation_requests')
-  .select('status, mirror_id')
-  .eq('custom_user_id', userId)
-  .order('requested_at', { ascending: false })
-  .limit(1);
+// Client subscribes to mirror_generation_requests table via Realtime WebSocket
+const channel = supabase
+  .channel(`mirror-generation-${user.id}`)
+  .on('postgres_changes', {
+    event: 'UPDATE',
+    table: 'mirror_generation_requests',
+    filter: `custom_user_id=eq.${user.id}`,
+  }, (payload) => {
+    const { status, mirror_id, error_message } = payload.new;
+    if (status === 'completed' || status === 'failed') {
+      onResolved(status, mirror_id, error_message);
+    }
+  })
+  .subscribe();
 
-// Status progression: 'pending' → 'processing' → 'completed' or 'failed'
+// 4-minute safety net: one final poll if Realtime doesn't deliver
 ```
 
-**Mirror Structure:**
+**Mirror Structure (in database):**
 ```typescript
-// Mirror structure in database
 {
   id: string
   custom_user_id: string
-  screen_1_themes: JSON
-  screen_2_biblical: JSON
-  screen_3_observations: JSON
-  screen_4_suggestions: JSON
-  reflection_focus: string
-  reflection_action: string
+  screen_1_themes: JSON      // themes array + insight
+  screen_2_biblical: JSON    // parallel_story, encouraging_verse, invitation_to_growth/challenging_verse
+  screen_3_observations: JSON // self_perception, god_perception, others_perception, blind_spots
+  screen_4_suggestions: JSON // legacy field, not shown in current MirrorViewer UI
+  reflection_focus: string   // user-written reflection (private, not shared)
   reflection_completed_at: string | null
   has_been_viewed: boolean
   created_at: string
-  journal_count: number  // Default: 10
+  journal_count: number      // Default: 10
+  mirror_type: 'full' | 'day_1'
+  status: 'completed' | ...
 }
 ```
 
-#### Mirror Flow (Server-Side Generation)
+#### Mirror Flow (Server-Side Generation with Realtime)
 ```
 10+ Journals Collected
   ↓
@@ -249,33 +283,23 @@ const { data } = await supabase
   ↓
 User taps Generate Mirror
   ↓
-Client calls lib/supabase/mirrors.generateMirror()
+Client calls useMirrorData.generateMirror()
   ↓
-Edge Function creates mirror_generation_request (status: pending)
+useMirrorData subscribes to Realtime channel for mirror_generation_requests
   ↓
-Client polls status every 3 seconds (hooks/useMirrorData.ts)
+Client calls lib/supabase/mirrors.requestMirrorGeneration()
   ↓
-Server processes request asynchronously with OpenAI
+Edge Function generates mirror synchronously and returns it in HTTP response
+  OR creates mirror_generation_request (status: pending) for async path
   ↓
-Mirror content generated and saved to database
+Either: HTTP response delivers mirror directly (resolves Realtime subscription)
+    OR: Realtime delivers status update when generation completes
   ↓
-Request status updated to 'completed'
+Mirror fetched via getMirrorById()
   ↓
-Polling detects completion
+Mirror marked as has_been_viewed when user opens it
   ↓
-Mirror marked as viewed (has_been_viewed: true)
-  ↓
-Server: Generates 3 screens (with retry if timeout)
-  ↓
-Server: Saves Mirror, updates status to 'completed'
-  ↓
-Client: Polling detects completion (every 5 seconds)
-  ↓
-Client: Fetches Mirror data
-  ↓
-User views 3-screen swipeable experience
-  ↓
-Mirror marked as has_been_viewed
+User sees scrollable experience with Mirror/Themes/Observations/Reflection tabs
   ↓
 Mirror saved to history for re-viewing
 ```
@@ -283,10 +307,10 @@ Mirror saved to history for re-viewing
 **Key Files:**
 - `supabase/functions/generate-mirror/index.ts` - Server-side Mirror generation
 - `app/(tabs)/mirror.tsx` - Mirror screen orchestration
-- `components/mirror/MirrorModal.tsx` - Full-screen mirror viewer
-- `components/mirror/ScreenOne.tsx` through `ScreenThree.tsx` - Individual screens (3-screen format)
-- `lib/supabase/mirrors.js` - Database operations
-- `hooks/useMirrorData.ts` - Data fetching, polling, and state management
+- `components/mirror/MirrorViewer.tsx` - Scrollable mirror viewer with tab navigation
+- `components/mirror/MirrorScreen1.tsx` through `MirrorScreen4.tsx` - Individual screen components (used for Day 1 mini-mirror)
+- `lib/supabase/mirrors.ts` - Database operations
+- `hooks/useMirrorData.ts` - Data fetching, Realtime subscription, and state management
 
 ---
 
@@ -335,16 +359,16 @@ Success → Both users see each other in Friends screen
 - `app/(tabs)/friends.tsx` - Friends screen with slots and invites
 - `app/friend-invite/[token].tsx` - Deep link route for invite acceptance
 - `components/friends/FriendSlots.tsx` - Friend slot UI with invite button
-- `lib/supabase/friends.js` - Friend operations (create/accept invite, fetch friends)
+- `lib/supabase/friends.ts` - Friend operations (create/accept invite, fetch friends)
 
 #### Mirror Sharing
 
 **How It Works:**
 1. User views completed mirror (from Mirror screen past mirrors)
 2. Taps "Share" button
-3. Friend picker modal appears showing all friends
+3. `ShareMirrorSheet` appears showing all friends
 4. User selects friend(s) to share with
-5. Mirror shared (3 screens: Themes, Biblical, Observations)
+5. Mirror shared (Mirror, Themes, Observations sections; Reflection tab excluded)
 6. Recipient sees "NEW" badge on Friends tab
 7. Recipient taps to view shared mirror
 8. Share marked as viewed → badge changes to "VIEW"
@@ -355,7 +379,7 @@ User A: Share Mirror
   ↓
 Tap "Share" on completed mirror
   ↓
-FriendPickerModal appears
+ShareMirrorSheet appears
   ↓
 Select friend(s)
   ↓
@@ -365,11 +389,11 @@ Create mirror_share record for each recipient
   ↓
 User B: Unread badge appears
   ↓
-UnreadSharesContext updates tab badge
+UnreadSharesContext / FriendBadgeContext updates tab badge
   ↓
 User B opens Friends tab
   ↓
-Sees shared mirror with "NEW" badge
+Sees shared mirror from User A with "NEW" badge
   ↓
 Taps to view
   ↓
@@ -377,60 +401,73 @@ lib/supabase/mirrorShares.getSharedMirrorDetails()
   ↓
 MirrorViewer opens with isSharedMirror={true}
   ↓
-Shows 3 screens (themes, biblical, observations)
-  ↓
-Reflection privacy preserved (screen 4 excluded)
+Shows Mirror, Themes, Observations sections (Reflection tab hidden)
   ↓
 Mark as viewed
   ↓
 Badge changes from "NEW" to "VIEW"
+  ↓
+User B can re-view shared mirror anytime
 ```
 
 **Key Files:**
 - `app/(tabs)/mirror.tsx` - Share button on past mirrors
-- `components/mirror/FriendPickerModal.tsx` - Friend selection UI
+- `components/mirror/ShareMirrorSheet.tsx` - Friend selection UI (bottom sheet)
 - `components/mirror/MirrorViewer.tsx` - Handles both own and shared mirrors
-- `lib/supabase/mirrorShares.js` - Mirror sharing operations
+- `lib/supabase/mirrorShares.ts` - Mirror sharing operations
 - `contexts/UnreadSharesContext.tsx` - Tracks unread shares for tab badge
+- `contexts/FriendBadgeContext.tsx` - Friend tab badge state
 
 ---
 
 ### 6. Authentication System
 
-**Context:** `contexts/AuthContext.tsx`  
-**Service:** `lib/supabase/auth.js`
+**Context:** `contexts/AuthContext.tsx`
+**Service:** `lib/supabase/auth.ts`
 
 #### How Auth Works
 
-**⚠️ Important:** Oxbow uses **access codes**, NOT email/password.
+Oxbow uses **phone number OTP** via Supabase Auth + Twilio Verify. There are no email/password or access codes.
 
 **Why?**
-- Simpler onboarding (no email verification)
-- Better for group-based or invitation-based access
-- Pre-created user records mapped to codes
+- Simpler onboarding (no password to remember)
+- Phone number is the natural identity for small group / invitation-based access
+- Supabase handles JWT session lifecycle automatically
 
 **User Flow:**
-1. User enters access code on sign-in screen
-2. Code validated against `users` table
-3. If valid, user data stored in AsyncStorage
-4. User automatically signed in on next app launch
+1. User enters phone number (E.164 format)
+2. OTP SMS sent via Twilio Verify
+3. User enters 6-digit OTP
+4. Supabase Auth session created → stored in `expo-secure-store`
+5. `AuthContext` detects session → looks up `users` row by `auth_user_id`
+6. If no match by `auth_user_id`, tries legacy phone-based lookup (migration path for pre-OTP users)
+7. If still no match → `isNewUser = true` → onboarding begins
+8. `completeProfileSetup()` creates the `users` row at Step 1 of narrative onboarding (name input)
 
-**User Properties:**
+**AppUser Properties:**
 ```typescript
-{
-  id: string
-  access_code: string
-  display_name: string
+interface AppUser {
+  id: string                        // public.users UUID
+  auth_user_id: string              // auth.users UUID
+  phone: string                     // E.164 (e.g. +15551234567)
+  display_name: string | null
+  created_at: string
   status: string
-  group_name?: string
-  invited_by?: string
+  group_name?: string | null
+  invited_by?: string | null
+  first_login_at?: string | null
+  onboarding_completed_at?: string | null
+  auth_migrated_at?: string | null
+  profile_picture_url?: string | null
+  day_1_completed_at?: string | null
 }
 ```
 
 **Session Persistence:**
-- Access code stored in AsyncStorage
-- Auto sign-in on app launch if code exists
-- Sign out clears AsyncStorage
+- Session (JWT + refresh token) stored in `expo-secure-store` via Supabase's built-in adapter
+- Supabase auto-refreshes tokens; no manual session management needed
+- Sign out calls `supabase.auth.signOut()` which clears SecureStore automatically
+- `onAuthStateChange` triggers `resolveAppUser()` on any session change
 
 ---
 
@@ -444,7 +481,7 @@ New users experience a **10-step narrative journey** using a river metaphor to e
 #### The Narrative Arc
 
 **Act 1: Individual Moments (Steps 1-4)**
-1. **Name Input** - User enters their first name (saved to `display_name`)
+1. **Name Input** - User enters their first name → `completeProfileSetup()` creates `users` row with `display_name`
 2. **Welcome** - Personalized greeting: "Hey, [Name]. Welcome to Oxbow." (auto-advances after 2.5s)
 3. **One Moment at a Time** - Shows first journal entry (Dec 12 - gratitude)
 4. **The Question** - "But how do these moments fit together into a sensible story?"
@@ -468,12 +505,14 @@ New users experience a **10-step narrative journey** using a river metaphor to e
 - **Key Animation:** Step 8 features a smooth zoom-out transition that reveals the oxbow pattern
 
 #### Implementation Notes
-- Onboarding shown only once (tracked in AsyncStorage)
-- Name saved to `users.display_name` during step 1
+- Onboarding completion tracked in database (`users.onboarding_completed_at`), not AsyncStorage
+- Name saved to `users.display_name` at step 1 via `completeProfileSetup()` (also creates the users row)
+- `onboarding_completed_at` set when user taps "Get started" on step 10
 - All journal entries are sample data for storytelling (not saved to database)
 - Permissions (microphone, notifications) requested later in-context when needed
 - Can be completed in 60-90 seconds
 - User taps to advance through most screens (except welcome which auto-advances)
+- Back navigation is disabled during onboarding
 
 ---
 
@@ -482,8 +521,8 @@ New users experience a **10-step narrative journey** using a river metaphor to e
 ### Complete Journaling Workflow
 ```
 1. App Launch
-   ↓ (AuthContext checks AsyncStorage)
-2. Auto Sign-In (if access code exists)
+   ↓ (AuthContext calls supabase.auth.getSession())
+2. Auto Sign-In (Supabase restores session from SecureStore)
    ↓
 3. Land on Journal Screen (app/(tabs)/index.tsx)
    ↓
@@ -493,58 +532,58 @@ New users experience a **10-step narrative journey** using a river metaphor to e
     - Type journal entry
     - Tap submit
     - Save to Supabase
-    
+
 5b. VOICE PATH:
     - Check microphone permissions
     - Tap record button
     - Speak (up to 8 minutes)
     - Tap stop
-    - Send to Whisper API
-    - Receive transcription
-    - Save to Supabase
+    - Audio uploaded to Supabase Storage
+    - Pending journal row created
+    - transcribe-audio Edge Function triggered
+    - Realtime subscription delivers transcription
+    - Journal content populated automatically
    ↓
 6. Navigate to Mirror Screen
    ↓
-7. Show progress (X/15 journals)
+7. Show progress (X/10 journals, or X/6 for Mens Group)
    ↓
-8. If 15th journal → Show "Unlock Mirror" button
+8. If threshold reached → Show "Unlock Mirror" button
 ```
 
 ### Complete Mirror Generation Workflow
 ```
-1. User reaches 10+ journals (configurable threshold)
+1. User reaches 10+ journals (configurable threshold, 6 for Mens Group)
    ↓
 2. "Generate Mirror" button appears on Mirror screen
    ↓
 3. User taps Generate Mirror
    ↓
-4. Client calls generateMirror() → creates mirror_generation_request
+4. Client subscribes to Realtime channel for mirror_generation_requests
    ↓
-5. Polling starts (every 3 seconds)
+5. Client calls requestMirrorGeneration() → Edge Function called
    ↓
-6. Server processes request asynchronously with OpenAI
+6. Edge Function generates mirror with OpenAI GPT-5-mini (typically 3-8 seconds)
    ↓
 7. Server fetches unassigned journals
    ↓
-8. Server calls OpenAI GPT-5-mini (typically 3-8 seconds)
+8. Associated journals marked with mirror_id
    ↓
-9. Associated journals marked with mirror_id
+9. Mirror saved to DB, request status updated to 'completed'
    ↓
-10. Request status updated to 'completed'
-    ↓
-11. Polling detects completion
-    ↓
-12. Mirror marked as viewed (has_been_viewed: true)
-    ↓
-13. Modal opens with swipeable 4-screen experience
-    ↓
-14. User can swipe through all 4 screens
-    ↓
-15. Mirror saved to history
-    ↓
-16. User can re-view past mirrors anytime
-    ↓
-17. User can share mirror with friends (3 screens shared)
+10. Either: HTTP response returns mirror directly
+    OR: Realtime delivers status update (4-minute safety net: one final poll)
+   ↓
+11. Mirror fetched and shown on screen
+   ↓
+12. Mirror marked as has_been_viewed when user opens it
+   ↓
+13. MirrorViewer opens as full-screen scrollable experience
+    with Mirror/Themes/Observations/Reflection tabs
+   ↓
+14. Mirror saved to history for re-viewing
+   ↓
+15. User can share mirror with friends (Reflection tab excluded from shared view)
 ```
 
 ### Friend Connection Workflow
@@ -590,7 +629,7 @@ New users experience a **10-step narrative journey** using a river metaphor to e
    ↓
 4. Taps "Share" button on specific mirror
    ↓
-5. Friend picker modal appears
+5. ShareMirrorSheet (bottom sheet) appears
    ↓
 6. User A selects friend(s) to share with
    ↓
@@ -606,9 +645,10 @@ New users experience a **10-step narrative journey** using a river metaphor to e
     ↓
 12. User B taps to view
     ↓
-13. MirrorViewer opens with 3 screens
+13. MirrorViewer opens with isSharedMirror={true}
     ↓
-14. User B sees: themes, biblical references, observations
+14. User B sees: Mirror, Themes, Observations tabs
+    (Reflection tab hidden — personal reflections not shared)
     ↓
 15. Share marked as viewed (viewed_at timestamp)
     ↓
@@ -652,10 +692,10 @@ New users experience a **10-step narrative journey** using a river metaphor to e
 
 ## 💡 Key Insights for New Engineers
 
-### 1. No Traditional Auth = By Design
-This app doesn't use email/password authentication. Access codes map to pre-created user records. This is **intentional** for the product's use case (likely group-based or invitation-based access model).
+### 1. Phone OTP Auth — Not Email, Not Access Codes
+Oxbow uses **phone number + OTP** for authentication (Supabase Auth + Twilio Verify). There are no access codes, no email/password. The session is stored in `expo-secure-store` via Supabase's built-in adapter and auto-refreshes.
 
-**Don't try to add email/password auth without discussing with the team first.**
+**Don't try to add email/password or access code auth without discussing with the team first.**
 
 ---
 
@@ -674,7 +714,7 @@ The "X journals = 1 Mirror" mechanic is a **core product decision**:
 - **Default: 10 journals** (for most users)
 - **Mens Group: 6 journals** (see Technical Debt section above)
 
-**Location:** `lib/config/constants.js:getMirrorThreshold()`
+**Location:** `lib/config/constants.ts:getMirrorThreshold()`
 
 **Don't change thresholds without product team approval.**
 
@@ -685,17 +725,19 @@ Mirror generation happens entirely server-side via Supabase Edge Functions, **no
 - Keeps OpenAI API key secure (never exposed to client)
 - Enables automatic retry logic for reliability
 - Uses GPT-5-mini for optimal speed/quality balance
-- Client polls `mirror_generation_requests` table for status updates
+- Client uses Supabase Realtime (WebSocket) to detect completion — not polling
 - Timeouts and failures are handled gracefully with request status tracking
 
 **Never move Mirror generation back to client-side without security review.**
 
 ---
 
-### 5. Mirrors are Immersive Experiences
-Mirrors render as full-screen modals with swipeable screens, not as part of the main navigation flow. This is intentional to create a focused, contemplative moment separate from the daily journaling routine.
+### 5. Mirrors are Scrollable Experiences, Not Swipeable Screens
+`MirrorViewer` renders a single long scrollable view with a **scroll-linked tab bar** (Mirror / Themes / Observations / Reflection). Tapping a tab scrolls to that section; scrolling past a section auto-updates the active tab. This is not a swipeable carousel.
 
-**Respect the modal pattern - don't try to inline Mirror content.**
+Shared mirrors (`isSharedMirror={true}`) hide the Reflection tab and section entirely — personal reflections stay private.
+
+**Respect the scrollable pattern and the isSharedMirror prop.**
 
 ---
 
@@ -713,7 +755,7 @@ index.tsx         # Default route for a directory
 ---
 
 ### 7. Service Layer is Your Friend
-All Supabase operations are abstracted into `lib/supabase/`. **Always use these service functions** rather than calling Supabase directly from components.
+All Supabase operations are abstracted into `lib/supabase/`. **Always use these service functions** rather than calling Supabase directly from components. All service files are TypeScript (`.ts`).
 ```typescript
 // ❌ Don't do this in components
 const { data } = await supabase.from('journals').select('*');
@@ -725,32 +767,33 @@ const journals = await fetchJournals(userId);
 
 ---
 
-### 7. Friends & Sharing Enable Social Growth
+### 8. Friends & Sharing Enable Social Growth
 The Friends & Mirror Sharing features enable spiritual accountability:
 - Friend connections via deep-linked invite tokens (72-hour expiry)
 - Bi-directional friendships stored with ordered user IDs
-- Mirror sharing shows all 3 screens (Themes, Biblical, Observations)
+- Mirror sharing shows Mirror, Themes, Observations sections (Reflection excluded)
 - Unread shares tracked with context and tab badges
 
 **Maintain the seamless sharing experience and deep link functionality.**
 
 ---
 
-### 8. Narrative Onboarding is Experience-Driven
+### 9. Narrative Onboarding is Experience-Driven
 The onboarding uses a **river journey metaphor** to communicate Oxbow's value proposition:
 - Individual moments (close-up river views) → pattern revealed (aerial oxbow view)
 - Sample journal entries tell an emotional story (gratitude → striving → connection → doubt)
-- No permissions requested, no real data collected - pure storytelling
+- No permissions requested, no real data collected - pure storytelling (except display_name)
 - Key moment: zoom-out animation revealing the oxbow pattern
 - Goal: Users leave thinking *"I wonder what my Mirror will be"*
+- Completion tracked in `users.onboarding_completed_at` (database, not AsyncStorage)
 
 **Don't skip or rush the onboarding experience - it sets user expectations.**
 
 ---
 
-### 9. Context + Hooks Pattern
+### 10. Context + Hooks Pattern
 State management follows a consistent pattern:
-- **Contexts** provide global state (AuthContext, UnreadSharesContext)
+- **Contexts** provide global state (AuthContext, UnreadSharesContext, FriendBadgeContext)
 - **Custom hooks** encapsulate logic (useMirrorData, useAudioRecording)
 - **Components** consume via hooks
 
@@ -761,7 +804,7 @@ State management follows a consistent pattern:
 ## 🧪 Testing Your Changes
 
 ### Testing Journaling
-1. Sign in with a test access code
+1. Sign in with a test phone number + OTP
 2. Try creating a text journal entry
 3. Try creating a voice journal entry (requires microphone)
 4. Verify both appear on Mirror screen with correct progress
@@ -769,19 +812,20 @@ State management follows a consistent pattern:
 ### Testing Voice Recording
 1. Grant microphone permissions when prompted
 2. Start recording, speak for 10 seconds, stop
-3. Verify transcription appears
+3. Verify transcription appears (delivered via Realtime, typically within seconds)
 4. Test pause/resume functionality
-5. Test 8-minute limit enforcement
+5. Test 8-minute limit enforcement (auto-stops with alert)
 
 ### Testing Mirrors
 1. Create 9 journal entries (or use existing test account)
 2. Create 10th journal
 3. Verify "Unlock Mirror" button appears
 4. Tap unlock and verify loading state
-5. Verify polling starts (check logs for 3-second intervals)
-6. Verify Mirror modal opens with 4 swipeable screens
+5. Verify Realtime subscription activates (check logs)
+6. Verify MirrorViewer opens with scrollable Mirror/Themes/Observations/Reflection tabs
 7. Verify Mirror appears in history
 8. Test sharing mirror with friend (if friends exist)
+9. Verify shared mirror shows only Mirror/Themes/Observations (no Reflection tab)
 
 ### Testing Friends & Sharing
 1. **Friend Invite:**
@@ -796,22 +840,22 @@ State management follows a consistent pattern:
    - Ensure you have at least one friend
    - Navigate to past mirrors section
    - Tap "Share" on a completed mirror
-   - Select friend(s) in picker modal
+   - Select friend(s) in ShareMirrorSheet
    - Verify share created
    - On friend's device, verify Friends tab badge shows unread
    - Open Friends tab and verify shared mirror with "NEW" badge
-   - Tap to view and verify 3 screens only (not 4)
+   - Tap to view and verify Mirror/Themes/Observations only (no Reflection tab)
    - Verify badge changes from "NEW" to "VIEW"
 
 ### Testing Narrative Onboarding
-1. Clear app data or use a fresh access code
+1. Clear app data or use a fresh phone number account
 2. Complete all 10 steps in sequence
-3. Verify name input saves to database
+3. Verify name input creates users row with display_name in database
 4. Verify personalized welcome message displays name correctly
 5. Verify each journal card appears individually (not accumulated)
 6. Verify zoom-out animation on step 8 is smooth
 7. Verify product screenshot displays on step 9
-8. Verify "Get started" completes onboarding and navigates to journal
+8. Verify "Get started" completes onboarding (sets `onboarding_completed_at`) and navigates to journal
 9. Test edge cases:
    - Very long names (>50 characters)
    - Empty name submission (should be blocked)
@@ -821,8 +865,8 @@ State management follows a consistent pattern:
 ### Testing Auth
 1. Sign out completely
 2. Close and reopen app
-3. Enter valid access code
-4. Verify auto sign-in on subsequent launches
+3. Enter phone number → receive OTP → verify code
+4. Verify auto sign-in on subsequent launches (session restored from SecureStore)
 
 ---
 
@@ -840,17 +884,17 @@ State management follows a consistent pattern:
 **Problem:** State updates don't reflect in callbacks
 **Solution:** Use refs for values accessed in async callbacks or event listeners
 
-### 4. AsyncStorage Not Clearing
+### 4. Auth Session Not Clearing After Sign Out
 **Problem:** Auth persists after sign out in dev
-**Solution:** Manually clear AsyncStorage or reinstall app
+**Solution:** Call `supabase.auth.signOut()` — this clears SecureStore automatically. If still stuck, manually clear app data (Settings → General → iPhone Storage → Oxbow → Offload). Do NOT delete AsyncStorage manually for auth — the session is in SecureStore.
 
-### 5. Whisper API Timeout
-**Problem:** Long recordings time out during transcription
-**Solution:** This is expected for 8-minute recordings - add retry logic
+### 5. Transcription Stuck "Processing"
+**Problem:** Recording submitted but transcription never completes
+**Solution:** Check Realtime subscription is connected (look for Supabase WS connection in logs). If upload failed, recording is in local `pending_recordings/` queue and will retry on next launch. The 3-minute safety net will alert the user if Realtime fails to deliver.
 
 ### 6. Mirror Not Unlocking at Threshold
 **Problem:** User has 10+ journals but no unlock button
-**Solution:** Check that journals have `mirror_id: null` (not already used)
+**Solution:** Check that journals have `mirror_id: null` (not already used in a previous mirror)
 
 ### 7. Onboarding Animation Performance Issues
 **Problem:** Step 8 zoom-out animation is choppy or laggy
@@ -860,9 +904,9 @@ State management follows a consistent pattern:
 **Problem:** Friend invite link opens browser instead of app
 **Solution:** Verify `scheme: "oxbow"` is configured in app.config.js and app is installed
 
-### 9. Shared Mirror Shows 4 Screens Instead of 3
-**Problem:** Shared mirrors showing reflection questions/actions
-**Solution:** Check `isSharedMirror={true}` prop is passed to MirrorViewer
+### 9. Shared Mirror Shows Reflection Tab
+**Problem:** Shared mirrors showing personal reflection input
+**Solution:** Check `isSharedMirror={true}` prop is passed to MirrorViewer — this hides the Reflection section entirely
 
 ### 10. Friends Tab Badge Not Updating
 **Problem:** Unread shares not showing badge
@@ -870,7 +914,11 @@ State management follows a consistent pattern:
 
 ### 11. Mirror Generation Card Disappearing
 **Problem:** Generation card disappears when backgrounding app
-**Solution:** Polling logic checks mirrorState before restarting - should only poll if state is 'generating'
+**Solution:** Realtime subscription is torn down on background and re-established on foreground via `AppState` listener in `useMirrorData`. `checkGenerationStatusOnFocus()` re-syncs state on return.
+
+### 12. RLS Blocking DB Operations (HTTP 406)
+**Problem:** Supabase returning 406 on table operations — Sentry shows RLS errors
+**Solution:** Check RLS policies for the affected table. The `users` table has special RLS: `auth.users.phone` lacks the `+` prefix, so policies use `'+' || (auth.jwt() ->> 'phone')`. See `docs/DATABASE.md` for full RLS architecture.
 
 ---
 
@@ -878,16 +926,16 @@ State management follows a consistent pattern:
 
 ### Learn More About:
 - **Architecture:** See [ARCHITECTURE.md](ARCHITECTURE.md) for technical deep-dive
-- **Database:** See [DATABASE.md](DATABASE.md) for schema details
-- **Development:** See [DEVELOPMENT.md](DEVELOPMENT.md) for workflows
+- **Database:** See [DATABASE.md](DATABASE.md) for schema details and RLS architecture
+- **Auth Migration:** See [AUTH_MIGRATION_PLAN.md](AUTH_MIGRATION_PLAN.md) for the phone OTP migration history
 
 ### Explore the Codebase:
 Start with these files in order:
 1. `app/_layout.tsx` - App entry point and providers
-2. `contexts/AuthContext.tsx` - How auth works
+2. `contexts/AuthContext.tsx` - How auth works (Phone OTP + Supabase)
 3. `app/(tabs)/index.tsx` - Main journal screen
 4. `hooks/useAudioRecording.tsx` - Voice recording logic
-5. `lib/supabase/journals.js` - Database operations
+5. `lib/supabase/journals.ts` - Database operations
 
 ---
 
@@ -900,4 +948,4 @@ Start with these files in order:
 
 ---
 
-Welcome to the team! Happy coding! 🎉
+Welcome to the team! Happy coding!

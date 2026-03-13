@@ -53,46 +53,32 @@ Notable hot spots:
 
 ### 3. `loadTodayAnsweredPrompts` Makes a Redundant Full Journal Fetch
 
-**File:** `app/(tabs)/index.tsx:98–128`
+**Status: ✅ Fixed (March 2026)**
+
+**File:** `app/(tabs)/index.tsx`
 **Impact:** HIGH — one extra full-table journals fetch on every Journal screen focus
 
-`loadTodayAnsweredPrompts` calls `getUserJournals(user.id)` (which fetches **all** journals with all columns), then filters client-side for today's entries. This happens in addition to `loadJournals()` which already calls `getUserJournals(user.id)`.
-
-The fix already exists: `lib/supabase/journals.js:145–174` exports `getTodaysAnsweredPrompts(userId)` which runs a server-side query with a `WHERE created_at >= today AND prompt_text IS NOT NULL`, returning only the `prompt_text` field. It is **never called anywhere in the app**.
-
-**Fix:** Replace `loadTodayAnsweredPrompts` in `index.tsx` with a call to the existing `getTodaysAnsweredPrompts(user.id)` from journals.js.
-
-**Gain:** Eliminates 1 redundant full journals fetch on every Journal screen focus. Server-side filtering instead of client-side.
+`loadTodayAnsweredPrompts` previously called `getUserJournals(user.id)` (fetching all journals with all columns) then filtered client-side for today's entries. Replaced with a direct call to `getTodaysAnsweredPrompts(user.id)` from `lib/supabase/journals.ts`, which runs a targeted server-side query: `SELECT prompt_text WHERE custom_user_id = ? AND prompt_text IS NOT NULL AND created_at >= today`. The `getUserJournals` import was also removed from `index.tsx` as it was no longer needed there.
 
 ---
 
 ### 4. Mirror Polling Interval Too Aggressive (3 Seconds)
 
-**File:** `hooks/useMirrorData.ts:148–254`
-**Impact:** HIGH — 80 network requests over 4 minutes during mirror generation; battery drain
+**Status: ✅ Superseded (March 2026) — replaced by Supabase Realtime subscription**
 
-The polling interval is hardcoded to `3000ms` (line 253) with 80 max attempts. This generates up to **80 Supabase queries** over ~4 minutes for a single mirror generation. Each poll queries `mirror_generation_requests` and, if completed, also fetches the full mirror record.
+**File:** `hooks/useMirrorData.ts`
 
-**Fix:** Start at 5 seconds, increase to 10 seconds after the first 10 attempts (exponential-ish backoff). 30 max attempts is sufficient (5 minutes total coverage).
-
-**Gain:** 40–66% reduction in polling network requests. Meaningful battery savings during generation.
+Polling has been removed entirely. `useMirrorData` now subscribes to `mirror_generation_requests` via `postgres_changes` WebSocket. The moment the edge function writes `status = 'completed'`, the app receives it instantly. A 4-minute safety-net timeout does one final DB query if the WebSocket event never arrives. Net result: 0 polling queries during normal operation (down from 80), and a single query only if Realtime fails.
 
 ---
 
 ### 5. `supabase.auth.getSession()` Called but Result Never Used
 
-**File:** `lib/supabase/mirrors.js:30`, `lib/supabase/mirrors.js:375`
-**Impact:** MEDIUM-HIGH — unnecessary async round-trip on every mirror generation and onboarding preview request
+**Status: ✅ Not applicable — superseded by Supabase Auth migration**
 
-Both `requestMirrorGeneration` and `generateOnboardingPreview` begin with:
-```js
-const { data: { session } } = await supabase.auth.getSession();
-```
-…but `session` is never referenced. Only `process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY` is used for the auth header.
+**File:** `lib/supabase/mirrors.ts`
 
-**Fix:** Remove these `getSession()` calls entirely.
-
-**Gain:** Faster cold-start for mirror generation and onboarding preview requests (eliminates one async DB round-trip).
+After the auth migration to Supabase Auth + Twilio Verify, `requestMirrorGeneration` now correctly uses `session.access_token` as the Bearer token for the edge function call (required for RLS). The `getSession()` call is not unused — it provides the JWT. `generateOnboardingPreview` uses only the anon key (no user auth needed for that endpoint) and has no `getSession()` call. No change required.
 
 ---
 
@@ -117,85 +103,49 @@ Note: `testData` barrel export from `lib/supabase.js` and `insertTestData`/`inse
 
 ### 7. Dead Component Code in `mirror.tsx` (~170 Lines)
 
-**File:** `app/(tabs)/mirror.tsx:858–1029`
-**Impact:** HIGH code quality — significant dead weight in a complex file
+**Status: ✅ Already done (prior to March 2026 audit session)**
 
-`MirrorCard` and `ReflectionDisplay` components are defined at lines 858–1029 but **never rendered**. The Mirror screen now uses `LastMirrorCard` and `LastJournalCard`. These are leftovers from a prior implementation. The inline styles for these components (lines 1067–1183) also use raw hex colors (`#ffffff`, `#1e293b`, `#e2e8f0`) instead of design tokens.
-
-**Fix:** Delete lines 858–1029 (both component definitions and their `styles` entries).
-
-**Gain:** ~170 lines removed from the largest, most complex screen file. Easier to maintain.
+`MirrorCard` and `ReflectionDisplay` were already removed before this audit session. `mirror.tsx` is 708 lines (down from the ~1183 the audit projected), and neither component nor their associated styles are present.
 
 ---
 
 ### 8. Dead Imports in `mirror.tsx`
 
-**File:** `app/(tabs)/mirror.tsx:12–15`
-**Impact:** MEDIUM — unused imports add to bundle size and create confusion
+**Status: ✅ Fixed (March 2026)**
 
-Two components are imported but never rendered:
-- `MirrorStatusCard` (line 12) — no JSX usage found in render tree
-- `MirrorTestPanel` (line 15) — no JSX usage found in render tree
-
-**Fix:** Remove both import lines.
+`MirrorStatusCard` and `MirrorTestPanel` were already gone. The remaining dead imports — `MirrorProgress` and `JournalHistory` — were removed in this session.
 
 ---
 
 ### 9. `GestureHandlerRootView` Imported but Never Used
 
-**File:** `app/(tabs)/_layout.tsx:4`
-**Impact:** LOW-MEDIUM — dead import from a large native module
+**Status: ✅ Already done (prior to March 2026 audit session)**
 
-```ts
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-```
-This import exists but `GestureHandlerRootView` is never referenced in the file's JSX.
-
-**Fix:** Remove the import line.
+Import was already removed from `app/(tabs)/_layout.tsx`.
 
 ---
 
 ### 10. `SpaceMono` Font Loaded at Startup but Never Used
 
-**File:** `app/_layout.tsx:62–63`
-**Impact:** MEDIUM — wastes startup time loading a font that goes unused
+**Status: ✅ Fixed (March 2026)**
 
-```ts
-SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-```
-The entire design system uses `Satoshi Variable`. `SpaceMono` appears nowhere in `theme/designTokens.ts` or any component. It was part of the Expo template default and was never removed.
-
-**Fix:** Remove the `SpaceMono` entry from `useFonts()` and delete `assets/fonts/SpaceMono-Regular.ttf`.
-
-**Gain:** Faster initial font load, ~50KB off the bundle.
+`SpaceMono` entry was already removed from `useFonts()` in `app/_layout.tsx`. The `assets/fonts/SpaceMono-Regular.ttf` file was deleted manually this session.
 
 ---
 
 ### 11. Deprecated `signInAnonymously` in Barrel Export
 
-**File:** `lib/supabase.js:8–12`
-**Impact:** LOW — dead code still exported from root module
+**Status: ✅ Already done (prior to March 2026 audit session)**
 
-```js
-export const signInAnonymously = async () => {
-  console.warn('⚠️ signInAnonymously is deprecated...');
-  return { success: false, error: 'Function deprecated' };
-};
-```
-This is exported from the root barrel but does nothing useful. No callers exist in the codebase.
-
-**Fix:** Delete the function.
+Function was already removed. `lib/supabase.js` is now a clean 5-line barrel of `export *` re-exports.
 
 ---
 
 ### 12. `getTodaysAnsweredPrompts` Function Never Called
 
-**File:** `lib/supabase/journals.js:144–174`
-**Impact:** LOW — dead function
+**Status: ✅ Fixed (March 2026) — resolved by fix #3**
 
-This function was written to efficiently fetch today's answered prompts server-side, but `index.tsx` instead does the equivalent manually with `getUserJournals()` + client-side filter (see issue #3). The function is never imported or called.
-
-**Fix:** After applying fix #3, this function becomes the canonical implementation. Remove the manual version in `index.tsx`.
+Now the canonical implementation, called directly from `index.tsx`. See issue #3.
 
 ---
 
@@ -218,27 +168,17 @@ Four different files independently call `AppState.addEventListener('change', ...
 
 ### 14. Friends Screen Realtime Subscriptions Duplicate Context Subscriptions
 
-**Files:** `app/(tabs)/friends.tsx:123–237`, `contexts/FriendBadgeContext.tsx:97–205`
-**Impact:** MEDIUM — redundant subscriptions, full data reload on every change
+**Status: ✅ Fixed (March 2026)**
 
-`FriendBadgeContext` already has two Supabase realtime subscriptions watching `friend_links` changes. `FriendsScreen` sets up its **own** additional subscriptions on the same table, and each change triggers `loadData()` — a full reload of all friends and shares.
-
-**Fix:** Remove the realtime subscriptions from `FriendsScreen`. Let `FriendBadgeContext` handle the badge count (it already does). For the friends list itself, either refresh on focus (already done via `useFocusEffect`) or implement optimistic updates on the context level.
-
-**Gain:** Fewer active WebSocket subscriptions, fewer full-reload triggers, less Supabase connection overhead.
+Removed the two `friend_links` `useEffect` subscription blocks from `FriendsScreen`. `FriendBadgeContext` already covers those channels for badge counts. Added `loadData()` to the existing `useFocusEffect` so the friends list refreshes on every tab focus. The `mirror_shares` subscription is kept — it's unique to this screen and handles live updates when a friend shares a mirror while the tab is active. Net result: 3 active WebSocket channels reduced to 1 for this screen.
 
 ---
 
 ### 15. `fetchFriends()` Called on Every Share Button Press
 
-**File:** `app/(tabs)/mirror.tsx:478`, dead `MirrorCard:941`
-**Impact:** MEDIUM — redundant network call; creates delay before share sheet opens
+**Status: ✅ Fixed (March 2026)**
 
-Every time the Share button is pressed, the app calls `fetchFriends(user.id)` to check if the user has friends, then opens the share sheet (or navigates to Friends tab). The Friends screen already has this data loaded. There's no caching.
-
-**Fix:** Either pass the `hasFriends` state from Friends screen context, or cache the friends list in a context so `handleShareLastMirror` can check locally without a network call.
-
-**Gain:** Instant share sheet open (no network round-trip), better perceived performance.
+Added `hasFriends: boolean | null` state to `MirrorScreen`. On mount, `fetchFriends` runs alongside `loadJournals` and `loadUserMirrors` and caches the result. `handleShareLastMirror` now uses the cached value — share sheet opens instantly with no network call. The network fallback still fires only if the user presses Share before the mount fetch completes.
 
 ---
 
@@ -263,28 +203,23 @@ This has already produced bugs (hence the `mirrorStateRef` workaround to read st
 
 ### 17. Hardcoded Supabase Edge Function URLs
 
-**File:** `lib/supabase/mirrors.js:7`, `lib/supabase/mirrors.js:364`
-**Impact:** MEDIUM — must update code (not config) if URL changes; project ID exposed
+**Status: ✅ Fixed (March 2026)**
 
-```js
-const EDGE_FUNCTION_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-mirror';
-const ONBOARDING_PREVIEW_URL = 'https://olqdyikgelidrytiiwfm.supabase.co/functions/v1/generate-onboarding-preview';
+**File:** `lib/supabase/mirrors.ts`
+
+Both URLs now derived from `process.env.EXPO_PUBLIC_SUPABASE_URL`:
+```ts
+const EDGE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-mirror`;
+const ONBOARDING_PREVIEW_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/generate-onboarding-preview`;
 ```
-
-**Fix:** Move to `lib/config/constants.js` or build from `process.env.EXPO_PUBLIC_SUPABASE_URL`.
 
 ---
 
 ### 18. Missing TypeScript Types in Data Layer
 
-**Files:** `lib/supabase/*.js` (11 files), `lib/config/constants.js`
-**Impact:** MEDIUM — all data layer code lacks type checking; return shapes are `any`
+**Status: ✅ Fixed (March 2026) — Tier 3 TypeScript migration**
 
-The entire data access layer (`auth.js`, `mirrors.js`, `journals.js`, `friends.js`, etc.) is plain JavaScript. The database types exist in `types/database.ts` but aren't used. This means type errors in the most critical path of the app are caught only at runtime.
-
-**Fix:** Rename all `.js` files to `.ts`, add return type annotations, leverage `types/database.ts`.
-
-**Gain:** Catch data shape bugs at compile time instead of runtime.
+All 10 files in `lib/supabase/` and `lib/config/constants.js` have been migrated to TypeScript (`.ts`). The data layer is now covered by the CI type gate.
 
 ---
 
@@ -320,10 +255,9 @@ Each tab exports a wrapped default that renders the tab inside an `ErrorBoundary
 
 ### 21. Unused React Logo Assets (Default Expo Template)
 
-**Files:** `assets/images/react-logo.png`, `react-logo@2x.png`, `react-logo@3x.png`, `assets/images/partial-react-logo.png`
-**Impact:** LOW — dead assets from Expo template never cleaned up
+**Status: ✅ Already done (prior to March 2026 audit session)**
 
-**Fix:** Delete all four files.
+All four react logo image files were already deleted.
 
 ---
 
@@ -354,32 +288,25 @@ This is evaluated once at module load. On orientation change, `screenWidth` stay
 
 ### 24. Audio Recording Status Updates May Cause Excess Re-renders
 
-**File:** `hooks/useAudioRecording.tsx:379–426`
-**Impact:** LOW — status callback fires on every audio frame, not just per-second
+**Status: ✅ Fixed (March 2026)**
 
-`setOnRecordingStatusUpdate` fires very frequently (sub-second) during recording, and each callback calls `setRecordingDuration`, triggering re-renders of all components that consume `recordingDuration`.
-
-**Fix:** Throttle duration updates to once per second using a `lastUpdateTime` ref check inside the callback.
+`setOnRecordingStatusUpdate` was calling `setRecordingDuration` on every audio frame (~10x/sec) even when the integer-second value hadn't changed. Fixed by saving `latestDurationRef.current` before updating it and only calling `setRecordingDuration` when `durationInSeconds !== prevDuration`. Reduces state updates from ~10/sec to 1/sec during recording with no new refs.
 
 ---
 
 ### 25. Inline Colors in Dead `MirrorCard` Component Don't Use Design Tokens
 
-**File:** `app/(tabs)/mirror.tsx:1067–1183`
-**Impact:** LOW — applies only to dead code (see issue #7)
+**Status: ✅ Moot — resolved by issue #7**
 
-Once `MirrorCard` and `ReflectionDisplay` are deleted (issue #7), this becomes moot. Noted here for awareness — if any of these styles are ever reused, they should reference `colors` from `designTokens`.
+`MirrorCard` and `ReflectionDisplay` are gone. The associated raw-hex styles were removed with them.
 
 ---
 
 ### 26. `getLastJournalType` Function — Verify Usage
 
-**File:** `lib/supabase/journals.js:247–275`
-**Impact:** LOW — potentially unused function
+**Status: ✅ Fixed (March 2026)**
 
-This function exists to return the last journal entry type for default tab selection, but no import of it was found in the app codebase.
-
-**Fix:** Search for callers; delete if unused.
+Confirmed no callers anywhere in the codebase. Deleted from `lib/supabase/journals.ts`.
 
 ---
 
@@ -419,30 +346,30 @@ This function exists to return the last journal entry type for default tab selec
 |---|-------|------|--------|
 | 1 | Duplicate `useMirrorData` instances | Architecture | 🔴 High |
 | 2 | 630 console.log calls in production | Performance | ✅ Fixed |
-| 3 | Redundant journals fetch (`loadTodayAnsweredPrompts`) | Performance | 🔴 High |
-| 4 | 3-second polling interval too aggressive | Performance | 🔴 High |
-| 5 | `getSession()` called but result unused | Performance | 🟠 Med-High |
+| 3 | Redundant journals fetch (`loadTodayAnsweredPrompts`) | Performance | ✅ Fixed |
+| 4 | 3-second polling interval too aggressive | Performance | ✅ Superseded |
+| 5 | `getSession()` called but result unused | Performance | ✅ N/A |
 | 6 | Test infrastructure in production | Code quality | ✅ Fixed |
-| 7 | Dead `MirrorCard`/`ReflectionDisplay` components | Code quality | 🟠 Med-High |
-| 8 | Dead imports (`MirrorStatusCard`, `MirrorTestPanel`) | Code quality | 🟡 Medium |
-| 9 | `GestureHandlerRootView` imported but unused | Code quality | 🟡 Medium |
-| 10 | `SpaceMono` font loaded but unused | Performance | 🟡 Medium |
-| 11 | Deprecated `signInAnonymously` in barrel | Code quality | 🟡 Medium |
-| 12 | `getTodaysAnsweredPrompts` never called | Code quality | 🟡 Medium |
+| 7 | Dead `MirrorCard`/`ReflectionDisplay` components | Code quality | ✅ Fixed |
+| 8 | Dead imports (`MirrorStatusCard`, `MirrorTestPanel`) | Code quality | ✅ Fixed |
+| 9 | `GestureHandlerRootView` imported but unused | Code quality | ✅ Fixed |
+| 10 | `SpaceMono` font loaded but unused | Performance | ✅ Fixed |
+| 11 | Deprecated `signInAnonymously` in barrel | Code quality | ✅ Fixed |
+| 12 | `getTodaysAnsweredPrompts` never called | Code quality | ✅ Fixed |
 | 13 | Four separate AppState listeners | Architecture | 🟡 Medium |
-| 14 | Realtime subscriptions duplicated | Architecture | 🟡 Medium |
-| 15 | `fetchFriends()` on every Share press | Performance | 🟡 Medium |
+| 14 | Realtime subscriptions duplicated | Architecture | ✅ Fixed |
+| 15 | `fetchFriends()` on every Share press | Performance | ✅ Fixed |
 | 16 | Mirror state machine fragility | Architecture | 🟡 Medium |
-| 17 | Hardcoded Edge Function URLs | Maintainability | 🟡 Medium |
-| 18 | Data layer not TypeScript | Type safety | 🟡 Medium |
+| 17 | Hardcoded Edge Function URLs | Maintainability | ✅ Fixed |
+| 18 | Data layer not TypeScript | Type safety | ✅ Fixed |
 | 19 | Inconsistent error handling | Architecture | 🟡 Medium |
 | 20 | No error boundaries | Reliability | ✅ Fixed |
-| 21 | React logo assets (Expo template) | Bundle size | 🟢 Low |
+| 21 | React logo assets (Expo template) | Bundle size | ✅ Fixed |
 | 22 | `Dimensions.get` at module level | Correctness | 🟢 Low |
 | 23 | Stale closure in `useFocusEffect` | Correctness | 🟢 Low |
-| 24 | Audio status updates excess re-renders | Performance | 🟢 Low |
-| 25 | Inline colors in dead component | Code quality | 🟢 Low |
-| 26 | `getLastJournalType` unused function | Code quality | 🟢 Low |
+| 24 | Audio status updates excess re-renders | Performance | ✅ Fixed |
+| 25 | Inline colors in dead component | Code quality | ✅ Fixed |
+| 26 | `getLastJournalType` unused function | Code quality | ✅ Fixed |
 | 27 | `react-native-worklets` direct dep | Bundle | 🟢 Low |
 | 28 | 5-level context provider nesting | Architecture | 🟢 Low |
 

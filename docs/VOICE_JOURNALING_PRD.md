@@ -153,7 +153,7 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 #### 5a. `triggerTranscription()` network error (fire-and-forget)
 **Cause:** Transient network failure between the INSERT completing and the edge function being fired.
-**Current behavior:** The fetch `.catch()` logs a warning: "Failed to trigger transcription edge function". Polling begins and will run for 3 minutes seeing `pending` status. After 3 minutes it shows "Still Transcribing, your recording was saved." On next launch, recovery sees `pending` status and re-fires the edge function.
+**Current behavior:** The fetch `.catch()` logs a warning: "Failed to trigger transcription edge function". The Realtime subscription remains open for up to 3 minutes. If the edge function succeeds server-side, the Realtime event delivers the result. After 3 minutes with no update, a final DB check runs and either resolves or shows "Still Transcribing." On next launch, recovery sees `pending` status and re-fires the edge function.
 **Status:** ✅ Handled — acceptable behavior. Recovery covers it.
 
 #### 5b. Edge function invoked but `journalId` in body is wrong/missing
@@ -164,27 +164,29 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 ---
 
-### Step 6 — Client Polling
+### Step 6 — Client Notification (Realtime)
 
-#### 6a. App is backgrounded while polling
+**Updated March 2026:** Polling replaced with a Supabase Realtime `postgres_changes` subscription. The app subscribes to the specific journal row at the moment `triggerTranscription()` is called. When the edge function writes `transcription_status = 'completed'`, the change is pushed to the app instantly via WebSocket. A 3-minute safety-net timeout does one final DB query if the Realtime event never arrives. See `hooks/useAudioRecording.tsx` — `subscribeForCompletion()`.
+
+#### 6a. App backgrounded during transcription wait
 **Cause:** User switches apps, receives a phone call, or locks the screen while the transcription spinner is showing.
-**Current behavior:** `setTimeout` is suspended when the app backgrounds. Polling pauses. If the component unmounts (user navigated away), `stopPolling()` is called via the `useEffect` cleanup. The AsyncStorage job remains. Recovery handles it on next launch.
-**Status:** ✅ Handled
+**Current behavior:** The `useEffect` cleanup calls `stopWaiting()`, which tears down the WebSocket subscription and clears the timeout. The AsyncStorage job remains. Recovery handles it on next launch.
+**Status:** ✅ Handled — same outcome as before, cleaner mechanism
 
-#### 6b. Poll query returns a network error
-**Cause:** Transient connectivity during the 3-minute polling window.
-**Current behavior:** Caught in the `tick()` try/catch. `pollCount` increments and polling retries after 3 seconds. A `hadNetworkErrors` flag is set to `true`. If MAX_POLLS is reached and `hadNetworkErrors` is true, the timeout alert says "Connection Issue — We lost connection while checking. Your recording was saved — check back shortly." rather than the generic "Still Transcribing" message.
-**Status:** ✅ Handled (March 2026 — network errors now distinguished from slow transcription)
+#### 6b. WebSocket drops mid-transcription
+**Cause:** Network switch (WiFi → cellular) or sustained connectivity loss during transcription.
+**Current behavior:** The Realtime channel closes. The 3-minute safety-net timeout is still running. When it fires, it does one final DB query: if transcription completed, it resolves normally; if still pending, it shows "Still Transcribing — Your recording was saved." The job stays in the queue.
+**Status:** ✅ Handled — this is now the rare fallback path, not the primary mechanism
 
-#### 6c. Polling times out (3-minute limit)
-**Cause:** Whisper is slow, edge function is processing a long recording, or Supabase Edge Functions are degraded.
-**Current behavior:** After 60 polls × 3 seconds, shows: "Still Transcribing — Your recording was saved. The transcription is still processing — check back in a moment." `setIsProcessing(false)` is called. The job stays in the queue.
+#### 6c. Safety-net timeout fires (3-minute limit)
+**Cause:** Whisper is slow, Realtime WebSocket dropped, or Supabase Edge Functions are degraded.
+**Current behavior:** After 3 minutes, one final DB query runs. If `transcription_status = 'completed'`, resolves normally. Otherwise shows: "Still Transcribing — Your recording was saved. The transcription is still processing — check back in a moment." `setIsProcessing(false)` is called. Job stays in the queue.
 **Status:** ✅ Handled — messaging is good
 
-#### 6d. Component unmounts mid-poll (user navigates away)
-**Cause:** User taps the back button while the transcription spinner is showing.
-**Current behavior:** `useEffect` cleanup calls `stopPolling()`. `setIsProcessing(false)` is not called on an unmounted component (polling stops before the state update). The job stays in the queue. Journal will complete server-side and appear on next load.
-**Status:** ✅ Handled — no state update on unmounted component
+#### 6d. Component unmounts during transcription wait (user navigates away)
+**Cause:** User taps to a different tab while the transcription spinner is showing.
+**Current behavior:** `useEffect` cleanup calls `stopWaiting()`. The Realtime subscription is removed, the timeout is cleared. The journal completes server-side and appears on next load.
+**Status:** ✅ Handled — known tradeoff: completion notification is lost if user navigates away, but data is preserved
 
 ---
 
@@ -192,13 +194,13 @@ Each scenario below documents: what can go wrong, what happens today, whether it
 
 #### EF-1. Whisper returns empty transcription
 **Cause:** User recorded silence, very quiet audio, or non-speech audio.
-**Current behavior:** Edge function throws `'Whisper returned empty transcription'`. Journal is marked `failed` with that as `error_message`. Client polling detects `failed`, shows: "Transcription Failed — Unable to transcribe your recording. Please try again." Job is dequeued.
+**Current behavior:** Edge function throws `'Whisper returned empty transcription'`. Journal is marked `failed` with that as `error_message`. The Realtime subscription receives the UPDATE, detects `failed`, shows: "Transcription Failed — Unable to transcribe your recording. Please try again." Job is dequeued.
 **Status:** ⚠️ Partial — dequeuing means no automatic retry, but the recording IS gone (local file not cleaned up by the error path, but dequeue removes it from recovery)
 **Required change:** When `transcription_status = 'failed'` and `error_message` indicates empty transcription (not a system error), the user message should be different: "We couldn't hear your recording. Please try again in a quiet environment." Do not retry this automatically — it would keep failing.
 
 #### EF-2. Whisper API timeout (60s)
 **Cause:** An 8-minute recording at a slow Whisper processing rate.
-**Current behavior:** The `AbortController` fires after 60s, throws `'Transcription timeout — audio may be too long'`. Journal marked `failed`. Client polling detects `failed`. Recovery in `retryFailedJob` re-uploads to a new path and re-triggers. If the recording is genuinely too long for Whisper, this will keep failing up to 3 times then the job is dequeued.
+**Current behavior:** The `AbortController` fires after 60s, throws `'Transcription timeout — audio may be too long'`. Journal marked `failed`. The Realtime subscription receives the UPDATE and detects `failed`. Recovery in `retryFailedJob` re-uploads to a new path and re-triggers. If the recording is genuinely too long for Whisper, this will keep failing up to 3 times then the job is dequeued.
 **Status:** ⚠️ Partial — the 60s Whisper timeout may be too aggressive for an 8-minute recording. Supabase Edge Functions have a 150-second wall clock limit.
 **Required change:** Increase `TRANSCRIPTION_TIMEOUT_MS` to 120000 (2 minutes). An 8-minute m4a typically transcribes in under 90 seconds. Add more specific `error_message` values so client polling can surface a meaningful message for timeout vs. other failures.
 
