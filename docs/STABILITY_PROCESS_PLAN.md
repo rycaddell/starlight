@@ -71,7 +71,7 @@ Implement in this order. Items 1–6 are targeted, localized fixes. Item 10 (Rea
 | 7 | Delete test/debug screens and infrastructure | Live routable test screens accessible to real users; security exposure | `app/button-test.tsx`, `app/components-test.tsx`, `app/design-test.tsx`, `app/phase3-test.tsx`, `components/mirror/MirrorTestPanel.tsx`, `lib/supabase/testData.js` | ✅ Done |
 | 8 | Wrap all `console.log` calls in `__DEV__` guard (or remove) | JS thread tax on every log; noisy Sentry — makes monitoring unreliable | Entire codebase (630 calls — see CODE-QUALITY-AUDIT.md #2) | ✅ Done |
 | 9 | Set Sentry user context in AuthContext (not MirrorScreen) | Incomplete error attribution in Sentry | `contexts/AuthContext.tsx` | ✅ Done |
-| 10 | Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely — do after items 1–9 are stable | `hooks/useAudioRecording.tsx` | ⬜ Todo |
+| 10 | Replace transcription polling with Supabase Realtime subscription | Eliminates polling race conditions entirely — do after items 1–9 are stable | `hooks/useAudioRecording.tsx` | ✅ Done |
 
 ### Tier 2 — Process Gates (Prevents Future Regressions)
 
@@ -149,7 +149,7 @@ See `docs/VOICE_JOURNALING_TESTS.md` for the full manual test protocol.
 | Fix | What It Solves |
 |-----|---------------|
 | Migrate `lib/supabase/*.js` → TypeScript | Full type safety on the data layer |
-| Replace mirror polling with Supabase Realtime | Eliminates polling complexity in `useMirrorData` |
+| Replace mirror polling with Supabase Realtime | Eliminates polling complexity in `useMirrorData` | ✅ Done |
 
 ---
 

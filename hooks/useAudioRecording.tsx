@@ -101,82 +101,112 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const wasBackgroundedRef = useRef(false);
   const resumeTimeRef = useRef<number>(0);
   const hasHitMaxDurationRef = useRef(false);
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pollingActiveRef = useRef(false);
+  const transcriptionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeChannelRef = useRef<any>(null);
+  const resolvedRef = useRef(false); // prevents double-completion on race conditions
   const isRecordingStoppingRef = useRef(false); // true while handleStopRecording is executing
 
-  const stopPolling = () => {
-    pollingActiveRef.current = false;
-    if (pollTimeoutRef.current) {
-      clearTimeout(pollTimeoutRef.current);
-      pollTimeoutRef.current = null;
+  const stopWaiting = () => {
+    if (transcriptionTimeoutRef.current) {
+      clearTimeout(transcriptionTimeoutRef.current);
+      transcriptionTimeoutRef.current = null;
+    }
+    if (realtimeChannelRef.current && supabase) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
     }
   };
 
-  const pollForCompletion = (journalId: string, localPath: string, jobId: string) => {
-    pollingActiveRef.current = true;
-    let pollCount = 0;
-    const MAX_POLLS = 60; // 3 min at 3s intervals
-    let hadNetworkErrors = false;
+  const subscribeForCompletion = (journalId: string, localPath: string, jobId: string) => {
+    if (!supabase) return;
 
-    const tick = async () => {
-      if (!pollingActiveRef.current) return;
+    resolvedRef.current = false;
 
-      if (pollCount >= MAX_POLLS) {
-        setIsProcessing(false);
-        stopPolling();
-        if (hadNetworkErrors) {
-          Alert.alert(
-            'Connection Issue',
-            'We lost connection while checking on your recording. It was saved — check back shortly.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          Alert.alert(
-            'Still Transcribing',
-            'Your recording was saved. The transcription is still processing — check back in a moment.',
-            [{ text: 'OK' }]
-          );
-        }
-        return;
+    const onResolved = (status: string, content: string, createdAt: string) => {
+      // Guard against double-calls (race between SUBSCRIBED check and postgres_changes event)
+      if (resolvedRef.current) return;
+      resolvedRef.current = true;
+
+      setIsProcessing(false);
+      // Defer channel removal so we're not removing the channel from within its own callback
+      setTimeout(() => stopWaiting(), 0);
+
+      if (status === 'completed') {
+        const timestamp = new Date(createdAt).toLocaleString('en-US', {
+          year: 'numeric', month: 'long', day: 'numeric',
+          hour: 'numeric', minute: '2-digit', hour12: true,
+        });
+        // Pass journalId so callers know the journal is already saved and skip re-insert
+        onTranscriptionComplete?.(content, timestamp, journalId);
+        FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
+        dequeuePendingJob(jobId);
+      } else {
+        dequeuePendingJob(jobId);
+        Alert.alert('Transcription Failed', 'Unable to transcribe your recording. Please try again.');
       }
+    };
 
-      try {
-        if (!supabase) return;
+    const channel = supabase
+      .channel(`journal-transcription-${journalId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'journals', filter: `id=eq.${journalId}` },
+        (payload) => {
+          const { transcription_status, content, created_at } = payload.new as {
+            transcription_status: string;
+            content: string;
+            created_at: string;
+          };
+          if (transcription_status === 'completed' || transcription_status === 'failed') {
+            onResolved(transcription_status, content, created_at);
+          }
+        }
+      )
+      .subscribe(async (status) => {
+        if (status !== 'SUBSCRIBED' || !supabase) return;
+        // Immediate check: transcription may have finished before subscription connected
         const { data: journal } = await supabase
           .from('journals')
           .select('transcription_status, content, created_at')
           .eq('id', journalId)
           .single();
-
-        if (journal?.transcription_status === 'completed') {
-          setIsProcessing(false);
-          stopPolling();
-          const timestamp = new Date(journal.created_at).toLocaleString('en-US', {
-            year: 'numeric', month: 'long', day: 'numeric',
-            hour: 'numeric', minute: '2-digit', hour12: true,
-          });
-          // Pass journalId so callers know the journal is already saved and skip re-insert
-          onTranscriptionComplete?.(journal.content, timestamp, journalId);
-          FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
-          dequeuePendingJob(jobId);
-        } else if (journal?.transcription_status === 'failed') {
-          setIsProcessing(false);
-          stopPolling();
-          dequeuePendingJob(jobId);
-          Alert.alert('Transcription Failed', 'Unable to transcribe your recording. Please try again.');
-        } else {
-          pollCount++;
-          pollTimeoutRef.current = setTimeout(tick, 3000);
+        if (
+          journal?.transcription_status === 'completed' ||
+          journal?.transcription_status === 'failed'
+        ) {
+          onResolved(journal.transcription_status, journal.content, journal.created_at);
         }
-      } catch {
-        hadNetworkErrors = true;
-        pollCount++;
-        pollTimeoutRef.current = setTimeout(tick, 3000);
-      }
-    };
+      });
 
-    tick();
+    realtimeChannelRef.current = channel;
+
+    // 3-minute safety net: if Realtime doesn't deliver an update, poll once then give up
+    transcriptionTimeoutRef.current = setTimeout(async () => {
+      if (resolvedRef.current) return; // already resolved via Realtime
+      if (!supabase) {
+        setIsProcessing(false);
+        return;
+      }
+      const { data: journal } = await supabase
+        .from('journals')
+        .select('transcription_status, content, created_at')
+        .eq('id', journalId)
+        .single();
+      if (
+        journal?.transcription_status === 'completed' ||
+        journal?.transcription_status === 'failed'
+      ) {
+        onResolved(journal.transcription_status, journal.content, journal.created_at);
+      } else {
+        stopWaiting();
+        setIsProcessing(false);
+        Alert.alert(
+          'Still Transcribing',
+          'Your recording was saved. The transcription is still processing — check back in a moment.',
+          [{ text: 'OK' }]
+        );
+      }
+    }, 3 * 60 * 1000);
   };
 
   useEffect(() => {
@@ -448,9 +478,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             // Fire edge function — don't await, server handles everything
             triggerTranscription(journal.id);
 
-            // Poll journals table for completion (runs independently)
-            pollForCompletion(journal.id, persistedLocalPath, jobId);
-            // isProcessing stays true until polling completes
+            // Subscribe to journal row for instant completion notification
+            subscribeForCompletion(journal.id, persistedLocalPath, jobId);
+            // isProcessing stays true until subscription resolves
 
           } else {
             // --- Fallback: upload failed, use legacy inline transcription ---
@@ -663,7 +693,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
 
   useEffect(() => {
     return () => {
-      stopPolling();
+      stopWaiting();
       if (wakeLockActiveRef.current) {
         deactivateKeepAwake('recording-session').catch(() => {});
       }

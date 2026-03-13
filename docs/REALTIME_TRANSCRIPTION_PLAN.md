@@ -261,8 +261,8 @@ Record both Step 2 and Step 3 in the Day 1 flow. Confirm both transcribe and the
 | # | Item | Status |
 |---|------|--------|
 | 1 | Migrate `lib/supabase/*.js` → TypeScript | ✅ Done (commit `625c9a4`) |
-| 2 | Replace transcription polling with Supabase Realtime | ⬜ This task |
-| 3 | Replace mirror polling with Supabase Realtime | ⬜ After #2 is stable |
+| 2 | Replace transcription polling with Supabase Realtime | ✅ Done |
+| 3 | Replace mirror polling with Supabase Realtime | ✅ Done |
 | 4 | Jest unit tests (recovery, upload timeout, error paths) | ⬜ Future |
 | 5 | Maestro E2E tests | ⬜ Future |
 
