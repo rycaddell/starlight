@@ -879,7 +879,6 @@ State management follows a consistent pattern:
 ### Learn More About:
 - **Architecture:** See [ARCHITECTURE.md](ARCHITECTURE.md) for technical deep-dive
 - **Database:** See [DATABASE.md](DATABASE.md) for schema details
-- **Development:** See [DEVELOPMENT.md](DEVELOPMENT.md) for workflows
 
 ### Explore the Codebase:
 Start with these files in order:
