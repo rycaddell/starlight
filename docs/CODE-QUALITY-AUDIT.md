@@ -68,14 +68,11 @@ The fix already exists: `lib/supabase/journals.js:145–174` exports `getTodaysA
 
 ### 4. Mirror Polling Interval Too Aggressive (3 Seconds)
 
-**File:** `hooks/useMirrorData.ts:148–254`
-**Impact:** HIGH — 80 network requests over 4 minutes during mirror generation; battery drain
+**Status: ✅ Superseded (March 2026) — replaced by Supabase Realtime subscription**
 
-The polling interval is hardcoded to `3000ms` (line 253) with 80 max attempts. This generates up to **80 Supabase queries** over ~4 minutes for a single mirror generation. Each poll queries `mirror_generation_requests` and, if completed, also fetches the full mirror record.
+**File:** `hooks/useMirrorData.ts`
 
-**Fix:** Start at 5 seconds, increase to 10 seconds after the first 10 attempts (exponential-ish backoff). 30 max attempts is sufficient (5 minutes total coverage).
-
-**Gain:** 40–66% reduction in polling network requests. Meaningful battery savings during generation.
+Polling has been removed entirely. `useMirrorData` now subscribes to `mirror_generation_requests` via `postgres_changes` WebSocket. The moment the edge function writes `status = 'completed'`, the app receives it instantly. A 4-minute safety-net timeout does one final DB query if the WebSocket event never arrives. Net result: 0 polling queries during normal operation (down from 80), and a single query only if Realtime fails.
 
 ---
 
@@ -420,7 +417,7 @@ This function exists to return the last journal entry type for default tab selec
 | 1 | Duplicate `useMirrorData` instances | Architecture | 🔴 High |
 | 2 | 630 console.log calls in production | Performance | ✅ Fixed |
 | 3 | Redundant journals fetch (`loadTodayAnsweredPrompts`) | Performance | 🔴 High |
-| 4 | 3-second polling interval too aggressive | Performance | 🔴 High |
+| 4 | 3-second polling interval too aggressive | Performance | ✅ Superseded |
 | 5 | `getSession()` called but result unused | Performance | 🟠 Med-High |
 | 6 | Test infrastructure in production | Code quality | ✅ Fixed |
 | 7 | Dead `MirrorCard`/`ReflectionDisplay` components | Code quality | 🟠 Med-High |

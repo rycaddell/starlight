@@ -65,7 +65,7 @@ Force-quitting at any point between [2] and [8] should result in recovery on nex
 
 **Fail signals:**
 - Spinner runs for more than 90 seconds with no result
-- "Still Transcribing" alert appears (means Realtime/polling didn't complete)
+- "Still Transcribing" alert appears (means the 3-minute safety-net timeout fired — Realtime event never arrived)
 - App navigates somewhere unexpected
 - Any crash or white screen
 
