@@ -1,4 +1,4 @@
-# Phase 6: Branch.io Deferred Deep Linking
+# Phase 6: Deferred Deep Linking via LinkRunner
 
 ## Goal
 
@@ -6,106 +6,246 @@ When User A invites User B via the share sheet and User B does NOT have the app 
 
 ---
 
-## Branch Account
+## Why LinkRunner (not Branch)
 
-- Live Key: `key_live_hCztJHj8AChUp2BR9P5mwkketqe3spYf`
-- Test Key: `key_test_etuAOGaYBzlRm0tS6T5K9epfAAb7sjWq`
-- App ID (numeric, not the SDK key): Live `1559180291845673804`, Test `1559180291887616845`
-- Link Domain: `oxbow.app.link`
-- Bundle ID: `com.caddell.starlight`
-- Apple App Prefix: `NX4S5H25Q3`
-- URI Scheme: `oxbow`
-- Fallback URL: `https://oxbowjournal.com`
+Branch deep linking requires a $500/mo paid plan. LinkRunner offers:
+- **Free tier:** 25,000 events, one-time, no expiry, no credit card required
+- **Pay-as-you-go** after free tier — scales with actual usage
+- **Native `expo-linkrunner` config plugin** — automatically handles iOS configuration without the AppDelegate incompatibility that killed the Branch integration (see Build History below)
+- Explicitly designed for "indie app builders" and "deep linking infra only" use cases
 
 ---
 
-## Current State of the Code
+## LinkRunner Account
 
-### What is implemented and in the codebase
-
-- `react-native-branch` SDK installed (`package.json`)
-- `branch_key` and `branch_universal_link_domains` set in `ios.infoPlist` in `app.config.js`
-- `associatedDomains` includes `oxbow.app.link` and `oxbow-alternate.app.link` in `app.config.js`
-- `BranchHandler` component in `app/_layout.tsx` — subscribes to Branch links, routes to `/friend-invite/[token]`, handles deferred case via `pendingInviteRef`
-- `createInviteLink()` in `lib/supabase/friends.js` returns `token` alongside `deepLink`
-- `handleCreateInvite` in `app/(tabs)/friends.tsx` attempts to create a Branch short URL, falls back to `oxbow://` if Branch fails
-- `web/.well-known/apple-app-site-association` uses correct bundle ID `com.caddell.starlight`
-
-### What is NOT in the codebase
-
-- `@config-plugins/react-native-branch` — was installed and tried, then uninstalled (see build failures below)
+- **Dashboard:** https://app.linkrunner.io
+- **Project Token:** `KeGhrHJGNJ14cFc3dD2VTDp5` ⚠️ DELETE before committing — move to `.env` as `EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN`
+- **API Key:** `vhTjNeqTmsiFuAzCmgRmIhiYHArInulE` ⚠️ DELETE before committing — move to `.env` as `EXPO_PUBLIC_LINKRUNNER_API_KEY`
+- **Link Domain:** `get.oxbowjournal.com`
+- **Fallback URL:** `https://oxbowjournal.com`
 
 ---
 
-## Build History
+## How Deferred Deep Linking Works (LinkRunner)
 
-### Build 1 — SDK only, numeric app ID as key (wrong key format)
-- **Config:** `react-native-branch` installed, numeric app ID `1559180291845673804` in infoPlist, no config plugin
-- **Build result:** ✅ Succeeded
-- **Runtime result:** ❌ "branch user session has not been initialized" error when generating invite link → fell back to `oxbow://`
+LinkRunner uses device fingerprinting (IP, device model, timestamp) to match a link tap to a subsequent app install — the same mechanism as Branch and AppsFlyer.
 
-### Build 2 — Correct SDK key, added `@config-plugins/react-native-branch`
-- **Config:** `key_live_hCztJHj8AChUp2BR9P5mwkketqe3spYf` in infoPlist, plugin added to plugins array, `newArchEnabled: true`
-- **Build result:** ❌ Failed — `cannot find type 'RCTBridge' in scope` in `AppDelegate.swift:58`
-- **Root cause:** `@config-plugins/react-native-branch` modifies AppDelegate, inserting `override func sourceURL(for bridge: RCTBridge)` which requires `RCTBridge` — incompatible with Expo SDK 54 / RN 0.81 AppDelegate
+**App already installed:**
+1. User B taps invite link
+2. iOS intercepts as Universal Link → app opens directly to invite acceptance screen
 
-### Build 3 — Same config, `newArchEnabled: false`
-- **Config:** Same as Build 2 with `newArchEnabled: false`
-- **Build result:** ❌ Failed — same `RCTBridge` error
-- **Note:** Disabling New Architecture did not resolve the plugin's AppDelegate incompatibility
+**App not installed:**
+1. User B taps link → App Store opens
+2. User B installs and opens app
+3. App calls `await linkrunner.getAttributionData()` on launch
+4. LinkRunner servers match the install to the original link tap via fingerprinting
+5. Response includes `deeplink: "oxbow://friend-invite/TOKEN?inviter=ID&name=NAME"`
+6. App routes to invite acceptance screen (or stores for after auth completes)
 
-### Build 4 — Config plugin removed from plugins array, `newArchEnabled: true`
-- **Config:** Plugin removed from `plugins` array but `@config-plugins/react-native-branch` still in `node_modules`
-- **Build result:** ❌ Failed — same `RCTBridge` error
-- **Note:** Package appears to auto-apply even when not listed in plugins array
-
-### Build 5 — Custom plugin, `@config-plugins/react-native-branch` fully removed
-- **Config:** `@config-plugins/react-native-branch` uninstalled from `node_modules`; custom `plugins/withBranch.js` added; `newArchEnabled: true`
-- **Plugin does three things:**
-  1. Adds `#import "RNBranch.h"` to iOS bridging header (NOT `<React/RCTBridge.h>`)
-  2. Inserts `RNBranch.initSession(launchOptions: launchOptions, isReferrable: true)` before the `return super.application(...)` line in `application(_:didFinishLaunchingWithOptions:)`
-  3. Appends `application(_:continue:restorationHandler:)` and `application(_:open:options:)` overrides for universal link + URI scheme handling
-- **Root fix:** Avoids `RCTBridge` entirely; only imports `RNBranch.h` which is always available
-- **Build result:** Pending
+**Key difference from Branch:** LinkRunner uses a **pull-based** model — `getAttributionData()` is called once on launch rather than Branch's push-based `subscribe()` listener. Same outcome, slightly different implementation shape.
 
 ---
 
-## What Still Needs to Be Solved
+## Social Media Intermediary Page
 
-The `react-native-branch` SDK requires its session to be initialized in the iOS AppDelegate via `RNBranch.initSession(launchOptions: launchOptions)`. Without this call, the SDK fails at runtime with "branch user session has not been initialized."
+LinkRunner automatically displays an intermediary page when invite links are tapped inside Instagram, Facebook, and similar in-app browsers. These platforms block direct redirects to the App Store; the intermediary page detects this environment and triggers the native App Store app correctly.
 
-The standard Expo solution (`@config-plugins/react-native-branch`) inserts AppDelegate code that is incompatible with Expo SDK 54 / RN 0.81. The incompatibility persists regardless of `newArchEnabled` setting.
-
-### Approaches not yet tried
-
-1. **Uninstall `@config-plugins/react-native-branch` entirely** (including from `node_modules`) and confirm Build 1 state (builds succeed, runtime session error). Then address session initialization separately.
-
-2. **Write a minimal custom config plugin** — a small `branch.plugin.js` file that adds only `RNBranch.initSession(launchOptions: launchOptions)` to the AppDelegate without the broken `sourceURL(for bridge: RCTBridge)` pattern.
-
-3. **Check if `ExpoAdapterBranch` handles initialization** — the `react-native-branch` package ships a native `ExpoAdapterBranch` pod that compiled successfully in Build 1. It may initialize the session automatically through Expo's module system without any AppDelegate changes. This was not confirmed.
-
-4. **Clipboard fallback** — store invite token in clipboard at share time, read it on first app launch. No native initialization required. Free. Less reliable (user can clear clipboard before installing).
+**Custom branding:** Contact support@linkrunner.io with a Figma design reference. They require SVG format only (no PNG/JPG) for performance reasons. An Oxbow-branded intermediary page would show the Oxbow icon and app name before redirecting.
 
 ---
 
-## Existing Invite Flow (works today)
+## Custom Subdomain Setup ✅ Done
+
+- Subdomain: `get.oxbowjournal.com` → `api.linkrunner.io` (CNAME via Netlify DNS)
+- SSL verified and active in LinkRunner dashboard
+- Invite links will look like `https://get.oxbowjournal.com/?c=TOKEN`
+
+---
+
+## Integration Plan
+
+### 1. Packages
+
+```bash
+# Remove Branch
+npm uninstall react-native-branch
+
+# Install LinkRunner
+npm install rn-linkrunner
+npx expo install expo-linkrunner
+```
+
+### 2. `app.config.js` changes
+
+Remove Branch entries, add LinkRunner plugin:
+
+```js
+// REMOVE these from ios.infoPlist:
+branch_key: 'key_live_...',
+branch_universal_link_domains: ['oxbow.app.link', 'oxbow-alternate.app.link'],
+
+// REMOVE from associatedDomains:
+'applinks:oxbow.app.link',
+'applinks:oxbow-alternate.app.link',
+
+// ADD to plugins array:
+[
+  'expo-linkrunner',
+  {
+    userTrackingPermission: 'This identifier helps us connect you with friends who invited you to Oxbow.',
+    debug: false, // true during development
+  }
+],
+
+// ADD to ios.associatedDomains (for Universal Links via custom subdomain):
+'applinks:get.oxbowjournal.com',
+```
+
+### 3. `app/_layout.tsx` — Replace `BranchHandler`
+
+```typescript
+// REMOVE:
+import branch from 'react-native-branch';
+// and the entire BranchHandler component
+
+// ADD — call getAttributionData() once after auth resolves:
+import linkrunner from 'rn-linkrunner';
+
+// Inside RootLayout or a new LinkRunnerHandler component:
+useEffect(() => {
+  async function checkDeferredLink() {
+    try {
+      const data = await linkrunner.getAttributionData();
+      if (!data?.deeplink) return;
+      // data.deeplink = "oxbow://friend-invite/TOKEN?inviter=ID&name=NAME"
+      // Route or store for after auth — same logic as pendingInviteRef in BranchHandler
+    } catch (e) {
+      // Non-fatal — deferred link just won't fire
+    }
+  }
+  checkDeferredLink();
+}, []);
+```
+
+**Note:** `getAttributionData()` should be called once on app launch. Store the result in a ref if the user hasn't authenticated yet, then process it once `user.id` is available — mirrors the `pendingInviteRef` pattern from `BranchHandler`.
+
+### 4. `lib/supabase/friends.js` — Replace Branch short URL generation
+
+```javascript
+// REMOVE:
+const buo = await branch.createBranchUniversalObject(...);
+const { url } = await buo.generateShortUrl(...);
+
+// REPLACE with LinkRunner Campaign API:
+const response = await fetch('https://api.linkrunner.io/api/v1/create-campaign', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'linkrunner-key': process.env.EXPO_PUBLIC_LINKRUNNER_API_KEY,
+  },
+  body: JSON.stringify({
+    name: `friend-invite-${token}`,
+    deeplink: `oxbow://friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`,
+    ios_web_redirect: 'https://oxbowjournal.com',
+    is_shortlink: true,
+    domain: 'get.oxbowjournal.com',
+  }),
+});
+const { link } = await response.json();
+shareUrl = link; // e.g. https://get.oxbowjournal.com/?c=abc123
+```
+
+### 5. SDK initialization — `app/_layout.tsx`
+
+```typescript
+// Call once at app startup, before getAttributionData():
+await linkrunner.init(
+  process.env.EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN,
+  undefined, // secret key — optional, add if LinkRunner requires it
+  undefined, // key ID — optional
+  false,     // disable IDFA collection (we don't need ad attribution)
+  __DEV__    // debug mode in development only
+);
+```
+
+### 6. User lifecycle hooks
+
+LinkRunner tracks install attribution. Wire these up:
+
+```javascript
+// After onboarding completes (Step 1 — name entered, users row created):
+await linkrunner.signup({ userId: user.id, name: user.display_name, phone: user.phone });
+
+// On each app session when user is logged in (in AuthContext or _layout.tsx):
+await linkrunner.setUserData({ userId: user.id, name: user.display_name });
+```
+
+### 7. Files to delete
+
+- `plugins/withBranch.js` — entire file, no longer needed
+
+### 8. Environment variables to add
+
+```
+EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN=...
+EXPO_PUBLIC_LINKRUNNER_API_KEY=...
+```
+
+---
+
+## Files Changed
+
+| File | What changes |
+|---|---|
+| `app.config.js` | Remove Branch config; add `expo-linkrunner` plugin + `associatedDomains` for custom subdomain |
+| `app/_layout.tsx` | Remove `BranchHandler` + `branch.subscribe()`; add `linkrunner.init()` + `getAttributionData()` on launch |
+| `lib/supabase/friends.js` | Replace `buo.generateShortUrl()` with LinkRunner Campaign API call |
+| `package.json` | Remove `react-native-branch`; add `rn-linkrunner` + `expo-linkrunner` |
+| `plugins/withBranch.js` | **Delete** |
+
+**Unchanged:**
+- `app/friend-invite/[token].tsx` — invite acceptance screen, no changes
+- `lib/supabase/friends.js` — `acceptInvite()`, `createFriendLink()`, all DB logic untouched
+- `app/(tabs)/friends.tsx` — invite button UI, no changes
+- All `friend_invites` / `friend_links` DB schema and RLS policies
+
+---
+
+## Existing Invite Flow (post-LinkRunner)
 
 1. User A taps "Invite Friend"
 2. `createInviteLink()` creates a `friend_invites` row in Supabase, returns token
-3. Branch link creation is attempted — if it fails, falls back to `oxbow://friend-invite/TOKEN?inviter=ID&name=NAME`
-4. Native share sheet opens
+3. LinkRunner Campaign API creates a short URL with the `oxbow://` deeplink embedded
+4. Native share sheet opens with `https://get.oxbowjournal.com/?c=...`
 5. User B taps link:
-   - **App installed:** iOS routes via URI scheme → `app/friend-invite/[token].tsx` → accept screen ✅
-   - **App not installed:** Goes to App Store → installs → opens to home screen → token is LOST ❌
+   - **App installed:** iOS Universal Link → `app/friend-invite/[token].tsx` → accept screen ✅
+   - **App not installed:** App Store → install → `getAttributionData()` fires → accept screen ✅
 
 ---
 
-## Files Changed for This Feature
+## Open Questions
 
-| File | What changed |
-|---|---|
-| `app.config.js` | Added `associatedDomains` for Branch domains; added `branch_key` and `branch_universal_link_domains` to `infoPlist` |
-| `app/_layout.tsx` | Added `BranchHandler` component with `branch.subscribe()` |
-| `lib/supabase/friends.js` | `createInviteLink()` now returns `token` in addition to `deepLink` |
-| `app/(tabs)/friends.tsx` | `handleCreateInvite` attempts Branch short URL, falls back to `oxbow://` |
-| `web/.well-known/apple-app-site-association` | Fixed bundle ID from `com.caddell.oxbow` → `com.caddell.starlight` |
+1. **Does `getAttributionData()` need to be called before or after `linkrunner.init()`?** — Almost certainly after. Confirm from docs or test.
+2. **Custom subdomain Universal Links** — LinkRunner likely hosts an `apple-app-site-association` file at `get.oxbowjournal.com/.well-known/aasa` automatically. Confirm this before removing the existing `web/.well-known/apple-app-site-association` file or verify it still needs to be served.
+3. **OG metadata / link preview** — Not documented in their public docs. Check dashboard after account setup for og:image / og:title fields on the campaign or subdomain level.
+4. **`is_shortlink` response shape** — Confirm the response JSON key is `link` (per docs) in testing.
+5. **`signup()` timing** — Should fire once, after the `users` row is created. The right place is in `completeProfileSetup()` in `AuthContext.tsx`. Don't call it on every login.
+
+---
+
+## Build History (Branch — context for why we switched)
+
+### Build 1 — SDK only, numeric app ID as key
+- **Result:** Built ✅ / Runtime ❌ — "branch user session has not been initialized"
+
+### Build 2 — Correct SDK key + `@config-plugins/react-native-branch`
+- **Result:** ❌ — `cannot find type 'RCTBridge' in scope` in `AppDelegate.swift`
+- **Root cause:** Plugin inserts `override func sourceURL(for bridge: RCTBridge)` — incompatible with Expo SDK 54 / RN 0.81
+
+### Builds 3–4 — Variations (newArchEnabled: false, plugin removed from array)
+- **Result:** ❌ — same `RCTBridge` error persisted
+
+### Build 5 — Custom `plugins/withBranch.js`
+- **Config:** Uninstalled `@config-plugins/react-native-branch`; custom plugin injects `RNBranch.initSession` directly without `RCTBridge`
+- **Result:** Pending at time of Branch plan abandonment
+- **Note:** Custom plugin approach was valid; abandoned because Branch pricing ($500/mo) is not viable
