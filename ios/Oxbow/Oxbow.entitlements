@@ -7,8 +7,7 @@
     <key>com.apple.developer.associated-domains</key>
     <array>
       <string>applinks:oxbowjournal.com</string>
-      <string>applinks:oxbow.app.link</string>
-      <string>applinks:oxbow-alternate.app.link</string>
+      <string>applinks:get.oxbowjournal.com</string>
     </array>
   </dict>
 </plist>
