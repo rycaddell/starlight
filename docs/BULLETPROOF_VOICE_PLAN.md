@@ -34,12 +34,13 @@ Stop recording
   │
   └─ 5. Fire edge function ──────→ transcribe-audio edge function
          (don't await)                │
+                                      ├─ Mark journal: processing
                                       ├─ Download audio from Storage
                                       ├─ Call OpenAI Whisper
                                       ├─ Update journal (content + status: 'completed')
                                       └─ Delete audio from Storage
 
-Client polls journals table every 3s
+Client polls journals table every 3s (pollForCompletion in useAudioRecording.tsx)
   └─ On 'completed': call onTranscriptionComplete(), clean up local file, dequeue job
 ```
 
@@ -54,7 +55,7 @@ It uses the iOS URL loading system under the hood, which is more resilient to ap
 |------|------|
 | `hooks/useAudioRecording.tsx` | Orchestrates steps 1–5 after stop; runs polling loop |
 | `hooks/useVoiceRecovery.ts` | Startup recovery for interrupted jobs |
-| `lib/supabase/transcription.js` | `uploadAudioToStorage`, `createPendingJournal`, `triggerTranscription` |
+| `lib/supabase/transcription.ts` | `uploadAudioToStorage`, `createPendingJournal`, `triggerTranscription` |
 | `supabase/functions/transcribe-audio/index.ts` | Edge function: pulls from Storage, calls Whisper, updates journal |
 
 ---
@@ -117,11 +118,13 @@ A pending voice journal has `content: ''` and `transcription_status: 'pending'`.
 
 This means text journals (no `transcription_status`) and completed voice journals both appear; in-flight voice journals do not.
 
+**DB migration note (run 2026-03-16):** Legacy journals created before the server-side pipeline existed had `transcription_status = 'pending'` and `audio_url = NULL` despite having real transcribed content. A one-time UPDATE was run in production to set these to `'completed'` so they are correctly included in all queries.
+
 ---
 
 ## Client Polling
 
-After firing the edge function, `useAudioRecording` polls the `journals` table every 3 seconds:
+After firing the edge function, `useAudioRecording` polls the `journals` table every 3 seconds via `pollForCompletion()`:
 
 - **Timeout:** 60 polls × 3 seconds = 3 minutes
 - **On `completed`:** calls `onTranscriptionComplete(content, timestamp, journalId)`, deletes local file, dequeues job
@@ -157,7 +160,7 @@ If the Storage upload fails (no connectivity, bucket error), the hook falls back
 
 **Max attempts:** 3. After 3 startup recovery attempts on the same job, it is dequeued and the local file deleted to prevent a stuck zombie job.
 
-**`isRecovering`:** The hook returns `{ isRecovering }`. When `true`, Day1Modal shows a "Finishing your last recording..." spinner and polls `day_1_progress` until the journal ID appears.
+**`isRecovering`:** The hook returns `{ isRecovering }`. When `true`, a recovery banner is shown in `app/(tabs)/_layout.tsx` and Day1Modal shows a "Finishing your last recording..." spinner.
 
 ---
 
@@ -184,6 +187,41 @@ This tag is stored in the AsyncStorage job record. During recovery, after re-tri
 | Edge function error | Journal marked `failed`; recovery re-uploads + retries |
 | Client polling timeout (3 min) | Alert shown; journal will complete in background and appear on next load |
 | >3 recovery attempts | Job dequeued, local file deleted (zombie protection) |
+
+---
+
+## Outstanding Work (Not Yet Addressed)
+
+These items were identified in the original PRD but not implemented. Listed in rough priority order.
+
+### Step 1 — Stop and Unload
+
+**1a. `stopAndUnloadAsync()` throws**
+Before calling `stopAndUnloadAsync()`, attempt to get the URI via `recording.getURI()`. If unload fails but URI exists, proceed with the save pipeline using whatever audio was captured. Add a Sentry capture with `tags: { action: 'stop_unload_failed' }`. Replace the current outer catch alert ("Failed to stop recording properly") with something non-alarming.
+
+**1b. `getURI()` returns null after successful stop**
+Currently the function returns silently with no alert and no save. Add an explicit check: capture to Sentry and show "Recording could not be saved. Please try again."
+
+### Step 4 — Journal INSERT
+
+**4b. INSERT fails with 401/403 (auth/RLS error)**
+Detect 401/403 error codes specifically in the insert error handler. For auth expiry, attempt to refresh the Supabase session and retry the INSERT once before giving up. Log to Sentry with the specific code.
+
+### Edge Function
+
+**EF-1. Empty transcription UX message**
+When `transcription_status = 'failed'` and `error_message` indicates empty transcription (Whisper returned empty string), show a different user message: "We couldn't hear your recording clearly. Please try again." vs. the generic system error message. Do not retry automatically.
+
+### Recovery
+
+**R-3. Max recovery attempts — silent data loss**
+When a job is dequeued due to exceeding 3 attempts, capture to Sentry with the job details and last known error. Optionally show a one-time notification: "One of your recordings could not be saved after multiple attempts." Currently this is silent.
+
+### Accepted Risks / Won't Fix
+
+- **4c. INSERT ACK lost** — INSERT commits server-side but client gets network error; recovery creates a duplicate journal row. No reliable client-side mitigation. Mitigation would require a unique constraint on `audio_url` in the DB.
+- **Duplicate journal on re-record** — If a user re-records after a failure, recovery delivers the original recording as a bonus entry. Accepted UX tradeoff.
+- **Edge function crash mid-processing** — If the function is killed at Supabase's 150s wall clock limit with status stuck at `processing`, recovery re-triggers but the `processing` idempotency guard now skips it. Journal stays stuck until max recovery attempts are hit. Known tradeoff introduced by the EF-5 fix.
 
 ---
 
