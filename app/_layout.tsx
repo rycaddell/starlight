@@ -4,7 +4,6 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
-import branch from 'react-native-branch';
 import { useEffect, useRef } from 'react';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -59,33 +58,50 @@ Sentry.init({
   },
 });
 
-// Handles Branch deep links — must sit inside AuthProvider to access user
-function BranchHandler() {
+// Handles LinkRunner deferred deep links — must sit inside AuthProvider to access user
+function LinkRunnerHandler() {
   const { user } = useAuth();
   const router = useRouter();
   const pendingInviteRef = useRef<{ token: string; inviterId: string; inviterName: string } | null>(null);
 
-  // Register Branch subscriber once on mount
+  // On mount: init SDK then check for a deferred deep link
   useEffect(() => {
-    const unsubscribe = branch.subscribe(({ error, params }) => {
-      if (error || !params?.['+clicked_branch_link']) return;
+    async function checkDeferredLink() {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const linkrunner = require('rn-linkrunner').default;
+        await linkrunner.init(
+          process.env.EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN ?? '',
+          undefined, // secret key — not required
+          undefined, // key ID — not required
+          false,     // disable IDFA collection
+          __DEV__,   // debug mode in dev only
+        );
 
-      const token = params['invite_token'] as string;
-      const inviterId = params['inviter_id'] as string;
-      const inviterName = params['inviter_name'] as string;
+        const data = await linkrunner.getAttributionData();
+        if (!data?.deeplink) return;
 
-      if (!token) return;
+        // deeplink = "oxbow://friend-invite/TOKEN?inviter=ID&name=NAME"
+        const url = new URL(data.deeplink);
+        const token = url.pathname.split('/').pop();
+        const inviterId = url.searchParams.get('inviter') ?? '';
+        const inviterName = url.searchParams.get('name') ?? '';
 
-      if (user?.id) {
-        router.push(`/friend-invite/${token}?inviter=${inviterId}&name=${encodeURIComponent(inviterName)}`);
-      } else {
-        // Deferred case: user may still be in onboarding — store for after auth
-        pendingInviteRef.current = { token, inviterId, inviterName };
+        if (!token) return;
+
+        if (user?.id) {
+          router.push(`/friend-invite/${token}?inviter=${inviterId}&name=${encodeURIComponent(inviterName)}`);
+        } else {
+          // Deferred case: user still in onboarding — store for after auth
+          pendingInviteRef.current = { token, inviterId, inviterName };
+        }
+      } catch (e) {
+        // Non-fatal — deferred link just won't fire
       }
-    });
+    }
 
-    return () => unsubscribe();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally register once
+    checkDeferredLink();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally run once on mount
 
   // Once user signs in, process any stored pending invite
   useEffect(() => {
@@ -116,7 +132,7 @@ function RootLayout() {
         <FriendBadgeProvider>
           <OnboardingProvider>
             <GlobalSettingsProvider>
-              <BranchHandler />
+              <LinkRunnerHandler />
               <AuthNavigator>
                 <Stack>
                   <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
