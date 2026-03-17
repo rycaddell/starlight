@@ -18,6 +18,7 @@ import {
   Image,
   ImageBackground,
 } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
@@ -221,9 +222,8 @@ function FriendsScreen() {
         return;
       }
 
-      // Open native share sheet
       await RNShare.share({
-        message: `Join me on Oxbow! Use this link to connect as friends:\n\n${result.deepLink}`,
+        message: `Join me on Oxbow! ${result.shareUrl}`,
         title: 'Join me on Oxbow',
       });
 
@@ -486,7 +486,6 @@ function FriendsScreen() {
                 Shared exploration in Oxbow
               </Text>
 
-              {/* Invite button hidden until Branch deep linking is configured
               <TouchableOpacity
                 style={[styles.emptyStateButton, creatingInvite && styles.buttonDisabled]}
                 onPress={handleCreateInvite}
@@ -498,7 +497,6 @@ function FriendsScreen() {
                   <Text style={styles.emptyStateButtonText}>Invite a Friend</Text>
                 )}
               </TouchableOpacity>
-              */}
             </View>
           </SafeAreaView>
         </ImageBackground>
@@ -518,7 +516,6 @@ function FriendsScreen() {
           {/* Header: "Friends" title with Invite button on right */}
           <View style={styles.header}>
             <Text style={styles.title}>Friends</Text>
-            {/* Invite button hidden until Branch deep linking is configured
             <TouchableOpacity
               onPress={handleCreateInvite}
               disabled={creatingInvite}
@@ -530,7 +527,6 @@ function FriendsScreen() {
                 <Text style={styles.inviteButtonText}>Invite a Friend</Text>
               )}
             </TouchableOpacity>
-            */}
           </View>
 
           {/* Friend Cards - full width */}

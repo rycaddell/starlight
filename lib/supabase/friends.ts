@@ -21,7 +21,7 @@ function generateUUID(): string {
 export async function createInviteLink(
   inviterUserId: string,
   inviterName: string
-): Promise<{ success: boolean; deepLink?: string; inviteId?: string; error?: string }> {
+): Promise<{ success: boolean; shareUrl?: string; token?: string; inviteId?: string; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not initialized' };
 
   try {
@@ -63,13 +63,46 @@ export async function createInviteLink(
       return { success: false, error: error.message };
     }
 
-    // Create deep link (matches route: friend-invite/[token])
+    // Internal deep link — embedded in the LinkRunner campaign link
     const deepLink = `oxbow://friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`;
+
+    // Create a shareable LinkRunner short URL wrapping the deep link
+    let shareUrl = deepLink; // fallback to oxbow:// if API call fails
+    try {
+      const response = await fetch('https://api.linkrunner.io/api/v1/create-campaign', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'linkrunner-key': process.env.EXPO_PUBLIC_LINKRUNNER_API_KEY ?? '',
+        },
+        body: JSON.stringify({
+          name: `friend-invite-${token}`,
+          deeplink: `https://get.oxbowjournal.com/friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`,
+          ios_web_redirect: 'https://apps.apple.com/us/app/oxbow-journal/id6749494345',
+          is_shortlink: true,
+          domain: 'get.oxbowjournal.com',
+        }),
+      });
+      const json = await response.json();
+      if (json?.data?.link) {
+        shareUrl = json.data.link;
+        console.log('✅ LinkRunner short URL created:', shareUrl);
+      } else {
+        console.warn('[LinkRunner] Unexpected response shape:', json);
+      }
+    } catch (linkrunnerError) {
+      console.error('[LinkRunner] ❌ Failed to create short URL:', linkrunnerError);
+      Sentry.captureException(linkrunnerError, {
+        tags: { component: 'friends', action: 'createInvite_linkrunner' },
+        contexts: { friends: { inviterUserId, token } },
+      });
+    }
 
     console.log('✅ Invite link created:', data.id);
     return {
       success: true,
-      deepLink,
+      token,
+      shareUrl,
       inviteId: data.id,
     };
   } catch (error: any) {

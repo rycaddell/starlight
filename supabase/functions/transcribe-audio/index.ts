@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const TRANSCRIPTION_TIMEOUT_MS = 60000; // 1 minute
+const TRANSCRIPTION_TIMEOUT_MS = 120000; // 2 minutes — covers 8-min recordings (~90s typical)
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -127,6 +127,13 @@ serve(async (req) => {
     if (!journal.audio_url) throw new Error('Journal has no audio_url — upload may have failed');
     if (journal.transcription_status === 'completed') {
       console.log('⚠️ Journal already transcribed, skipping');
+      return new Response(JSON.stringify({ success: true, skipped: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      });
+    }
+    if (journal.transcription_status === 'processing') {
+      console.log('⚠️ Journal already processing, skipping concurrent invocation');
       return new Response(JSON.stringify({ success: true, skipped: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
