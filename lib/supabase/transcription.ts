@@ -105,7 +105,7 @@ export const createPendingJournal = async ({
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message ?? 'Journal INSERT failed', { cause: error });
 
   console.log('📝 Pending journal created:', data.id);
   Sentry.addBreadcrumb({

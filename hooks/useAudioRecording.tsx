@@ -372,9 +372,25 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             await ensureRecordingsDir();
             await FileSystem.copyAsync({ from: uri, to: localPath });
             persistedLocalPath = localPath;
+            Sentry.addBreadcrumb({
+              category: 'recording',
+              message: 'Audio persisted to permanent local storage',
+              data: { jobId, localPath },
+              level: 'info',
+            });
+          } catch (copyError) {
+            // Non-fatal: continue with original temp URI — enqueue below will still run
+            Sentry.captureException(copyError, {
+              tags: { component: 'useAudioRecording', action: 'persist_local' },
+            });
+          }
+
+          // Always enqueue — even if copy failed, a job with the temp URI covers
+          // network-failure-only scenarios and gives recovery a path to retry.
+          try {
             await enqueuePendingJob({
               jobId,
-              localPath,
+              localPath: persistedLocalPath,
               storagePath: null,
               journalId: null,
               promptText: null,
@@ -382,16 +398,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
               createdAt: new Date().toISOString(),
               day1Step,
             });
-            Sentry.addBreadcrumb({
-              category: 'recording',
-              message: 'Audio persisted to permanent local storage',
-              data: { jobId, localPath },
-              level: 'info',
-            });
-          } catch (persistError) {
-            // Non-fatal: log and continue with original temp URI
-            Sentry.captureException(persistError, {
-              tags: { component: 'useAudioRecording', action: 'persist_local' },
+          } catch (enqueueError) {
+            Sentry.captureException(enqueueError, {
+              tags: { component: 'useAudioRecording', action: 'enqueue_job' },
             });
           }
 
