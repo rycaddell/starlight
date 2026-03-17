@@ -22,7 +22,7 @@ Branch deep linking requires a $500/mo paid plan. LinkRunner offers:
 - **Project Token:** `EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN` (in `.env`)
 - **API Key:** `EXPO_PUBLIC_LINKRUNNER_API_KEY` (in `.env`)
 - **Link Domain:** `get.oxbowjournal.com`
-- **Fallback URL:** `https://oxbowjournal.com`
+- **Fallback URL (App Store): `https://apps.apple.com/us/app/oxbow-journal/id6749494345`
 
 ---
 
