@@ -19,8 +19,8 @@ Branch deep linking requires a $500/mo paid plan. LinkRunner offers:
 ## LinkRunner Account
 
 - **Dashboard:** https://app.linkrunner.io
-- **Project Token:** `KeGhrHJGNJ14cFc3dD2VTDp5` ⚠️ DELETE before committing — move to `.env` as `EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN`
-- **API Key:** `vhTjNeqTmsiFuAzCmgRmIhiYHArInulE` ⚠️ DELETE before committing — move to `.env` as `EXPO_PUBLIC_LINKRUNNER_API_KEY`
+- **Project Token:** `EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN` (in `.env`)
+- **API Key:** `EXPO_PUBLIC_LINKRUNNER_API_KEY` (in `.env`)
 - **Link Domain:** `get.oxbowjournal.com`
 - **Fallback URL:** `https://oxbowjournal.com`
 
