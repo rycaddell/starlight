@@ -93,12 +93,5 @@
     <string>Automatic</string>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
-    <key>branch_key</key>
-    <string>key_live_hCztJHj8AChUp2BR9P5mwkketqe3spYf</string>
-    <key>branch_universal_link_domains</key>
-    <array>
-      <string>oxbow.app.link</string>
-      <string>oxbow-alternate.app.link</string>
-    </array>
   </dict>
 </plist>
