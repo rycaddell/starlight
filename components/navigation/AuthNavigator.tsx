@@ -51,6 +51,7 @@ export function AuthNavigator({ children }: AuthNavigatorProps) {
     return (
       <OTPVerifyScreen
         phone={phoneNumber}
+        onGoBack={() => setAuthStep('phone')}
         onVerify={async (token) => {
           const result = await verifyOTP(phoneNumber, token);
           if (!result.success) return result;

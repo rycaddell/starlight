@@ -33,6 +33,13 @@ export const sendPhoneOTP = async (
   }
 };
 
+function normalizeOtpError(message: string): string {
+  if (/expired/i.test(message)) return 'That code has expired. Tap "Resend code" to get a new one.';
+  if (/invalid/i.test(message)) return 'That code is incorrect. Please try again.';
+  if (/max.*attempts/i.test(message)) return 'Too many attempts. Please request a new code.';
+  return 'Something went wrong. Please try again.';
+}
+
 // Verify 6-digit OTP — returns Supabase session on success
 export const verifyPhoneOTP = async (
   phone: string,
@@ -57,7 +64,7 @@ export const verifyPhoneOTP = async (
       Sentry.captureException(error, {
         tags: { component: 'auth', action: 'verifyOTP' },
       });
-      return { success: false, error: error.message };
+      return { success: false, error: normalizeOtpError(error.message) };
     }
 
     Sentry.addBreadcrumb({

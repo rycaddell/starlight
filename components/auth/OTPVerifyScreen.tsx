@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Video, ResizeMode } from 'expo-av';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
@@ -25,12 +26,14 @@ interface OTPVerifyScreenProps {
   phone: string; // E.164 format
   onVerify: (token: string) => Promise<{ success: boolean; error?: string }>;
   onResend: () => Promise<{ success: boolean; error?: string }>;
+  onGoBack?: () => void;
 }
 
 export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
   phone,
   onVerify,
   onResend,
+  onGoBack,
 }) => {
   const [otp, setOtp] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -68,15 +71,19 @@ export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
   const handleVerify = async (token: string) => {
     if (isVerifying) return;
     setIsVerifying(true);
+    let failed = false;
     try {
       const result = await onVerify(token);
       if (!result.success) {
         setErrorMessage(result.error || 'Invalid code. Please try again.');
         setOtp('');
-        inputRef.current?.focus();
+        failed = true;
       }
     } finally {
       setIsVerifying(false);
+    }
+    if (failed) {
+      setTimeout(() => inputRef.current?.focus(), 50);
     }
   };
 
@@ -118,6 +125,16 @@ export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
       >
         <SafeAreaView style={styles.contentContainer}>
           <View style={styles.content}>
+            {onGoBack && (
+              <TouchableOpacity
+                onPress={onGoBack}
+                style={styles.backButton}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <MaterialIcons name="chevron-left" size={32} color={colors.text.white} />
+              </TouchableOpacity>
+            )}
+
             <View style={styles.headerSection}>
               <Text style={styles.title}>Enter your code</Text>
               <Text style={styles.subtitle}>
@@ -127,7 +144,11 @@ export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
 
             <View style={styles.bottomSection}>
               {/* Digit boxes — tap anywhere to focus the hidden input */}
-              <View style={styles.boxRow}>
+              <TouchableOpacity
+                onPress={() => inputRef.current?.focus()}
+                activeOpacity={1}
+                style={styles.boxRow}
+              >
                 {Array.from({ length: 6 }, (_, i) => (
                   <View
                     key={i}
@@ -140,7 +161,7 @@ export const OTPVerifyScreen: React.FC<OTPVerifyScreenProps> = ({
                     <Text style={styles.digitText}>{otp[i] ?? ''}</Text>
                   </View>
                 ))}
-              </View>
+              </TouchableOpacity>
 
               {/* Hidden input that actually receives keystrokes and autofill */}
               <TextInput
@@ -203,6 +224,10 @@ const styles = StyleSheet.create({
   },
   keyboardAvoidingView: { flex: 1 },
   contentContainer: { flex: 1 },
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: spacing.m,
+  },
   content: {
     flex: 1,
     justifyContent: 'space-between',

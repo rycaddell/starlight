@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Dimensions,
   Keyboard,
   TouchableWithoutFeedback,
@@ -35,27 +34,36 @@ interface PhoneAuthScreenProps {
 export const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ onPhoneSubmit }) => {
   const [digits, setDigits] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const videoRef = useRef(null);
+  const inputRef = useRef<TextInput>(null);
 
   const isValid = digits.length === 10;
 
   const handleChangeText = (text: string) => {
-    const raw = text.replace(/\D/g, '').slice(0, 10);
-    setDigits(raw);
+    let raw = text.replace(/\D/g, '');
+    // Strip leading US country code if iOS autofill inserted +1XXXXXXXXXX
+    if (raw.length === 11 && raw.startsWith('1')) {
+      raw = raw.slice(1);
+    }
+    setDigits(raw.slice(0, 10));
+    setErrorMessage('');
   };
 
   const handleSubmit = async () => {
     if (!isValid || isSubmitting) return;
-    Keyboard.dismiss();
     setIsSubmitting(true);
+    setErrorMessage('');
     try {
       const e164 = `+1${digits}`;
       const result = await onPhoneSubmit(e164);
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Failed to send code. Please try again.');
+        setErrorMessage(result.error || 'Failed to send code. Please try again.');
+        setTimeout(() => inputRef.current?.focus(), 50);
       }
     } catch {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      setErrorMessage('Something went wrong. Please try again.');
+      setTimeout(() => inputRef.current?.focus(), 50);
     } finally {
       setIsSubmitting(false);
     }
@@ -96,6 +104,7 @@ export const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ onPhoneSubmit 
                       <Text style={styles.countryPrefixText}>+1</Text>
                     </View>
                     <TextInput
+                      ref={inputRef}
                       style={styles.input}
                       value={formatPhoneDisplay(digits)}
                       onChangeText={handleChangeText}
@@ -110,6 +119,9 @@ export const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ onPhoneSubmit 
                     />
                   </View>
                 </View>
+                {!!errorMessage && (
+                  <Text style={styles.errorText}>{errorMessage}</Text>
+                )}
                 <TouchableOpacity
                   style={[
                     styles.submitButton,
@@ -226,6 +238,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '400',
     color: colors.text.white,
+  },
+  errorText: {
+    fontFamily: fontFamily.primary,
+    fontSize: 14,
+    color: '#FF6B6B',
+    textAlign: 'center',
   },
   submitButton: {
     backgroundColor: colors.text.primary,
