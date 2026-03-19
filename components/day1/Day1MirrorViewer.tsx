@@ -186,7 +186,7 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
 
                   {/* Title and Date */}
                   <View style={[styles.titleOverlay, { top: insets.top + 112 }]}>
-                    <Text style={styles.titleText}>{sanitizeText(getTitle())}</Text>
+                    <Text style={styles.titleText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{sanitizeText(getTitle())}</Text>
                     <Text style={styles.dateText}>{formatDate()}</Text>
                   </View>
                 </ImageBackground>
@@ -386,6 +386,7 @@ const styles = StyleSheet.create({
   titleOverlay: {
     position: 'absolute',
     left: spacing.xl,
+    right: spacing.xl,
     zIndex: 2,
   },
   titleText: {

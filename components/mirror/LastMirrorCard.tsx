@@ -59,7 +59,7 @@ export const LastMirrorCard: React.FC<LastMirrorCardProps> = ({
       <View style={styles.contentPanel}>
         {/* Name + date as a tight group */}
         <View style={styles.nameGroup}>
-          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
+          <Text style={styles.name} numberOfLines={3} ellipsizeMode="tail">
             {biblicalCharacter || 'Mirror'}
           </Text>
           <Text style={styles.date}>{formattedDate}</Text>

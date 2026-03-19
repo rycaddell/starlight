@@ -75,6 +75,7 @@ REQUIREMENTS:
 - Observations only - no recommendations or growth edges
 - Omit observation sections if no clear evidence
 - Properly formatted JSON strings
+- The character field must be 25 characters or fewer
 
 TONE: 
 - Warm, encouraging, and non-judgmental. 

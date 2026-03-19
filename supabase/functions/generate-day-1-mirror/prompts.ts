@@ -58,6 +58,7 @@ IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
 - Ensure all JSON strings are properly formatted (no unescaped quotes or newlines)
+- The character field must be 25 characters or fewer
 
 TONE: 
 - Warm, encouraging, and non-judgmental. 
