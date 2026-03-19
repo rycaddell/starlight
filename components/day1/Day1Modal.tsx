@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 import { Video, ResizeMode } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDay1Progress, completeDay1, generateMiniMirror } from '../../lib/supabase/day1';
@@ -92,7 +93,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
       }
 
       // Determine starting step
-      if (progress.mini_mirror_id && progress.generation_status === 'completed') {
+      if (progress.mini_mirror_id) {
         setCurrentStep(5);
       } else if (progress.step_3_journal_id) {
         // Recording done but no mirror — resume generation from here
@@ -147,11 +148,25 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   };
 
   // Poll day_1_progress every 3s until the step journal ID is set (recovery complete)
+  const MAX_RECOVERY_POLL_ATTEMPTS = 10;
   const pollUntilRecoveryComplete = (step: 2 | 3) => {
     if (!user) return;
     const field = step === 2 ? 'step_2_journal_id' : 'step_3_journal_id';
+    let attempts = 0;
 
     const tick = async () => {
+      attempts++;
+      if (attempts > MAX_RECOVERY_POLL_ATTEMPTS) {
+        Sentry.captureException(new Error('Day 1 recovery poll timed out'), {
+          tags: { component: 'day1', action: 'pollUntilRecoveryComplete' },
+          contexts: { day1: { userId: user.id, step } },
+        });
+        setIsWaitingForRecovery(false);
+        setCurrentStep(step);
+        setLoading(false);
+        return;
+      }
+
       try {
         const result = await getDay1Progress(user.id);
         if (result.success && (result.progress as any)?.[field]) {
@@ -181,20 +196,23 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
 
   const handleGenerateMirror = async () => {
     if (!user) return;
+    if (isGenerating) return;
     setIsGenerating(true);
     try {
       const generateResult = await generateMiniMirror(user.id) as any;
       if (generateResult.success) {
         setMiniMirrorId(generateResult.mirror.id);
-        await completeDay1(user.id);
         setIsGenerating(false);
         setCurrentStep(5);
       } else {
         console.error('❌ [Day1Modal] Mirror generation failed:', generateResult.error);
         setIsGenerating(false);
+        const isTimeout = generateResult.error === 'GENERATION_TIMEOUT';
         Alert.alert(
           'Generation Failed',
-          'Unable to generate your Mirror. Would you like to try again?',
+          isTimeout
+            ? 'Mirror generation is taking longer than expected. Please check your connection and try again.'
+            : 'Unable to generate your Mirror. Would you like to try again?',
           [
             { text: 'Cancel', style: 'cancel' },
             { text: 'Retry', onPress: handleGenerateMirror },
@@ -221,7 +239,8 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     handleGenerateMirror();
   };
 
-  const handleStep5Complete = () => {
+  const handleStep5Complete = async () => {
+    await completeDay1(user!.id);
     onComplete();
   };
 

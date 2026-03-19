@@ -358,15 +358,23 @@ export async function generateMiniMirror(userId: string): Promise<{
 
     console.log('📡 Calling edge function:', edgeFunctionUrl);
 
-    const response = await fetch(edgeFunctionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session?.access_token}`,
-        apikey: anonKey ?? '',
-      },
-      body: JSON.stringify({}),
-    });
+    const GENERATION_TIMEOUT_MS = 90_000;
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error('GENERATION_TIMEOUT')), GENERATION_TIMEOUT_MS)
+    );
+
+    const response = await Promise.race([
+      fetch(edgeFunctionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session?.access_token}`,
+          apikey: anonKey ?? '',
+        },
+        body: JSON.stringify({}),
+      }),
+      timeoutPromise,
+    ]);
 
     const responseText = await response.text();
     console.log('📥 Edge function response status:', response.status);
@@ -441,10 +449,11 @@ export async function generateMiniMirror(userId: string): Promise<{
       summaries: data.summaries,
     };
   } catch (error: any) {
-    console.error('❌ Error in generateMiniMirror:', error);
+    const isTimeout = error?.message === 'GENERATION_TIMEOUT';
+    console.error(`❌ Error in generateMiniMirror (${isTimeout ? 'timeout' : 'unexpected'}):`, error);
 
     Sentry.captureException(error, {
-      tags: { component: 'day1', action: 'generateMiniMirror', type: 'unexpected' },
+      tags: { component: 'day1', action: 'generateMiniMirror', type: isTimeout ? 'timeout' : 'unexpected' },
       contexts: { day1: { userId } },
     });
 
@@ -454,7 +463,7 @@ export async function generateMiniMirror(userId: string): Promise<{
       .update({ generation_status: 'failed' })
       .eq('user_id', userId);
 
-    return { success: false, error: error.message };
+    return { success: false, error: isTimeout ? 'GENERATION_TIMEOUT' : error.message };
   }
 }
 
