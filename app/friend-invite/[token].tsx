@@ -14,7 +14,7 @@ import {
 import * as Sentry from '@sentry/react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { acceptInvite, getInviterInfo } from '@/lib/supabase/friends';
+import { acceptInvite, declineInvite, getInviterInfo } from '@/lib/supabase/friends';
 import { Avatar } from '@/components/ui/Avatar';
 import { colors, typography, spacing, borderRadius, fontFamily } from '@/theme/designTokens';
 
@@ -132,7 +132,12 @@ export default function AcceptInviteScreen() {
         {
           text: 'Decline',
           style: 'destructive',
-          onPress: () => router.replace('/(tabs)/friends'),
+          onPress: async () => {
+            if (typeof token === 'string' && user?.id) {
+              await declineInvite(token, user.id);
+            }
+            router.replace('/(tabs)/friends');
+          },
         },
       ]
     );

@@ -88,30 +88,36 @@ export function ShareMirrorSheet({
         : selectedFriendIds;
 
       // Share with selected friends sequentially
-      let successCount = 0;
+      const sharedNames: string[] = [];
       let errorCount = 0;
+      let lastError: string | undefined;
 
       for (const friendId of friendIdsToShare) {
         const result = await shareMirror(mirrorId, userId, friendId);
         if (result.success) {
-          successCount++;
+          const friend = friends.find(f => f.userId === friendId);
+          sharedNames.push(friend?.displayName || friendId);
         } else {
           errorCount++;
+          lastError = result.error;
           const friend = friends.find(f => f.userId === friendId);
           console.warn(`Failed to share with ${friend?.displayName || friendId}:`, result.error);
         }
       }
 
-      if (successCount > 0) {
+      if (sharedNames.length > 0) {
+        const nameList =
+          sharedNames.length === 1
+            ? sharedNames[0]
+            : sharedNames.slice(0, -1).join(', ') + ' and ' + sharedNames[sharedNames.length - 1];
         Alert.alert(
           'Mirror Shared',
-          `Shared with ${successCount} friend${successCount > 1 ? 's' : ''}` +
-            (errorCount > 0 ? ` (${errorCount} failed)` : '')
+          `Shared with ${nameList}` + (errorCount > 0 ? ` (${errorCount} failed)` : '')
         );
         onShareSuccess?.();
         onClose();
       } else {
-        Alert.alert('Unable to Share', 'Failed to share with any friends');
+        Alert.alert('Unable to Share', lastError ?? 'Failed to share with any friends');
       }
     } catch (error) {
       console.error('Error sharing mirror:', error);

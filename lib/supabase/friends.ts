@@ -289,6 +289,38 @@ export async function acceptInvite(
 }
 
 /**
+ * Decline a friend invite so it is not shown again
+ */
+export async function declineInvite(
+  token: string,
+  inviteeUserId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!supabase) return { success: false, error: 'Supabase not initialized' };
+
+  try {
+    const { error } = await supabase
+      .from('friend_invites')
+      .update({
+        declined_at: new Date().toISOString(),
+        declined_by_user_id: inviteeUserId,
+      })
+      .eq('token', token)
+      .is('accepted_at', null)
+      .is('declined_at', null);
+
+    if (error) {
+      console.error('❌ Error declining invite:', error);
+      return { success: false, error: error.message };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ Error in declineInvite:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
  * Get list of user's active friends
  */
 export async function fetchFriends(
@@ -440,6 +472,7 @@ export async function getInviterInfo(token: string): Promise<{
       .select('created_at, users!friend_invites_inviter_user_id_fkey(display_name, profile_picture_url)')
       .eq('token', token)
       .is('accepted_at', null)
+      .is('declined_at', null)
       .single();
 
     if (error || !invite) {

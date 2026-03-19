@@ -43,7 +43,7 @@ const JournalCard: React.FC<JournalCardProps> = ({ date, text }) => {
 };
 
 export const NarrativeOnboardingScreen: React.FC = () => {
-  const { currentStep, userName, setUserName, goToNextStep, completeOnboarding, canProceed } =
+  const { currentStep, userName, setUserName, setCurrentStep, goToNextStep, completeOnboarding, canProceed } =
     useOnboarding();
   const { user, isNewUser, completeProfileSetup } = useAuth();
   const [nameInput, setNameInput] = useState(userName);
@@ -102,13 +102,15 @@ export const NarrativeOnboardingScreen: React.FC = () => {
         Alert.alert('Error', 'Failed to save your name. Please try again.');
         return;
       }
-      goToNextStep();
+      // Use setCurrentStep directly to avoid canProceed reading stale userName state
+      // (setUserName above hasn't re-rendered yet when goToNextStep checks canProceed).
+      setCurrentStep('welcome');
       return;
     }
 
     if (!user) {
       console.error('❌ No user found when saving display name');
-      goToNextStep(); // defensive fallback
+      setCurrentStep('welcome'); // defensive fallback
       return;
     }
 
@@ -131,7 +133,7 @@ export const NarrativeOnboardingScreen: React.FC = () => {
       console.error('❌ Exception saving display name:', error);
     }
 
-    goToNextStep();
+    setCurrentStep('welcome');
   };
 
   // Auto-advance for welcome screen only
