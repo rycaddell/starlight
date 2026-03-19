@@ -221,12 +221,10 @@ export const useVoiceRecovery = (userId: string | null) => {
       storagePath = `${uid}/${job.jobId}.m4a`;
       console.log(`⬆️ [RECOVERY] Re-uploading audio for job ${job.jobId}`);
       const uploadResult = await uploadAudioToStorage(job.localPath, storagePath);
-      const alreadyExists = uploadResult.error?.includes('already exists');
-      if (!uploadResult.success && !alreadyExists) {
+      if (!uploadResult.success) {
         console.error(`❌ [RECOVERY] Re-upload failed for job ${job.jobId}, will retry next launch`);
         return false;
       }
-      // alreadyExists means a prior timed-out upload completed in the background — file is in Storage, proceed
     }
 
     console.log(`📝 [RECOVERY] Creating journal for job ${job.jobId}`);

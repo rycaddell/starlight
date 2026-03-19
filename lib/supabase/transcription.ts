@@ -30,7 +30,7 @@ export const uploadAudioToStorage = async (
   try {
     const uploadUrl = `${SUPABASE_URL}/storage/v1/object/audio-recordings/${storagePath}`;
 
-    const UPLOAD_TIMEOUT_MS = 30000;
+    const UPLOAD_TIMEOUT_MS = 120000;
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), UPLOAD_TIMEOUT_MS)
     );
@@ -50,7 +50,18 @@ export const uploadAudioToStorage = async (
 
     if (result.status !== 200) {
       const body = result.body ? JSON.parse(result.body) : {};
-      throw new Error(body.message || `Upload failed with status ${result.status}`);
+      const message = body.message || `Upload failed with status ${result.status}`;
+      if (message.toLowerCase().includes('already exists')) {
+        // File already in Storage from a prior background upload — this is a success
+        Sentry.addBreadcrumb({
+          category: 'transcription',
+          message: 'Audio already in Storage (prior background upload)',
+          data: { storagePath },
+          level: 'info',
+        });
+        return { success: true };
+      }
+      throw new Error(message);
     }
 
     console.log('✅ Audio uploaded to Storage successfully');

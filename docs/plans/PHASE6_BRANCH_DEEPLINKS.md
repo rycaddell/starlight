@@ -223,13 +223,127 @@ EXPO_PUBLIC_LINKRUNNER_API_KEY=...
 
 ---
 
+## Test Cases
+
+### Prerequisites
+- 1.0.2 production build installed on Device A (the inviter)
+- Device B available for new-install tests (either no app installed, or app deleted)
+- Both devices on different networks if possible (fingerprinting is more reliable across different IPs)
+
+---
+
+### TC-1: Link creation — share URL format
+**Steps:**
+1. Open app on Device A, navigate to Friends tab
+2. Tap "Invite a Friend"
+3. Share sheet appears — inspect the message text
+
+**Expected:** Message contains `https://get.oxbowjournal.com/?c=` (not `oxbow://`)
+**Status:** ✅ Verified
+
+---
+
+### TC-2: Universal Link — app already installed
+**Steps:**
+1. Send the invite link from Device A to Device A via iMessage
+2. Tap the link in Messages
+
+**Expected:** App opens directly to the invite acceptance screen (not Safari, not App Store)
+**Notes:** If this fails after a fresh install, iOS may have cached an old AASA. Delete and reinstall the app to flush the cache.
+**Status:** ✅ Verified (requires fresh install to flush AASA cache)
+
+---
+
+### TC-3: No app installed — App Store redirect
+**Steps:**
+1. Delete app from Device B
+2. Send invite link from Device A to Device B
+3. Tap link on Device B
+
+**Expected:** App Store opens to the Oxbow listing (`https://apps.apple.com/us/app/oxbow-journal/id6749494345`)
+**Status:** ✅ Verified
+
+---
+
+### TC-4: Deferred deep link — new install auto-connect ⏳
+**Steps:**
+1. Delete app from Device B
+2. Send invite link from Device A to Device B
+3. Tap link on Device B → App Store opens
+4. Install app from App Store
+5. Open app and complete onboarding/sign in on Device B
+
+**Expected:** After auth completes, app automatically navigates to the invite acceptance screen showing Device A's user name
+**Notes:**
+- Requires production build (1.0.2+) — `rn-linkrunner` must be natively linked
+- LinkRunner uses fingerprinting; best results when install happens within ~30 mins of tapping the link
+- If deferred link doesn't fire, check LinkRunner dashboard for attribution data on the install
+**Status:** ⏳ Not yet verified — pending 1.0.2 TestFlight build
+
+---
+
+### TC-5: Invite acceptance — friend link created
+**Steps:**
+1. Complete TC-4 so Device B lands on the invite acceptance screen
+2. Tap "Accept" on Device B
+
+**Expected:**
+- Device B shows success and navigates to Friends tab with Device A listed as a friend
+- Device A's Friends tab shows Device B (may require pull-to-refresh)
+- `friend_links` row created in Supabase with both user IDs
+- `friend_invites` row updated with `accepted_at` timestamp
+**Status:** ⏳ Pending TC-4
+
+---
+
+### TC-6: Expired invite
+**Steps:**
+1. Create an invite link
+2. Manually update the `created_at` in Supabase to >72 hours ago
+3. Tap the link
+
+**Expected:** Invite acceptance screen shows "Invite expired. Ask your friend to send a new one."
+**Status:** Not yet tested
+
+---
+
+### TC-7: Already-used invite
+**Steps:**
+1. Accept an invite (TC-5)
+2. Tap the same invite link again from a different account
+
+**Expected:** Error shown — "Invite not found or already used."
+**Status:** Not yet tested
+
+---
+
+### TC-8: Self-invite guard
+**Steps:**
+1. Create an invite link on Device A
+2. Tap the link on the same account (Device A)
+
+**Expected:** Error shown — "You cannot link with yourself."
+**Status:** Not yet tested
+
+---
+
+### TC-9: Social media link (Instagram/Facebook)
+**Steps:**
+1. Share invite link to an Instagram DM or Facebook message
+2. Recipient taps link inside the Instagram/Facebook in-app browser
+
+**Expected:** LinkRunner intermediary page appears, then redirects correctly to App Store or opens app
+**Status:** Not yet tested
+
+---
+
 ## Open Questions
 
-1. **Does `getAttributionData()` need to be called before or after `linkrunner.init()`?** — Almost certainly after. Confirm from docs or test.
-2. **Custom subdomain Universal Links** — LinkRunner likely hosts an `apple-app-site-association` file at `get.oxbowjournal.com/.well-known/aasa` automatically. Confirm this before removing the existing `web/.well-known/apple-app-site-association` file or verify it still needs to be served.
+1. ~~**Does `getAttributionData()` need to be called before or after `linkrunner.init()`?**~~ ✅ Confirmed: called after `init()` — see `LinkRunnerHandler` in `app/_layout.tsx`.
+2. ~~**Custom subdomain Universal Links**~~ ✅ Confirmed: LinkRunner hosts the AASA at `get.oxbowjournal.com/.well-known/apple-app-site-association` automatically. Verified working (TC-2 ✅).
 3. **OG metadata / link preview** — Not documented in their public docs. Check dashboard after account setup for og:image / og:title fields on the campaign or subdomain level.
-4. **`is_shortlink` response shape** — Confirm the response JSON key is `link` (per docs) in testing.
-5. **`signup()` timing** — Should fire once, after the `users` row is created. The right place is in `completeProfileSetup()` in `AuthContext.tsx`. Don't call it on every login.
+4. ~~**`is_shortlink` response shape**~~ ✅ Confirmed: response key is `json.data.link` (not `json.link`). Fixed in `lib/supabase/friends.ts`.
+5. **`linkrunner.signup()` timing** — Should fire once after the `users` row is created. Right place: `completeProfileSetup()` in `AuthContext.tsx`. `linkrunner.setUserData()` should fire on each session when user is logged in. Neither is implemented yet.
 
 ---
 
@@ -249,3 +363,38 @@ EXPO_PUBLIC_LINKRUNNER_API_KEY=...
 - **Config:** Uninstalled `@config-plugins/react-native-branch`; custom plugin injects `RNBranch.initSession` directly without `RCTBridge`
 - **Result:** Pending at time of Branch plan abandonment
 - **Note:** Custom plugin approach was valid; abandoned because Branch pricing ($500/mo) is not viable
+
+---
+
+## Build History (LinkRunner)
+
+### Builds 1–2 — `RNBranch` remnants in native files
+- **Result:** ❌ — `RNBranch.h` not found, then `cannot find 'RNBranch' in scope`
+- **Root cause:** `plugins/withBranch.js` had injected Branch calls into `AppDelegate.swift` and `Oxbow-Bridging-Header.h`; must be removed manually after plugin deletion
+
+### Build 3 — Sentry auth token missing
+- **Result:** ❌ — `SENTRY_AUTH_TOKEN` not set in EAS environment
+- **Fix:** Added as EAS secret
+
+### Build 4 — LinkRunner Campaign API rejected `oxbow://` deeplink
+- **Result:** Built ✅ / Runtime ❌ — `oxbow://` scheme rejected by API with `{"msg":"Not a valid link!","status":400}`
+- **Fix:** Changed deeplink parameter to HTTPS: `https://get.oxbowjournal.com/friend-invite/TOKEN...`
+
+### Build 5 — Wrong response key (`json.link` vs `json.data.link`)
+- **Result:** Built ✅ / Runtime: fallback URL used instead of short link
+- **Fix:** Updated `friends.ts` to read `json.data.link`
+
+### Build 6 — `rn-linkrunner` crash on older builds
+- **Result:** ❌ crash when native module not linked
+- **Fix:** Changed top-level `import` to lazy `require()` inside try/catch in `useEffect`
+
+### Builds 7–N — `EAS_PUBLIC_LINKRUNNER_*` env vars undefined in EAS
+- **Fix:** Added both keys as EAS secrets (not just `.env`)
+
+### Submission failures — `CFBundleShortVersionString` stuck at 1.0.0
+- **Root cause:** `app.config.js` version is ignored when an `ios/` directory exists. EAS reads `CFBundleShortVersionString` directly from `ios/Oxbow/Info.plist`.
+- **Fix:** Version must be bumped in BOTH `app.config.js` AND `ios/Oxbow/Info.plist`
+- **Symptom:** EAS submit log shows `App Version: 1.0.0` regardless of `app.config.js` value
+
+### Build (1.0.2) — First correct submission
+- **Result:** ✅ Build submitted with `App Version: 1.0.2`, `Build number: 37`
