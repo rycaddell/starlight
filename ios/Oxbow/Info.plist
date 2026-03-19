@@ -73,6 +73,10 @@
     <array>
       <string>arm64</string>
     </array>
+    <key>UIDeviceFamily</key>
+    <array>
+      <integer>1</integer>
+    </array>
     <key>UIRequiresFullScreen</key>
     <false/>
     <key>UIStatusBarStyle</key>
@@ -81,13 +85,6 @@
     <array>
       <string>UIInterfaceOrientationPortrait</string>
       <string>UIInterfaceOrientationPortraitUpsideDown</string>
-    </array>
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-      <string>UIInterfaceOrientationPortrait</string>
-      <string>UIInterfaceOrientationPortraitUpsideDown</string>
-      <string>UIInterfaceOrientationLandscapeLeft</string>
-      <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
     <key>UIUserInterfaceStyle</key>
     <string>Automatic</string>
