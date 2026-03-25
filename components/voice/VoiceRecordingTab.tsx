@@ -33,10 +33,13 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
   return (
     <View style={styles.container}>
       <View style={styles.recordingUnit}>
-        {/* Timer */}
-        <Text style={styles.durationText}>
-          {formatDuration(recordingDuration)}
-        </Text>
+        {/* Timer — only shown while recording or processing so stale duration
+            doesn't appear in the idle state between sessions */}
+        {(isRecording || isProcessing) && (
+          <Text style={styles.durationText}>
+            {formatDuration(recordingDuration)}
+          </Text>
+        )}
 
         {/* Status */}
         {isRecording && !isProcessing && (

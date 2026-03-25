@@ -306,7 +306,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       pausedDurationRef.current = 0;
       latestDurationRef.current = 0;
       wasBackgroundedRef.current = false;
-      resumeTimeRef.current = 0;
+      resumeTimeRef.current = Date.now();
       hasHitMaxDurationRef.current = false;
 
       console.log('🔐 [HOOK] Activating wake lock...');
@@ -534,7 +534,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         setRecording(null);
         setIsRecording(false);
         setIsPaused(false);
-        setRecordingDuration(0);
+        // recordingDuration intentionally NOT reset here — it stays visible during
+        // the processing phase (isProcessing=true) so the user can see their recording
+        // length while transcription runs. handleStartRecording resets it to 0.
         pausedDurationRef.current = 0;
         latestDurationRef.current = 0;
         wasBackgroundedRef.current = false;
@@ -619,9 +621,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     if (recording) {
       try {
         // Set resume time BEFORE starting recording to avoid race condition
-        if (wasBackgroundedRef.current) {
-          resumeTimeRef.current = Date.now();
-        }
+        resumeTimeRef.current = Date.now();
         
         // Re-enable audio mode for recording
         await Audio.setAudioModeAsync({
@@ -654,19 +654,14 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   useEffect(() => {
     if (recording && isRecording && !isPaused) {
       recording.setOnRecordingStatusUpdate((status) => {
-        console.log('📊 [TIMER]', status.isRecording, status.durationMillis);
         if (status.isRecording) {
           let durationInSeconds;
-          
-          // If recording was backgrounded, calculate duration manually
-          // because the recording object's internal timer is corrupted by iOS
-          if (wasBackgroundedRef.current && resumeTimeRef.current > 0) {
-            const elapsedSinceResume = Math.floor((Date.now() - resumeTimeRef.current) / 1000);
-            durationInSeconds = pausedDurationRef.current + elapsedSinceResume;
-          } else {
-            // Normal mode: use recording object's duration
-            durationInSeconds = Math.floor((status.durationMillis || 0) / 1000);
-          }
+
+          // Use wall-clock math (Date.now) instead of status.durationMillis — the native
+          // AVAudioRecorder currentTime is unreliable and can stay at 0 on some iOS builds.
+          // resumeTimeRef is set at recording start and on each manual resume.
+          const elapsedSinceResume = Math.floor((Date.now() - resumeTimeRef.current) / 1000);
+          durationInSeconds = pausedDurationRef.current + elapsedSinceResume;
           
           // Only update state when the second value changes (callback fires ~10x/sec)
           const prevDuration = latestDurationRef.current;
