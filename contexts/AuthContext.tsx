@@ -23,6 +23,11 @@ export interface AppUser {
   auth_migrated_at?: string | null;
   profile_picture_url?: string | null;
   day_1_completed_at?: string | null;
+  spiritual_rhythm?: any | null;
+  notifications_enabled?: boolean | null;
+  timezone?: string | null;
+  last_opened_at?: string | null;
+  notif_card_dismissed?: boolean | null;
 }
 
 interface AuthContextType {

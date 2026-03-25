@@ -151,6 +151,7 @@ export const completeProfileSetup = async (
         display_name: displayName || null,
         status: 'active',
         first_login_at: new Date().toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
       .select()
       .single();

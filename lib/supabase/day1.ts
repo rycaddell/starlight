@@ -411,26 +411,31 @@ export async function generateMiniMirror(userId: string): Promise<{
     if (!response.ok || !data.success) {
       console.error('❌ Generation failed:', data);
 
-      Sentry.captureException(new Error('Mini-mirror generation failed'), {
-        tags: { component: 'day1', action: 'generateMiniMirror' },
-        contexts: {
-          day1: {
-            userId,
-            status: response.status,
-            error: data?.error,
-          },
-        },
-      });
+      const errorMessage = data?.error || 'Mini-mirror generation failed';
+      const isTranscriptionPending = errorMessage === 'Transcriptions not yet complete';
 
-      // Mark as failed
-      await supabase
-        .from('day_1_progress')
-        .update({ generation_status: 'failed' })
-        .eq('user_id', userId);
+      // Don't mark as failed or log to Sentry for a transient transcription-pending state
+      if (!isTranscriptionPending) {
+        Sentry.captureException(new Error('Mini-mirror generation failed'), {
+          tags: { component: 'day1', action: 'generateMiniMirror' },
+          contexts: {
+            day1: {
+              userId,
+              status: response.status,
+              error: data?.error,
+            },
+          },
+        });
+
+        await supabase
+          .from('day_1_progress')
+          .update({ generation_status: 'failed' })
+          .eq('user_id', userId);
+      }
 
       return {
         success: false,
-        error: data?.error || 'Mini-mirror generation failed',
+        error: errorMessage,
       };
     }
 

@@ -83,7 +83,7 @@ export const GuidedPromptSingle = forwardRef<GuidedPromptSingleHandle, GuidedPro
         <Text style={styles.promptText}>{currentPrompt.text}</Text>
         <Button
           variant="primaryFilled"
-          label="Start from Prompt"
+          label="Begin"
           onPress={() => onPromptSelect(currentPrompt)}
         />
       </View>

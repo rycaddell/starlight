@@ -18,6 +18,8 @@ import { Step1SpiritualPlace } from './Step1SpiritualPlace';
 import { Step2VoiceJournal } from './Step2VoiceJournal';
 import { Step3VoiceJournal } from './Step3VoiceJournal';
 import { Step5MiniMirror } from './Step5MiniMirror';
+import { Step6RhythmBuilder } from './Step6RhythmBuilder';
+import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 interface Day1ModalProps {
   visible: boolean;
@@ -28,6 +30,7 @@ interface Day1ModalProps {
 export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComplete }) => {
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const { requestPermissionAndRegister } = usePushNotifications(user?.id ?? null);
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(true);
   const [spiritualPlace, setSpiritualPlace] = useState<string | null>(null);
@@ -184,8 +187,15 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     recoveryPollRef.current = setTimeout(tick, 2000);
   };
 
-  const handleClose = () => {
-    onClose();
+  const handleClose = async () => {
+    // If user has reached the mirror (step 5), closing dismisses Day 1 and
+    // marks it complete so the notifications pitch card becomes visible.
+    if (currentStep === 5 && user) {
+      await completeDay1(user.id);
+      onComplete();
+    } else {
+      onClose();
+    }
   };
 
   const handleBack = () => {
@@ -194,9 +204,9 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     }
   };
 
-  const handleGenerateMirror = async () => {
+  const handleGenerateMirror = async (transcriptionRetryCount = 0) => {
     if (!user) return;
-    if (isGenerating) return;
+    if (isGenerating && transcriptionRetryCount === 0) return;
     setIsGenerating(true);
     try {
       const generateResult = await generateMiniMirror(user.id) as any;
@@ -204,6 +214,10 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
         setMiniMirrorId(generateResult.mirror.id);
         setIsGenerating(false);
         setCurrentStep(5);
+      } else if (generateResult.error === 'Transcriptions not yet complete' && transcriptionRetryCount < 12) {
+        // Transcriptions still processing — retry silently every 5s (up to 1 min)
+        console.log(`⏳ [Day1Modal] Transcriptions pending, retrying in 5s (attempt ${transcriptionRetryCount + 1}/12)`);
+        recoveryPollRef.current = setTimeout(() => handleGenerateMirror(transcriptionRetryCount + 1), 5000);
       } else {
         console.error('❌ [Day1Modal] Mirror generation failed:', generateResult.error);
         setIsGenerating(false);
@@ -215,7 +229,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
             : 'Unable to generate your Mirror. Would you like to try again?',
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'Retry', onPress: handleGenerateMirror },
+            { text: 'Retry', onPress: () => handleGenerateMirror(0) },
           ]
         );
       }
@@ -239,7 +253,16 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     handleGenerateMirror();
   };
 
-  const handleStep5Complete = async () => {
+  const handleStep5Complete = () => {
+    setCurrentStep(6);
+  };
+
+  const handleStep6Complete = async () => {
+    await completeDay1(user!.id);
+    onComplete();
+  };
+
+  const handleStep6Skip = async () => {
     await completeDay1(user!.id);
     onComplete();
   };
@@ -254,8 +277,8 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
       onRequestClose={handleClose}
     >
       <View style={styles.container}>
-        {/* Header area with background — hidden on step 5 (hero handles navigation) */}
-        {currentStep !== 5 && <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
+        {/* Header area with background — hidden on step 5 (hero handles navigation) and step 6 (owns its chrome) */}
+        {currentStep !== 5 && currentStep !== 6 && <View style={[styles.headerContainer, { paddingTop: insets.top }]}>
           {/* Single row with back button, progress, and close button */}
           <View style={styles.header}>
             {/* Back button or spacer */}
@@ -267,8 +290,8 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
               )}
             </View>
 
-            {/* Step indicator in center (hidden on step 5) */}
-            {currentStep !== 5 && (
+            {/* Step indicator in center (hidden on steps 5 and 6) */}
+            {currentStep !== 5 && currentStep !== 6 && (
               <View style={styles.stepIndicator}>
                 {[1, 2, 3].map((step) => (
                   <View
@@ -351,6 +374,15 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
                   spiritualPlace={spiritualPlace!}
                   onClose={handleClose}
                   onComplete={handleStep5Complete}
+                />
+              )}
+
+              {currentStep === 6 && (
+                <Step6RhythmBuilder
+                  userId={user.id}
+                  onComplete={handleStep6Complete}
+                  onSkip={handleStep6Skip}
+                  requestPermissionAndRegister={requestPermissionAndRegister}
                 />
               )}
             </>

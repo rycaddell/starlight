@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider } from '../contexts/AuthContext';
@@ -16,6 +17,7 @@ import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useAuth } from '../contexts/AuthContext';
+import { updateLastOpenedAt } from '../lib/supabase/notifications';
 
 // Initialize Sentry
 Sentry.init({
@@ -59,6 +61,22 @@ Sentry.init({
     return breadcrumb;
   },
 });
+
+// Tracks app focus events to update last_opened_at — must sit inside AuthProvider
+function AppFocusTracker() {
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+      if (nextState === 'active' && user?.id) {
+        updateLastOpenedAt(user.id);
+      }
+    });
+    return () => subscription.remove();
+  }, [user?.id]);
+
+  return null;
+}
 
 // Handles LinkRunner deferred deep links — must sit inside AuthProvider to access user
 function LinkRunnerHandler() {
@@ -135,6 +153,7 @@ function RootLayout() {
           <FriendBadgeProvider>
             <OnboardingProvider>
               <GlobalSettingsProvider>
+                <AppFocusTracker />
                 <LinkRunnerHandler />
                 <AuthNavigator>
                   <Stack>

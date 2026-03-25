@@ -104,12 +104,6 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
 
   const handleSubmit = async () => {
     Keyboard.dismiss();
-
-    if (!focusAreasText.trim()) {
-      Alert.alert('Input Required', 'Please share where you want to focus before continuing.');
-      return;
-    }
-
     setSubmitting(true);
 
     const saveResult = await saveFocusAreas(userId, mirrorId, focusAreasText);
@@ -301,7 +295,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
           <TextInput
             ref={inputRef}
             style={styles.reflectionInput}
-            placeholder="Share your thoughts..."
+            placeholder="I feel invited to..."
             placeholderTextColor={colors.text.bodyLight}
             multiline
             numberOfLines={4}
@@ -319,9 +313,17 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
             onPress={handleSubmit}
             disabled={!focusAreasText.trim() || submitting}
           >
-            <Text style={styles.finishButtonText}>
-              {submitting ? 'Finishing...' : 'Finish'}
+            <Text style={[styles.finishButtonText, (!focusAreasText.trim() || submitting) && styles.finishButtonTextDisabled]}>
+              {submitting ? 'Saving...' : 'Save'}
             </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={onComplete}
+            disabled={submitting}
+          >
+            <Text style={styles.skipButtonText}>Skip reflection</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -559,5 +561,16 @@ const styles = StyleSheet.create({
   finishButtonText: {
     ...typography.heading.l,
     color: colors.text.black,
+  },
+  finishButtonTextDisabled: {
+    color: colors.text.bodyLight,
+  },
+  skipButton: {
+    alignItems: 'center',
+    paddingVertical: spacing.l,
+  },
+  skipButtonText: {
+    ...typography.body.s,
+    color: colors.text.primary,
   },
 });

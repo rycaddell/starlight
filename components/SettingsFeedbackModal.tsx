@@ -15,6 +15,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
+import { RhythmBuilderSheet } from './notifications/RhythmBuilderSheet';
 
 const PRIVACY_POLICY_URL = 'https://app.termly.io/policy-viewer/policy.html?policyUUID=bf1cff31-3390-4b3d-b6d2-5bfc2642343d';
 import { useAuth } from '../contexts/AuthContext';
@@ -37,6 +38,7 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
   const [feedbackType, setFeedbackType] = useState<'bug' | 'wish' | null>(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
+  const [rhythmBuilderVisible, setRhythmBuilderVisible] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { handleAddProfilePicture, uploading } = useProfilePicture(user?.id || '', async () => {
     await refreshUser();
@@ -237,6 +239,12 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
                 </TouchableOpacity>
               </View>
 
+              {/* Notification reminders */}
+              <TouchableOpacity style={styles.notifRemindersButton} onPress={() => setRhythmBuilderVisible(true)}>
+                <Text style={styles.notifRemindersText}>Notification reminders</Text>
+                <Text style={styles.notifRemindersChevron}>›</Text>
+              </TouchableOpacity>
+
               {/* Sign Out */}
               <TouchableOpacity style={styles.signOutButton} onPress={handleLogout}>
                 <Text style={styles.signOutButtonText}>Sign Out</Text>
@@ -263,6 +271,20 @@ export const SettingsFeedbackModal: React.FC<SettingsFeedbackModalProps> = ({
           </ScrollView>
         </SafeAreaView>
       </KeyboardAvoidingView>
+
+      {user && (
+        <RhythmBuilderSheet
+          visible={rhythmBuilderVisible}
+          userId={user.id}
+          initialRhythm={user.spiritual_rhythm}
+          notificationsEnabled={user.notifications_enabled}
+          onClose={() => setRhythmBuilderVisible(false)}
+          onSave={async () => {
+            setRhythmBuilderVisible(false);
+            await refreshUser();
+          }}
+        />
+      )}
     </Modal>
   );
 };
@@ -418,6 +440,24 @@ const styles = StyleSheet.create({
   deleteAccountButtonText: {
     ...typography.heading.s,
     color: '#C0392B',
+  },
+  // Notification reminders row
+  notifRemindersButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background.defaultLight,
+    borderRadius: borderRadius.button,
+    paddingVertical: spacing.l,
+    paddingHorizontal: spacing.xl,
+  },
+  notifRemindersText: {
+    ...typography.heading.s,
+    color: colors.text.body,
+  },
+  notifRemindersChevron: {
+    fontSize: 20,
+    color: colors.text.bodyLight,
   },
   // Privacy Policy
   privacyPolicyText: {

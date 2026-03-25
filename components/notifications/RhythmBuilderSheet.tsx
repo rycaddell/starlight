@@ -46,11 +46,15 @@ export function RhythmBuilderSheet({
 
   const hasChanges = JSON.stringify(slots) !== savedSlotsRef.current;
 
+  const isFirstTimer = !notificationsEnabled && !(initialRhythm && Array.isArray(initialRhythm) && initialRhythm.length > 0);
+  const enabledSlots = slots.filter(s => s.enabled && s.timeWindow !== null);
+  const ctaLabel = isFirstTimer ? 'Turn on reminders' : 'Save';
+  const saveDisabled = isFirstTimer ? (enabledSlots.length === 0 || isSaving) : (!hasChanges || isSaving);
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
       await requestPermissionAndRegister();
-      const enabledSlots = slots.filter(s => s.enabled && s.timeWindow !== null);
       await saveRhythm(userId, slots, enabledSlots.length > 0);
       onSave();
     } catch (error) {
@@ -72,8 +76,6 @@ export function RhythmBuilderSheet({
     }
   };
 
-  const saveDisabled = !hasChanges || isSaving;
-
   return (
     <Modal
       visible={visible}
@@ -84,7 +86,7 @@ export function RhythmBuilderSheet({
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Notification reminders</Text>
+          <Text style={styles.title}>Set Up Reminders</Text>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Image
               source={require('../../assets/images/icons/Close.png')}
@@ -99,9 +101,10 @@ export function RhythmBuilderSheet({
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.description}>
-            {"Choose when God usually gets your attention. We'll remind you to capture what He says in those moments."}
-          </Text>
+          <View style={styles.copyBlock}>
+            <Text style={styles.descriptionHeading}>{"Don't lose what God shares with you."}</Text>
+            <Text style={styles.description}>{"Get reminders after church, small group, or your time with God."}</Text>
+          </View>
 
           <SlotEditor slots={slots} onSlotsChange={setSlots} showRemove />
 
@@ -127,7 +130,7 @@ export function RhythmBuilderSheet({
               <ActivityIndicator color={colors.text.white} />
             ) : (
               <Text style={[styles.saveButtonText, saveDisabled && styles.saveButtonTextDisabled]}>
-                Save
+                {ctaLabel}
               </Text>
             )}
           </TouchableOpacity>
@@ -167,6 +170,14 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.xxxl,
     paddingBottom: spacing.xxxxl,
+  },
+  copyBlock: {
+    gap: spacing.s,
+  },
+  descriptionHeading: {
+    ...typography.body.default,
+    color: colors.text.body,
+    lineHeight: 24,
   },
   description: {
     ...typography.body.default,
