@@ -1,51 +1,69 @@
 import React, { useState, useRef } from 'react';
 import { ErrorBoundary } from '../../components/ui/ErrorBoundary';
-import { View, Text, ScrollView, StyleSheet, Alert, Image, TouchableOpacity, AppState, Dimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Alert, Image, TouchableOpacity, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Audio } from 'expo-av';
 import * as Sentry from '@sentry/react-native';
 import { useAuth } from '../../contexts/AuthContext';
-import { useAudioPermissions } from '../../hooks/useAudioPermissions';
 import { useAudioRecording } from '../../hooks/useAudioRecording';
-import { saveJournalEntry, getTodaysAnsweredPrompts } from '../../lib/supabase';
-import { useGlobalSettings } from '../../components/GlobalSettingsContext';
+import { saveJournalEntry, getTodaysAnsweredPrompts } from '../../lib/supabase/journals';
 import { MirrorStatus } from '../../components/ui/MirrorStatus';
 import { GuidedPromptSingle, GuidedPromptSingleHandle } from '../../components/journal/GuidedPromptSingle';
 import { JournalOption } from '../../components/ui/JournalOption';
 import { JournalBottomSheet } from '../../components/journal/JournalBottomSheet';
-import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { Button } from '../../components/ui/Button';
+import { GuidedPrompt } from '../../constants/guidedPrompts';
 import { useMirrorData } from '../../hooks/useMirrorData';
 import { getMirrorThreshold } from '../../lib/config/constants';
 import { GetStartedCard } from '../../components/day1/GetStartedCard';
 import { Day1Modal } from '../../components/day1/Day1Modal';
-import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
-
-const screenWidth = Dimensions.get('window').width;
+import { NotificationPitchCard } from '../../components/journal/NotificationPitchCard';
+import { RhythmBuilderSheet } from '../../components/notifications/RhythmBuilderSheet';
+import { dismissNotifCard } from '../../lib/supabase/notifications';
+import { colors, typography, spacing } from '@/theme/designTokens';
+import { PathGradient } from '../../components/mirror/PathGradient';
+import { GRADIENT_PATHS } from '../../components/mirror/gradient-paths';
 
 function JournalScreen() {
   const router = useRouter();
   const promptRef = useRef<GuidedPromptSingleHandle>(null);
 
   const { user, isAuthenticated, isLoading, refreshUser } = useAuth();
-  const { showSettings } = useGlobalSettings();
 
   const [day1ModalVisible, setDay1ModalVisible] = useState(false);
+  const [rhythmBuilderVisible, setRhythmBuilderVisible] = useState(false);
   const [todayAnsweredPrompts, setTodayAnsweredPrompts] = useState<string[]>([]);
+  const [selectedTab, setSelectedTab] = useState<'text' | 'voice'>('voice');
+  const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
+  const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
 
   const { journalCount, loadJournals, mirrorState, generateMirror, viewMirror, generatedMirror, checkGenerationStatusOnFocus } = useMirrorData();
   const mirrorThreshold = getMirrorThreshold(user as any);
 
+  // Path rotates each mirror cycle (seeded from mirror ID so it changes after
+  // each completed mirror). Falls back to user ID on the first cycle.
+  const riverPath = React.useMemo(() => {
+    const seedStr = generatedMirror?.id ?? user?.id ?? '';
+    const seed = seedStr.split('').reduce((acc: number, c: string) => acc + c.charCodeAt(0), 0);
+    return GRADIENT_PATHS[seed % GRADIENT_PATHS.length];
+  }, [generatedMirror?.id, user?.id]);
+
+  const riverProgress = Math.min(1, journalCount / mirrorThreshold);
+
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
-  const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
-  const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
-  const [selectedTab, setSelectedTab] = useState<'text' | 'voice'>('voice');
+
+  const loadTodayAnsweredPrompts = React.useCallback(async () => {
+    if (!isAuthenticated || !user) return;
+    const result = await getTodaysAnsweredPrompts(user.id);
+    if (result.success && result.data) {
+      setTodayAnsweredPrompts(result.data);
+    }
+  }, [isAuthenticated, user]);
 
   const handleBottomSheetVoiceComplete = async (transcribedText: string, timestamp: string, journalId?: string) => {
     console.log('🎤 Voice transcription complete in bottom sheet');
 
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'journal',
       message: 'Voice transcription completed',
@@ -59,7 +77,6 @@ function JournalScreen() {
     });
 
     if (journalId) {
-      // New flow: journal already created and populated by edge function — skip DB insert
       setBottomSheetVisible(false);
       router.push({
         pathname: '/(tabs)/mirror',
@@ -72,7 +89,6 @@ function JournalScreen() {
       return;
     }
 
-    // Fallback flow: journal not yet in DB — insert it now
     const saved = await saveJournalToDatabase(
       transcribedText,
       timestamp,
@@ -82,15 +98,10 @@ function JournalScreen() {
 
     if (saved) {
       setBottomSheetVisible(false);
-
       router.push({
         pathname: '/(tabs)/mirror',
-        params: {
-          journalText: transcribedText,
-          timestamp: timestamp
-        }
+        params: { journalText: transcribedText, timestamp }
       });
-
       if (isAuthenticated && user) {
         await loadJournals();
         await loadTodayAnsweredPrompts();
@@ -98,7 +109,6 @@ function JournalScreen() {
     }
   };
 
-  const { hasAudioPermission, checkPermissionAndRequest } = useAudioPermissions();
   const {
     isRecording,
     isPaused,
@@ -112,15 +122,6 @@ function JournalScreen() {
     formatDuration
   } = useAudioRecording(handleBottomSheetVoiceComplete);
 
-  const loadTodayAnsweredPrompts = React.useCallback(async () => {
-    if (!isAuthenticated || !user) return;
-
-    const result = await getTodaysAnsweredPrompts(user.id);
-    if (result.success && result.data) {
-      setTodayAnsweredPrompts(result.data);
-    }
-  }, [isAuthenticated, user]);
-
   React.useEffect(() => {
     if (isAuthenticated && user) {
       loadJournals();
@@ -133,7 +134,7 @@ function JournalScreen() {
     React.useCallback(() => {
       if (isAuthenticated && user) {
         console.log('📊 Journal screen focused - checking mirror status and reloading journals');
-        checkGenerationStatusOnFocus(); // Check if mirror has been viewed
+        checkGenerationStatusOnFocus();
         loadJournals();
         loadTodayAnsweredPrompts();
       }
@@ -149,43 +150,24 @@ function JournalScreen() {
   ) => {
     if (!isAuthenticated || !user) {
       Alert.alert('Error', 'Please sign in to save journal entries.');
-
-      // Capture unauthorized save attempt
       Sentry.captureException(new Error('Attempted to save journal without authentication'), {
         tags: { component: 'JournalScreen', action: 'save' },
       });
-
       return false;
     }
 
-    console.log('💾 Saving journal for custom user:', user.id);
-    console.log('📝 Entry type:', entryType);
-    console.log('💬 Prompt text:', promptText);
-
-    // Add Sentry breadcrumb
     Sentry.addBreadcrumb({
       category: 'journal',
       message: 'Saving journal to database',
-      data: {
-        entryType,
-        hasPromptText: !!promptText,
-        contentLength: content.length,
-      },
+      data: { entryType, hasPromptText: !!promptText, contentLength: content.length },
       level: 'info',
     });
 
-    const result = await saveJournalEntry(
-      content,
-      user.id,
-      entryType,
-      promptText
-    );
+    const result = await saveJournalEntry(content, user.id, entryType, promptText);
 
     if (result.success) {
-      console.log('✅ Journal saved successfully');
       return true;
     } else {
-      console.error('❌ Failed to save journal:', result.error);
       Alert.alert('Save Error', result.error || 'Failed to save journal entry.');
       return false;
     }
@@ -193,56 +175,36 @@ function JournalScreen() {
 
   const handleStartRecordingWithPermission = async () => {
     try {
-      console.log('🎤 [MAIN-PERMISSION] Checking current microphone permission...');
-
       const currentStatus = await Audio.getPermissionsAsync();
-      console.log('📊 [MAIN-PERMISSION] Current permission status:', JSON.stringify(currentStatus, null, 2));
 
       if (currentStatus.granted) {
-        console.log('✅ [MAIN-PERMISSION] Permission already granted, starting recording...');
         await handleStartRecording(true);
         return;
       }
 
-      console.log('📝 [MAIN-PERMISSION] Permission not granted, requesting directly...');
-
       try {
-        console.log('🔧 [MAIN-PERMISSION] Setting audio mode...');
-
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
-        console.log('✅ [MAIN-PERMISSION] Audio mode set successfully');
 
-        console.log('🔐 [MAIN-PERMISSION] Requesting system permission...');
         const permission = await Audio.requestPermissionsAsync();
-        console.log('📊 [MAIN-PERMISSION] Permission response:', JSON.stringify(permission, null, 2));
-
         const granted = permission.granted === true || permission.status === 'granted';
-        console.log('🔍 [MAIN-PERMISSION] Permission granted:', granted);
 
         if (granted) {
-          console.log('✅ [MAIN-PERMISSION] Permission granted, waiting for app to become active...');
-
           const subscription = AppState.addEventListener('change', async (nextAppState) => {
             if (nextAppState === 'active') {
-              console.log('📱 [MAIN-PERMISSION] App returned to active state');
               subscription.remove();
-
               setTimeout(async () => {
-                console.log('🎙️ [MAIN-PERMISSION] Calling handleStartRecording...');
                 await handleStartRecording(true);
               }, 50);
             }
           });
 
           setTimeout(() => {
-            console.log('⚠️ [MAIN-PERMISSION] Fallback timeout reached, removing listener');
             subscription.remove();
           }, 3000);
         } else {
-          console.error('❌ [MAIN-PERMISSION] Permission denied by user');
           Alert.alert(
             'Microphone Access Needed',
             'To use voice journaling, please enable microphone access in Settings > Oxbow > Microphone.',
@@ -250,7 +212,6 @@ function JournalScreen() {
           );
         }
       } catch (error: any) {
-        console.error('❌ [MAIN-PERMISSION] Error requesting permission:', error);
         Alert.alert(
           'Permission Error',
           `Unable to enable microphone: ${error.message || 'Unknown error'}. You can enable it manually in Settings.`,
@@ -258,17 +219,11 @@ function JournalScreen() {
         );
       }
     } catch (error) {
-      console.error('❌ [MAIN-PERMISSION] Error in permission check:', error);
-      Alert.alert(
-        'Permission Error',
-        'Unable to check microphone permission. Please try again.',
-        [{ text: 'OK' }]
-      );
+      Alert.alert('Permission Error', 'Unable to check microphone permission. Please try again.');
     }
   };
 
   const handleVoiceFormPress = () => {
-    console.log('🎤 Voice pressed - opening voice recording');
     setSheetMode('free');
     setSheetPrompt(null);
     setSelectedTab('voice');
@@ -276,7 +231,6 @@ function JournalScreen() {
   };
 
   const handleTextFormPress = () => {
-    console.log('📝 Text pressed - opening text journal');
     setSheetMode('free');
     setSheetPrompt(null);
     setSelectedTab('text');
@@ -284,7 +238,6 @@ function JournalScreen() {
   };
 
   const handleGuidedPromptSelect = (prompt: GuidedPrompt) => {
-    console.log('📝 Guided prompt selected:', prompt.text);
     setSheetMode('guided');
     setSheetPrompt(prompt.text);
     setSelectedTab('voice');
@@ -313,10 +266,7 @@ function JournalScreen() {
     if (saved) {
       router.push({
         pathname: '/(tabs)/mirror',
-        params: {
-          journalText: text,
-          timestamp: timestamp
-        }
+        params: { journalText: text, timestamp }
       });
 
       if (isAuthenticated && user) {
@@ -384,30 +334,23 @@ function JournalScreen() {
           journalsReady={journalCount}
           onGenerate={generateMirror}
           onViewMirror={() => {
-            console.log('🔵 [JOURNAL TAB] View Mirror button pressed');
-            console.log('🔵 [JOURNAL TAB] Current state:', {
-              mirrorState,
-              hasGeneratedMirror: !!generatedMirror,
-              generatedMirrorId: generatedMirror?.id
-            });
-
             if (generatedMirror?.id) {
-              console.log('🔵 [JOURNAL TAB] Navigating to mirror tab with mirrorId:', generatedMirror.id);
               router.push({
                 pathname: '/(tabs)/mirror',
                 params: { openMirrorId: generatedMirror.id }
               });
-            } else {
-              console.warn('⚠️ [JOURNAL TAB] No generated mirror to view!');
             }
           }}
         />
 
-        {/* River Illustration — bleeds edge to edge */}
-        <Image
-          source={require('@/assets/images/journal-river-illustration.png')}
-          style={styles.riverImage}
-          resizeMode="stretch"
+        {/* River Illustration — bleeds 20px off each screen edge.
+            Progress is remapped so 0% aligns to the left screen edge and
+            100% aligns to the right screen edge (not the canvas edges). */}
+        <PathGradient
+          pathString={riverPath}
+          progress={riverProgress}
+          strokeWidth={26}
+          bleed={36}
         />
 
         {/* Day 1 Get Started Section */}
@@ -430,10 +373,10 @@ function JournalScreen() {
         {user.day_1_completed_at && (
           <View style={styles.section}>
             <View style={styles.dailyPromptHeader}>
-              <Text style={styles.sectionTitle}>Daily Prompt</Text>
+              <Text style={styles.sectionTitle}>Journal Starters</Text>
               <Button
                 variant="link"
-                label="New Prompt"
+                label="New"
                 onPress={() => promptRef.current?.nextPrompt()}
                 icon={
                   <Image
@@ -450,6 +393,20 @@ function JournalScreen() {
               userId={user.id}
               todayAnsweredPrompts={todayAnsweredPrompts}
               onPromptSelect={handleGuidedPromptSelect}
+            />
+          </View>
+        )}
+
+        {/* Notification pitch card — after Day 1, below Daily Prompt */}
+        {!!(user.day_1_completed_at && !user.notifications_enabled && !user.notif_card_dismissed) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Setup</Text>
+            <NotificationPitchCard
+              onSetupPress={() => setRhythmBuilderVisible(true)}
+              onDismiss={async () => {
+                await dismissNotifCard(user.id);
+                await refreshUser();
+              }}
             />
           </View>
         )}
@@ -482,6 +439,19 @@ function JournalScreen() {
         onClose={handleDay1Close}
         onComplete={handleDay1Complete}
       />
+
+      {/* Rhythm Builder Sheet */}
+      <RhythmBuilderSheet
+        visible={rhythmBuilderVisible}
+        userId={user.id}
+        initialRhythm={user.spiritual_rhythm}
+        notificationsEnabled={user.notifications_enabled}
+        onClose={() => setRhythmBuilderVisible(false)}
+        onSave={async () => {
+          setRhythmBuilderVisible(false);
+          await refreshUser();
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -504,13 +474,6 @@ const styles = StyleSheet.create({
     paddingTop: 36,
     paddingBottom: 100,
     gap: spacing.xxxl,
-  },
-  riverImage: {
-    width: screenWidth * 1.1,
-    height: (screenWidth * 1.1) / (443 / 135),
-    marginLeft: -spacing.screen.horizontalPadding,
-    marginTop: -30,
-    marginBottom: 30,
   },
   section: {
     gap: spacing.l,

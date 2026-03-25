@@ -295,7 +295,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       console.log('📱 [HOOK] Creating recording object...');
       // Create and start recording
       const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
       );
       console.log('✅ [HOOK] Recording object created successfully');
 
@@ -654,6 +654,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   useEffect(() => {
     if (recording && isRecording && !isPaused) {
       recording.setOnRecordingStatusUpdate((status) => {
+        console.log('📊 [TIMER]', status.isRecording, status.durationMillis);
         if (status.isRecording) {
           let durationInSeconds;
           
