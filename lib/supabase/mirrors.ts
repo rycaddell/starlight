@@ -148,14 +148,9 @@ export const checkMirrorGenerationStatus = async (
     if (error) {
       console.error('❌ Error checking status:', error);
 
-      Sentry.captureException(new Error('Failed to check mirror generation status'), {
+      Sentry.captureException(new Error(error.message ?? 'Failed to check mirror generation status', { cause: error }), {
         tags: { component: 'mirrors', action: 'checkStatus' },
-        contexts: {
-          mirror: {
-            customUserId,
-            error: error.message,
-          },
-        },
+        contexts: { mirror: { customUserId } },
       });
 
       return { success: false, error: error.message };
@@ -314,14 +309,9 @@ export const getMirrorById = async (
     if (error) {
       console.error('❌ Error loading Mirror:', error);
 
-      Sentry.captureException(new Error('Failed to load mirror'), {
+      Sentry.captureException(new Error(error.message ?? 'Failed to load mirror', { cause: error }), {
         tags: { component: 'mirrors', action: 'load' },
-        contexts: {
-          mirror: {
-            mirrorId,
-            error: error.message,
-          },
-        },
+        contexts: { mirror: { mirrorId } },
       });
 
       return { success: false, error: error.message };

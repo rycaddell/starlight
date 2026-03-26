@@ -207,6 +207,18 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   const handleGenerateMirror = async (transcriptionRetryCount = 0) => {
     if (!user) return;
     if (isGenerating && transcriptionRetryCount === 0) return;
+
+    // Check if mirror already exists server-side (handles reconnect after a successful server completion)
+    if (transcriptionRetryCount === 0) {
+      const progressCheck = await getDay1Progress(user.id);
+      if (progressCheck.success && (progressCheck.progress as any)?.mini_mirror_id) {
+        console.log('✅ [Day1Modal] Mirror already exists server-side, skipping generation');
+        setMiniMirrorId((progressCheck.progress as any).mini_mirror_id);
+        setCurrentStep(5);
+        return;
+      }
+    }
+
     setIsGenerating(true);
     try {
       const generateResult = await generateMiniMirror(user.id) as any;
@@ -236,6 +248,16 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     } catch (error) {
       console.error('❌ [Day1Modal] Unexpected error during generation:', error);
       setIsGenerating(false);
+
+      // Before showing retry — check if the server actually completed the mirror despite the error
+      const retryProgress = await getDay1Progress(user.id);
+      if (retryProgress.success && (retryProgress.progress as any)?.mini_mirror_id) {
+        console.log('✅ [Day1Modal] Mirror completed server-side despite client error, recovering');
+        setMiniMirrorId((retryProgress.progress as any).mini_mirror_id);
+        setCurrentStep(5);
+        return;
+      }
+
       Alert.alert('Error', 'Something went wrong. Please try again.');
     }
   };

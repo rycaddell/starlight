@@ -232,8 +232,11 @@ export const useMirrorData = () => {
         setGenerationStartTime(null);
         Alert.alert(
           'Generation Taking Longer Than Expected',
-          'Your Mirror is still being generated. Please check back in a few minutes.',
-          [{ text: 'OK' }]
+          'Your Mirror is still being generated. Please check back in a few minutes, or try again.',
+          [
+            { text: 'Try Again', onPress: () => generateMirror() },
+            { text: 'OK' },
+          ]
         );
       }
     }, 4 * 60 * 1000);
@@ -369,12 +372,21 @@ export const useMirrorData = () => {
     const statusCheck = await checkMirrorGenerationStatus(user.id);
 
     if (statusCheck.success && (statusCheck.status === 'processing' || statusCheck.status === 'pending')) {
-      setMirrorState('generating');
-      setGenerationStartTime(Date.now());
-      // Use the request's actual requestedAt so the immediate check doesn't catch older generations
-      const notBefore = statusCheck.requestedAt ? new Date(statusCheck.requestedAt).getTime() : 0;
-      subscribeForMirrorCompletion(notBefore);
-      return;
+      const requestAgeMs = statusCheck.requestedAt
+        ? Date.now() - new Date(statusCheck.requestedAt).getTime()
+        : Infinity;
+      const isStale = requestAgeMs > 10 * 60 * 1000; // 10 minutes
+
+      if (!isStale) {
+        setMirrorState('generating');
+        setGenerationStartTime(Date.now());
+        // Use the request's actual requestedAt so the immediate check doesn't catch older generations
+        const notBefore = statusCheck.requestedAt ? new Date(statusCheck.requestedAt).getTime() : 0;
+        subscribeForMirrorCompletion(notBefore);
+        return;
+      }
+      // If stale (>10 min), fall through to fresh generation
+      console.log('⚠️ [useMirrorData] Found stale processing request, proceeding with fresh generation');
     }
 
     const eligibilityCheck = await checkCanGenerateMirror(user.id, user as any);
