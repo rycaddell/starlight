@@ -41,7 +41,7 @@ export default {
         [
           "expo-linkrunner",
           {
-            userTrackingPermission: "This identifier helps us connect you with friends who invited you to Oxbow.",
+            userTrackingPermission: false,
             debug: false,
           }
         ],
@@ -76,6 +76,7 @@ export default {
         // These will be available as Constants.expoConfig.extra.*
         supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
         supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+        mixpanelToken: process.env.EXPO_PUBLIC_MIXPANEL_TOKEN,
 
         router: {},
         eas: {

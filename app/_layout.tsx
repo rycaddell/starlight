@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
+import { initAnalytics } from '../lib/analytics';
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 
@@ -18,6 +19,7 @@ import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useAuth } from '../contexts/AuthContext';
 import { updateLastOpenedAt } from '../lib/supabase/notifications';
+import { track, Events } from '../lib/analytics';
 
 // Initialize Sentry
 Sentry.init({
@@ -62,14 +64,25 @@ Sentry.init({
   },
 });
 
+initAnalytics();
+
 // Tracks app focus events to update last_opened_at — must sit inside AuthProvider
 function AppFocusTracker() {
   const { user } = useAuth();
 
+  // Cold launch
+  useEffect(() => {
+    if (user?.id) {
+      track(Events.APP_OPENED);
+    }
+  }, [user?.id]);
+
+  // Foreground resume
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (nextState === 'active' && user?.id) {
         updateLastOpenedAt(user.id);
+        track(Events.APP_OPENED);
       }
     });
     return () => subscription.remove();
@@ -94,7 +107,7 @@ function LinkRunnerHandler() {
           process.env.EXPO_PUBLIC_LINKRUNNER_PROJECT_TOKEN ?? '',
           undefined, // secret key — not required
           undefined, // key ID — not required
-          false,     // disable IDFA collection
+          true,      // disable IDFA collection
           __DEV__,   // debug mode in dev only
         );
 

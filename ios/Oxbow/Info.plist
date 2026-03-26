@@ -59,9 +59,7 @@
     <string>Oxbow uses your microphone to record voice journal entries. Recordings are transcribed on our servers and then deleted.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Oxbow needs access to your photo library so you can add a profile picture that your friends will see when they pray for you.</string>
-    <key>NSUserTrackingUsageDescription</key>
-    <string>This identifier helps us connect you with friends who invited you to Oxbow.</string>
-    <key>NSUserActivityTypes</key>
+<key>NSUserActivityTypes</key>
     <array>
       <string>$(PRODUCT_BUNDLE_IDENTIFIER).expo.index_route</string>
     </array>
