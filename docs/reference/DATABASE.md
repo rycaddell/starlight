@@ -51,6 +51,13 @@ Stores user accounts. Auth is handled by Supabase Auth (phone OTP via Twilio Ver
   profile_picture_url: string (nullable)        // URL to profile image
   created_at: timestamp
   updated_at: timestamp
+
+  // Push notification / rhythm fields (added 2026-03-24 — run migration before deploying)
+  spiritual_rhythm: jsonb (nullable)            // Array of SlotDef objects (see notifications feature)
+  notifications_enabled: boolean (default: false)  // true after user opts in via Step 6 or pitch card
+  timezone: text (nullable)                     // IANA timezone string, captured at profile setup
+  last_opened_at: timestamptz (nullable)        // Updated on every app foreground; used for anti-spam
+  notif_card_dismissed: boolean (default: false)   // true after user taps "Not now" on pitch card
 }
 ```
 
@@ -61,6 +68,17 @@ Stores user accounts. Auth is handled by Supabase Auth (phone OTP via Twilio Ver
 - `resolveAppUser()` in AuthContext looks up by `auth_user_id` first, then falls back to `phone` for migrating users
 
 **`group_name = 'Mens Group'`** triggers special handling in several places (Wednesday reminders, etc.) — acknowledged tech debt.
+
+**⚠️ Pending migration (branch: push_notif_day1):** Run this in the Supabase SQL editor before deploying the push notification feature:
+```sql
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS spiritual_rhythm     jsonb       DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS notifications_enabled boolean    DEFAULT false,
+  ADD COLUMN IF NOT EXISTS timezone             text        DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS last_opened_at       timestamptz DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS notif_card_dismissed  boolean    DEFAULT false;
+```
+No new RLS policies needed — existing `auth_user_id = auth.uid()` policies cover the new columns automatically.
 
 **Indexes:**
 - Primary key on `id`
@@ -645,6 +663,11 @@ All database operations go through `lib/supabase/`:
 
 **`lib/supabase/day1.js`**
 - Full Day 1 flow: spiritual place, journal linking, mini-mirror generation, focus area saving
+
+**`lib/supabase/notifications.ts`**
+- `saveRhythm(userId, slots, enabled)` — saves spiritual_rhythm + sets notifications_enabled
+- `dismissNotifCard(userId)` — sets notif_card_dismissed=true
+- `updateLastOpenedAt(userId)` — fire-and-forget on every app foreground (AppFocusTracker)
 
 ---
 

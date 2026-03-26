@@ -46,6 +46,7 @@ starlight/
 ├── components/                   # Reusable UI components
 │   ├── auth/                    # Authentication UI
 │   ├── journal/                 # Journal components (bottom sheet modal)
+│   │   └── NotificationPitchCard.tsx  # Post-Day1 pitch card (bell icon, "Set up reminders")
 │   ├── mirror/                  # Mirror screens & viewer
 │   │   ├── MirrorViewer.tsx     # Full-screen mirror viewing experience
 │   │   ├── MirrorStatusCard.tsx # Mirror generation status card
@@ -55,15 +56,19 @@ starlight/
 │   │   ├── PastJournalsModal.tsx # Full-sheet modal for all journals
 │   │   ├── ShareMirrorSheet.tsx # Friend picker for mirror sharing
 │   │   └── JournalHistory.tsx   # Legacy journal list component
-│   ├── day1/                    # Day 1 onboarding (5-step spiritual formation)
-│   │   ├── Day1Modal.tsx        # Main modal orchestrating 5 steps
+│   ├── day1/                    # Day 1 onboarding (6-step spiritual formation)
+│   │   ├── Day1Modal.tsx        # Main modal orchestrating 6 steps
 │   │   ├── GetStartedCard.tsx   # Welcome screen with intro
 │   │   ├── Step1SpiritualPlace.tsx  # Spiritual place selection (8 options)
 │   │   ├── Step2VoiceJournal.tsx    # "What's going on?" voice prompt
 │   │   ├── Step3VoiceJournal.tsx    # "How are you relating to God?" prompt
 │   │   ├── Step4Loading.tsx     # Mirror generation loading screen
-│   │   ├── Step5MiniMirror.tsx  # View mini-mirror + set focus
+│   │   ├── Step5MiniMirror.tsx  # View mini-mirror + optional focus area
+│   │   ├── Step6RhythmBuilder.tsx   # Notification rhythm builder + opt-in
 │   │   └── Day1MirrorViewer.tsx # Day 1 mirror viewer from Mirror tab
+│   ├── notifications/           # Push notification UI components
+│   │   ├── SlotEditor.tsx       # Shared slot UI (day chips + time window chips)
+│   │   └── RhythmBuilderSheet.tsx   # pageSheet modal for settings + pitch card
 │   ├── onboarding/              # Narrative onboarding flow screens
 │   ├── voice/                   # Voice recording UI
 │   ├── friends/                 # Friends & sharing components
@@ -93,6 +98,7 @@ starlight/
 │   │   ├── friends.js          # Friend invite & linking
 │   │   ├── mirrorShares.js     # Mirror sharing operations
 │   │   ├── day1.js             # Day 1 onboarding operations
+│   │   ├── notifications.ts    # saveRhythm, dismissNotifCard, updateLastOpenedAt
 │   │   ├── profilePicture.js   # Profile picture upload/delete
 │   │   └── feedback.js         # Feedback handling
 │   ├── silenceLogsInProduction.ts  # No-ops console.log/warn in production builds
@@ -113,7 +119,9 @@ starlight/
 │       │   └── index.ts
 │       ├── send-push-notification/  # Push notification delivery
 │       │   └── index.ts
-│       └── wednesday-journal-reminder/  # Weekly Mens Group reminder
+│       ├── wednesday-journal-reminder/  # Weekly Mens Group reminder
+│       │   └── index.ts
+│       └── send-encounter-nudge/    # Hourly slot-aware encounter nudge (cron)
 │           └── index.ts
 │
 ├── types/                        # TypeScript definitions
@@ -328,7 +336,34 @@ components/
 - `app/friend-invite/[token].tsx` - Invite acceptance route
 - Expo Router handles deep link navigation
 
-### 10. Supabase Realtime for Live Updates
+### 10. Post-Day-1 Push Notification System
+
+**Why:** Users complete Day 1 and don't return. Smart reminders fire after specific spiritual contexts (church, small group, 1:1 time) rather than on a fixed schedule.
+
+**Three opt-in paths:**
+1. **Step 6 (primary)** — Rhythm builder immediately after the mini-mirror experience
+2. **NotificationPitchCard (fallback)** — Shown on Journal tab when `day_1_completed_at` is set but `notifications_enabled=false` and `notif_card_dismissed=false`
+3. **Settings row** — "Notification reminders" in SettingsFeedbackModal reopens the sheet at any time
+
+**Slot data shape (`spiritual_rhythm` column):**
+```typescript
+interface SlotDef {
+  id: string;              // 'one_on_one' | 'church' | 'small_group' | uuid
+  label: string;
+  days: string[];          // ['Sunday'…] — empty = fires on any day (1:1)
+  timeWindow: 'morning' | 'afternoon' | 'evening' | null;
+  hasDaySelection: boolean;
+  enabled: boolean;
+}
+```
+
+**Delivery (`send-encounter-nudge`):** Runs hourly via Supabase cron. For each `notifications_enabled=true` user: converts UTC → user's IANA timezone, checks if the current hour matches a slot's timeWindow end (Morning→11am, Afternoon→4pm, Evening→8:30pm), validates the slot's day-of-week, and skips if `last_opened_at` is within the last 24 hours (anti-spam).
+
+**`last_opened_at` tracking:** `AppFocusTracker` component in `_layout.tsx` calls `updateLastOpenedAt()` fire-and-forget on every `AppState → 'active'` event.
+
+**⚠️ Manual setup required:** Supabase cron trigger must be configured in the dashboard (every hour on the hour). DB migration must be run first — see DATABASE.md.
+
+### 11. Supabase Realtime for Live Updates
 
 **Why:** Instant updates without polling overhead
 - Replaced 30-second polling with WebSocket-based Realtime subscriptions
@@ -551,19 +586,21 @@ Save to mirrors table (mirror_type: 'day_1', journal_count: 2)
     ↓
 Update day_1_progress (mini_mirror_id, generation_status: completed)
     ↓
-Step 5: View mini-mirror + focus area input
+Step 5: View mini-mirror + optional "I feel invited to..." reflection
+  Save (enabled when text entered) → saveFocusAreas + extract-focus-theme edge fn
+  "Skip reflection" → advances without saving
+  X → marks Day 1 complete immediately (so pitch card is visible)
     ↓
-User types focus response
+Step 6: Rhythm builder (notification opt-in)
+  "Turn on reminders" → requestPermissionAndRegister() → push token saved
+                      → saveRhythm(slots, enabled=true) → completeDay1()
+  X dismiss           → completeDay1() without enabling
     ↓
-lib/supabase/day1.saveFocusAreas(userId, mirrorId, focusText)
-    ↓
-Edge Function: extract-focus-theme → 1-2 word theme
-    ↓
-Update day_1_progress (focus_theme, completed_at)
-    ↓
-Modal closes → User sees regular journal screen
+Modal closes → User sees Journal tab
     ↓
 Day 1 mirror appears in Mirror tab
+    ↓
+If notifications NOT enabled → NotificationPitchCard visible on Journal tab
 ```
 
 **Day 1 recovery (if app is killed during Steps 2 or 3):**

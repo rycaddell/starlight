@@ -241,7 +241,71 @@ _________________________________________________
 
 ---
 
-## 5. Friend Invites & Connections
+## 5. Day 1 — Step 6 & Push Notification Setup
+
+### SQL reset for Step 6 testing
+```sql
+-- Jump straight to Step 6 (skip Steps 1–5)
+UPDATE users SET day_1_completed_at = NULL, notifications_enabled = false,
+  notif_card_dismissed = false, spiritual_rhythm = NULL WHERE id = '[user_id]';
+UPDATE day_1_progress SET completed_at = NULL WHERE user_id = '[user_id]';
+-- Then complete Day 1 Steps 1–5 normally, or manually set mini_mirror_id and jump to step 5.
+```
+
+### Step 6 — Rhythm Builder Screen
+- [ ] Step 6 appears after tapping Save or "Skip reflection" on Step 5
+- [ ] Bell icon visible above heading
+- [ ] Heading reads "Capture what God shares."
+- [ ] 1:1 with God slot is enabled by default with no day selection
+- [ ] Church and Small group slots are disabled by default
+- [ ] "Turn on reminders" is disabled until ≥1 enabled slot has a timeWindow
+- [ ] Enabling a slot and selecting a timeWindow activates the CTA
+- [ ] Tapping a selected day chip deselects it AND clears timeWindow
+- [ ] Tapping a selected timeWindow chip deselects it
+- [ ] "Turn on reminders" → iOS push permission dialog appears
+- [ ] After granting: users.notifications_enabled=true in DB
+- [ ] After granting: users.spiritual_rhythm populated in DB
+- [ ] After granting: modal closes, Journal tab shows no pitch card
+- [ ] X dismiss: modal closes, day_1_completed_at IS set, notifications_enabled=false
+- [ ] X dismiss: NotificationPitchCard IS visible on Journal tab
+
+### NotificationPitchCard (Journal Tab)
+- [ ] Card visible after Day 1 complete + notifications_enabled=false + notif_card_dismissed=false
+- [ ] Card NOT visible when notifications_enabled=true
+- [ ] Card NOT visible when notif_card_dismissed=true
+- [ ] Card shows bell icon, correct heading + body copy
+- [ ] "Set up reminders" → opens RhythmBuilderSheet
+- [ ] RhythmBuilderSheet CTA reads "Turn on reminders" (first-timer mode)
+- [ ] After enabling via sheet: card disappears, notifications_enabled=true
+- [ ] "Not now" → card disappears immediately, notif_card_dismissed=true in DB
+- [ ] Card does not reappear after dismissal (refresh app, re-open tab)
+
+### Settings — Notification Reminders
+- [ ] Settings modal has "Notification reminders" row
+- [ ] Tapping opens RhythmBuilderSheet as pageSheet
+- [ ] Sheet shows "Set Up Reminders" header with X button
+- [ ] Copy reads "Don't lose what God shares with you." + body line
+- [ ] If returning user: slots pre-populated from spiritual_rhythm
+- [ ] If returning user: CTA reads "Save" and is disabled until changes made
+- [ ] Dirty check: changing any slot enables Save; reverting re-disables it
+- [ ] "Turn off all reminders" visible when notifications_enabled=true
+- [ ] Turn off: notifications_enabled=false, rhythm data preserved in DB
+- [ ] Save: DB updated, sheet closes
+
+### Edge Function — send-encounter-nudge (manual test)
+- [ ] Manually invoke function via Supabase dashboard
+- [ ] User with matching slot + timeWindow receives push notification
+- [ ] User with last_opened_at < 24h ago is skipped (anti-spam)
+- [ ] User with notifications_enabled=false is skipped
+- [ ] User with no push_token is skipped
+
+### last_opened_at tracking
+- [ ] Background app then foreground → users.last_opened_at updates in DB
+- [ ] Value is a recent timestamptz (within seconds of foregrounding)
+
+---
+
+## 6. Friend Invites & Connections
 
 ### No Friends State (First User)
 - [ ] Friends tab shows "Pursue Jesus with Friends" pitch
@@ -297,7 +361,7 @@ _________________________________________________
 
 ---
 
-## 6. Mirror Sharing
+## 7. Mirror Sharing
 
 ### Setup (Need Friends + Mirrors)
 **Prerequisites:**
@@ -359,7 +423,7 @@ _________________________________________________
 
 ---
 
-## 7. Tab Navigation & UI
+## 8. Tab Navigation & UI
 
 ### Tab Bar
 - [ ] Three tabs visible: Journal, Mirror, Friends
@@ -390,7 +454,7 @@ _________________________________________________
 
 ---
 
-## 8. Offline & Network Behavior
+## 9. Offline & Network Behavior
 
 ### Airplane Mode Tests
 - [ ] Enable airplane mode before opening app
@@ -417,7 +481,7 @@ _________________________________________________
 
 ---
 
-## 9. Background & Multitasking
+## 10. Background & Multitasking
 
 ### App Backgrounding
 - [ ] Background app during journal entry → Text preserved
@@ -445,7 +509,7 @@ _________________________________________________
 
 ---
 
-## 10. Platform-Specific Tests
+## 11. Platform-Specific Tests
 
 ### iOS Only
 - [ ] SF Symbols icons display correctly
@@ -473,7 +537,7 @@ _________________________________________________
 
 ---
 
-## 11. Performance & Polish
+## 12. Performance & Polish
 
 ### Performance
 - [ ] App launches quickly (< 3 seconds)
@@ -507,7 +571,7 @@ _________________________________________________
 
 ---
 
-## 12. Data Integrity & Edge Cases
+## 13. Data Integrity & Edge Cases
 
 ### Data Persistence
 - [ ] Journals persist after app restart
@@ -538,7 +602,7 @@ _________________________________________________
 
 ---
 
-## 13. Regression Testing (Ensure Old Features Still Work)
+## 14. Regression Testing (Ensure Old Features Still Work)
 
 ### Core Features Not Broken
 - [ ] Text journaling still works as before
@@ -561,16 +625,33 @@ _________________________________________________
 
 ---
 
-## 14. Critical User Journeys (End-to-End)
+## 15. Critical User Journeys (End-to-End)
 
-### Journey 1: New User → First Mirror
-- [ ] Install app → Sign in → Complete onboarding
+### Journey 1: New User → Day 1 → Notification Opt-In
+- [ ] Install app → Sign in → Day 1 modal opens
+- [ ] Complete Steps 1–4 (spiritual place, 2 voice journals, mini-mirror generation)
+- [ ] Step 5: view mini-mirror, optionally write reflection, tap Save or Skip
+- [ ] Step 6: configure at least one slot with a timeWindow
+- [ ] Tap "Turn on reminders" → iOS permission dialog → grant
+- [ ] Modal closes, Journal tab shows no pitch card
+- [ ] DB: notifications_enabled=true, spiritual_rhythm populated, day_1_completed_at set
+- [ ] Journey feels smooth and motivated by the mirror experience
+
+### Journey 1b: New User → Day 1 → Skip Notifications → Pitch Card → Opt-In
+- [ ] Complete Day 1, tap X on Step 6 (or X while on Step 5)
+- [ ] Journal tab shows "Setup" section with NotificationPitchCard
+- [ ] Tap "Set up reminders" → RhythmBuilderSheet opens in first-timer mode
+- [ ] Configure slots, tap "Turn on reminders" → pitch card disappears
+- [ ] DB: notifications_enabled=true
+
+### Journey 2: New User → First Regular Mirror
+- [ ] Install app → Complete Day 1 (already done or skip)
 - [ ] Create 10 journals (mix of text and voice)
 - [ ] Generate first mirror
 - [ ] View mirror completely
 - [ ] Journey feels smooth and intuitive
 
-### Journey 2: Connect Friends → Share Mirror
+### Journey 3: Connect Friends → Share Mirror
 - [ ] User A creates invite link
 - [ ] User B accepts invite
 - [ ] Both see each other in Friends tab
@@ -580,7 +661,7 @@ _________________________________________________
 - [ ] User B views shared mirror
 - [ ] Journey feels seamless
 
-### Journey 3: Daily Use
+### Journey 4: Daily Use
 - [ ] Open app → Already signed in
 - [ ] Submit journal quickly (text or voice)
 - [ ] Check Mirror screen progress
@@ -595,7 +676,7 @@ _________________________________________________
 
 ---
 
-## 15. Known Issues & Acceptable Limitations
+## 16. Known Issues & Acceptable Limitations
 
 **Document any known issues that are acceptable for release:**
 ```
@@ -606,7 +687,7 @@ _________________________________________________
 
 ---
 
-## 16. Final Checks Before Submission
+## 17. Final Checks Before Submission
 
 ### Pre-Release Checklist
 - [ ] All critical bugs fixed
@@ -662,5 +743,5 @@ _________________________________________________
 
 ---
 
-**Last Updated:** 2026-01-15
-**Version:** Mirror Page Redesign + Friends & Sharing
+**Last Updated:** 2026-03-24
+**Version:** Push Notification System + Day 1 Step 6

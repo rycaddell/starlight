@@ -6,21 +6,22 @@ Complete documentation for the Day 1 onboarding flow - a lightweight spiritual f
 
 ## Overview
 
-The Day 1 feature is a **5-step onboarding experience** designed to give new users their first spiritual reflection (mini-mirror) within minutes, without requiring 10+ journal entries.
+The Day 1 feature is a **6-step onboarding experience** designed to give new users their first spiritual reflection (mini-mirror) within minutes, without requiring 10+ journal entries.
 
 ### Key Characteristics:
 - **Fast:** Completed in 5-10 minutes
 - **Voice-first:** Two voice journal prompts instead of 10 written journals
 - **Personalized:** Starts with spiritual place selection
 - **AI-powered:** Generates a focused biblical mirror
-- **Progressive:** Leads naturally into regular journaling flow
+- **Progressive:** Leads naturally into regular journaling flow + notification opt-in
 
 ### User Flow:
 1. **Step 1:** Choose spiritual place (8 options)
 2. **Step 2:** Voice journal - "What shaped your choice?"
 3. **Step 3:** Voice journal - "How are you relating to God?"
 4. **Step 4:** AI generates mini-mirror (30-60 seconds)
-5. **Step 5:** View mini-mirror + set focus area
+5. **Step 5:** View mini-mirror + optional focus area ("I feel invited to...")
+6. **Step 6:** Set up notification reminders (rhythm builder + iOS permission request)
 
 ---
 
@@ -41,7 +42,8 @@ The Day 1 feature is a **5-step onboarding experience** designed to give new use
 - **`Step2VoiceJournal.tsx`** - First voice prompt ("What's going on?")
 - **`Step3VoiceJournal.tsx`** - Second voice prompt ("How are you relating to God?")
 - **`Step4Loading.tsx`** - Loading screen during mirror generation
-- **`Step5MiniMirror.tsx`** - Mini-mirror display + focus area input
+- **`Step5MiniMirror.tsx`** - Mini-mirror display + optional focus area ("I feel invited to..."); Save button enabled when text entered; "Skip reflection" link advances without saving
+- **`Step6RhythmBuilder.tsx`** - Notification rhythm builder; bell icon + copy; slot editor (1:1 with God enabled by default, Church + Small group disabled); "Turn on reminders" CTA (enabled when ≥1 slot has a timeWindow set); X dismisses without enabling
 
 #### Viewer
 - **`Day1MirrorViewer.tsx`** - Full-screen viewer for Day 1 mirrors from Mirror tab
@@ -394,7 +396,7 @@ const SPIRITUAL_PLACE_IMAGES = {
 ### First-Time User Journey
 
 ```
-1. User creates account with access code
+1. User creates account with phone OTP
    ↓
 2. OnboardingContext detects user hasn't completed Day 1
    ↓
@@ -412,13 +414,24 @@ const SPIRITUAL_PLACE_IMAGES = {
    ↓
 9. Step 4: "Mirror In Progress" (30-60 sec AI generation)
    ↓
-10. Step 5: View mini-mirror + "Where is God inviting you to focus?"
+10. Step 5: View mini-mirror + optional "I feel invited to..." reflection
+    User can Save (enabled when text entered) or tap "Skip reflection"
+    Either advances to Step 6.
+    If user taps X here, Day 1 is marked complete → pitch card becomes visible.
     ↓
-11. User types focus, taps "Save Focus"
+11. Step 6: Rhythm builder — configure when to receive reminders
+    - Slot options: 1:1 with God (default on), Church, Small group
+    - Each enabled slot needs a timeWindow (Morning / Afternoon / Evening)
+    - "Turn on reminders" → iOS permission dialog → push token saved →
+      notifications_enabled=true, spiritual_rhythm saved → completeDay1()
+    - X dismiss → completeDay1() without enabling notifications
     ↓
-12. Modal closes, user sees normal journal screen
+12. Modal closes, user sees Journal tab
     ↓
 13. Mirror appears in Mirror tab as "Biblical Mirror: [Character]"
+    ↓
+14. If notifications NOT enabled: NotificationPitchCard visible on Journal tab
+    (shown until user opts in or dismisses)
 ```
 
 ### Returning to Day 1 (Back Navigation)
@@ -510,10 +523,46 @@ function sanitizeContent(text) {
 - [ ] Back navigation shows buttons on re-visit
 - [ ] Mirror generation completes within 60 seconds
 - [ ] Generated mirror shows biblical character
-- [ ] Can save focus areas on Step 5
-- [ ] Modal closes after saving focus
+- [ ] Step 5: Save button enabled when reflection text entered
+- [ ] Step 5: "Skip reflection" link advances without saving text
+- [ ] Step 5: Tapping X marks Day 1 complete → pitch card visible on Journal tab
 - [ ] Day 1 mirror appears in Mirror tab
 - [ ] Can view Day 1 mirror from Past Mirrors sheet
+
+### Step 6 — Rhythm Builder
+
+- [ ] Step 6 screen appears after Step 5 Save or Skip
+- [ ] Bell icon and correct copy visible ("Capture what God shares.")
+- [ ] 1:1 with God slot is enabled by default
+- [ ] Church and Small group slots are disabled by default
+- [ ] "Turn on reminders" is disabled until ≥1 slot has a timeWindow selected
+- [ ] Tapping a day chip deselects it; deselecting a day also clears timeWindow
+- [ ] Tapping a selected timeWindow chip deselects it
+- [ ] "Turn on reminders" → iOS permission dialog appears
+- [ ] After granting: notifications_enabled=true in DB, spiritual_rhythm saved
+- [ ] After granting: modal closes, user lands on Journal tab, no pitch card
+- [ ] X dismiss → modal closes, pitch card IS visible on Journal tab
+- [ ] Day 1 marked complete (day_1_completed_at set) on both paths
+
+### Notification Pitch Card (Journal Tab)
+
+- [ ] Visible when: day_1_completed_at set + notifications_enabled=false + notif_card_dismissed=false
+- [ ] Not visible when notifications_enabled=true
+- [ ] Not visible when notif_card_dismissed=true
+- [ ] "Set up reminders" → opens RhythmBuilderSheet
+- [ ] RhythmBuilderSheet in first-timer mode: CTA reads "Turn on reminders"
+- [ ] After enabling via sheet: notifications_enabled=true, pitch card disappears
+- [ ] "Not now" → notif_card_dismissed=true, card disappears immediately
+
+### Settings — Notification Reminders
+
+- [ ] Settings modal has "Notification reminders" row
+- [ ] Tapping opens RhythmBuilderSheet
+- [ ] Sheet pre-populated with existing spiritual_rhythm data
+- [ ] CTA reads "Save" (disabled until changes made)
+- [ ] "Turn off all reminders" visible when notifications_enabled=true
+- [ ] Turning off: notifications_enabled=false, rhythm data preserved
+- [ ] Saving changes: updated slots stored in DB
 
 ### Permission Testing
 
@@ -588,7 +637,7 @@ function sanitizeContent(text) {
 
 ### "Transcriptions not yet complete"
 **Cause:** Mirror generation triggered before voice transcription finished
-**Fix:** Edge function validates `transcription_status = 'completed'`
+**Fix:** Edge function validates `transcription_status = 'completed'`. Client-side retry logic in `handleGenerateMirror` silently retries every 5 seconds up to 12 times (1 minute total) before surfacing an error to the user. This is not logged to Sentry — it's a normal transient state.
 
 ### Mirror doesn't appear in Mirror tab
 **Cause:** `mini_mirror_id` not linked in `day_1_progress`

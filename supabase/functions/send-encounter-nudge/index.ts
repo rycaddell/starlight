@@ -1,6 +1,6 @@
 // supabase/functions/send-encounter-nudge/index.ts
 // Sends smart encounter-aware push notifications based on user spiritual rhythms
-// Runs hourly via cron. Checks each user's rhythm slots against current local time.
+// Runs at :30 past each hour via cron. Checks each user's rhythm slots against current local time.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
@@ -10,60 +10,92 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-// Time window end hours in local time (24h)
+// Time window end hours in local time (24h). Cron fires at :30, so 11:30, 16:30, 21:30.
 const TIME_WINDOW_HOURS: Record<string, number> = {
-  morning: 11,    // 11:00 AM
-  afternoon: 16,  // 4:00 PM
-  evening: 20,    // 8:00 PM (8:30 rounded to hour trigger)
+  morning: 11,    // fires at 11:30 AM (30 min after morning window closes at 11:00)
+  afternoon: 16,  // fires at 4:30 PM (30 min after afternoon window closes at 4:00)
+  evening: 21,    // fires at 9:30 PM (~30 min after evening end)
 }
 
-// Notification copy banks per slot context
-const COPY_BANKS: Record<string, Array<{ title: string; body: string }>> = {
+// Notification copy banks per slot context — body only (no title; iOS shows app name)
+const COPY_BANKS: Record<string, string[]> = {
   church: [
-    { title: 'What did God say today?', body: 'Capture what stood out in church while it\'s fresh.' },
-    { title: 'Something landed this morning', body: 'What did you hear today that you don\'t want to forget?' },
-    { title: 'Don\'t let it slip away', body: 'Take 2 minutes to capture what God said in church today.' },
+    "Something land in the service today? Capture it before the week takes over.",
+    "What stayed with you from this morning?",
+    "What did you hear today that you don't want to lose?",
   ],
   small_group: [
-    { title: 'What came up in group?', body: 'Something worth capturing from your small group today.' },
-    { title: 'God speaks in community', body: 'What did you hear — or say — that you want to hold onto?' },
-    { title: 'Capture it before life moves on', body: 'What stood out from your group time today?' },
+    "What came up in group tonight that's still with you?",
+    "Sometimes the best stuff comes after the conversation ends. What's sitting with you?",
+    "What was said tonight that you want to hold onto?",
   ],
   one_on_one: [
-    { title: 'Time with God', body: 'What did He say? Capture it before the day takes over.' },
-    { title: 'He\'s been speaking', body: 'What\'s been on your heart? Take a moment to write it down.' },
-    { title: 'Still, small voice', body: 'What did you sense God saying today?' },
+    "Anything stirring from your time this morning?",
+    "What showed up in prayer today?",
+    "What's God been saying?",
   ],
   default: [
-    { title: 'God speaks.', body: 'What has He been saying? Capture it in Oxbow.' },
-    { title: 'Don\'t forget what you heard', body: 'Take 2 minutes to write it down.' },
-    { title: 'Something worth capturing', body: 'What did God put on your heart today?' },
+    "Something been on your heart lately? Capture it.",
+    "What's God been saying?",
   ],
 }
 
-function getLocalDateTime(timezone: string): { hour: number; dayOfWeek: string } {
+const CUSTOM_SLOT_TEMPLATES = [
+  (label: string) => `You just had ${label}. What's still with you?`,
+  (label: string) => `What came out of ${label} today worth capturing?`,
+]
+
+function buildCustomCopy(label: string): string[] {
+  return CUSTOM_SLOT_TEMPLATES.map(t => t(label))
+}
+
+function getLocalDateTime(timezone: string): { hour: number; dayOfWeek: string; dateString: string } {
   const now = new Date()
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: timezone,
     hour: 'numeric',
     weekday: 'long',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
     hour12: false,
   })
   const parts = formatter.formatToParts(now)
   const hour = parseInt(parts.find(p => p.type === 'hour')?.value ?? '0', 10)
   const dayOfWeek = parts.find(p => p.type === 'weekday')?.value ?? ''
-  return { hour, dayOfWeek }
+  const year = parts.find(p => p.type === 'year')?.value ?? ''
+  const month = parts.find(p => p.type === 'month')?.value ?? ''
+  const day = parts.find(p => p.type === 'day')?.value ?? ''
+  const dateString = `${year}-${month}-${day}` // YYYY-MM-DD in user's timezone
+  return { hour, dayOfWeek, dateString }
+}
+
+function isSameCalendarDay(isoString: string | null, timezone: string): boolean {
+  if (!isoString) return false
+  const { dateString: todayString } = getLocalDateTime(timezone)
+  const thenFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+  const thenParts = thenFormatter.formatToParts(new Date(isoString))
+  const thenYear = thenParts.find(p => p.type === 'year')?.value ?? ''
+  const thenMonth = thenParts.find(p => p.type === 'month')?.value ?? ''
+  const thenDay = thenParts.find(p => p.type === 'day')?.value ?? ''
+  const thenString = `${thenYear}-${thenMonth}-${thenDay}`
+  return todayString === thenString
+}
+
+function isDormant(isoString: string | null): boolean {
+  if (!isoString) return false
+  const then = new Date(isoString).getTime()
+  const now = Date.now()
+  return now - then > 14 * 24 * 60 * 60 * 1000
 }
 
 function pickRandom<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function isWithin24Hours(isoString: string | null): boolean {
-  if (!isoString) return false
-  const then = new Date(isoString).getTime()
-  const now = Date.now()
-  return now - then < 24 * 60 * 60 * 1000
 }
 
 serve(async (req) => {
@@ -93,18 +125,27 @@ serve(async (req) => {
 
     console.log(`👥 Found ${users?.length ?? 0} users with notifications enabled`)
 
+    // Fetch day_1_progress.completed_at for all relevant users
+    const userIds = (users ?? []).map((u: any) => u.id)
+    const day1CompletedAtMap: Record<string, string | null> = {}
+
+    if (userIds.length > 0) {
+      const { data: day1Rows } = await supabase
+        .from('day_1_progress')
+        .select('custom_user_id, completed_at')
+        .in('custom_user_id', userIds)
+
+      for (const row of (day1Rows ?? [])) {
+        day1CompletedAtMap[row.custom_user_id] = row.completed_at
+      }
+    }
+
     let sentCount = 0
     let skippedCount = 0
 
     for (const user of (users ?? [])) {
-      // Anti-spam: skip if opened within last 24h
-      if (isWithin24Hours(user.last_opened_at)) {
-        skippedCount++
-        continue
-      }
-
       const timezone = user.timezone ?? 'America/Denver'
-      let localTime: { hour: number; dayOfWeek: string }
+      let localTime: { hour: number; dayOfWeek: string; dateString: string }
       try {
         localTime = getLocalDateTime(timezone)
       } catch {
@@ -112,10 +153,29 @@ serve(async (req) => {
         continue
       }
 
+      // Suppression rule 1: dormant (last opened > 14 days ago)
+      if (isDormant(user.last_opened_at)) {
+        skippedCount++
+        continue
+      }
+
+      // Suppression rule 2: already opened today (same calendar date in user's timezone)
+      if (isSameCalendarDay(user.last_opened_at, timezone)) {
+        skippedCount++
+        continue
+      }
+
+      // Suppression rule 3: completed Day 1 today
+      const day1CompletedAt = day1CompletedAtMap[user.id] ?? null
+      if (isSameCalendarDay(day1CompletedAt, timezone)) {
+        skippedCount++
+        continue
+      }
+
       const slots: any[] = Array.isArray(user.spiritual_rhythm) ? user.spiritual_rhythm : []
 
-      // Find slots that match: enabled, timeWindow ending this hour, and day matches
-      const matchingSlots = slots.filter((slot: any) => {
+      // Find the first slot that matches: enabled, timeWindow ending this hour, day matches
+      const matchedSlot = slots.find((slot: any) => {
         if (!slot.enabled || !slot.timeWindow) return false
 
         const windowEndHour = TIME_WINDOW_HOURS[slot.timeWindow]
@@ -127,21 +187,26 @@ serve(async (req) => {
         return slot.day === localTime.dayOfWeek
       })
 
-      if (matchingSlots.length === 0) {
+      // Suppression rule 4: no matching slot for this time
+      if (!matchedSlot) {
         skippedCount++
         continue
       }
 
-      // Pick the first matching slot for copy context
-      const matchedSlot = matchingSlots[0]
-      const copyBank = COPY_BANKS[matchedSlot.id] ?? COPY_BANKS.default
-      const copy = pickRandom(copyBank)
+      // Select copy bank: known slot IDs first, then custom label, then default
+      const copyBank =
+        matchedSlot.id === 'church' ? COPY_BANKS.church
+        : matchedSlot.id === 'small_group' ? COPY_BANKS.small_group
+        : matchedSlot.id === 'one_on_one' ? COPY_BANKS.one_on_one
+        : matchedSlot.label ? buildCustomCopy(matchedSlot.label)
+        : COPY_BANKS.default
+
+      const body = pickRandom(copyBank)
 
       const message = {
         to: user.push_token,
         sound: 'default',
-        title: copy.title,
-        body: copy.body,
+        body,
         data: {
           type: 'encounter_nudge',
           slotId: matchedSlot.id,
