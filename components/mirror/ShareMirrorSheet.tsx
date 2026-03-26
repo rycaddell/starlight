@@ -11,12 +11,15 @@ import {
   FlatList,
   Alert,
   ActivityIndicator,
+  Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { fetchFriends } from '@/lib/supabase/friends';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
 import { shareMirror } from '@/lib/supabase/mirrorShares';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 import { Avatar } from '@/components/ui/Avatar';
+import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 
 interface ShareMirrorSheetProps {
@@ -35,10 +38,12 @@ export function ShareMirrorSheet({
   onShareSuccess,
 }: ShareMirrorSheetProps) {
   const router = useRouter();
+  const { user } = useAuth();
   const [friends, setFriends] = useState<any[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [sharing, setSharing] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -74,56 +79,84 @@ export function ShareMirrorSheet({
   };
 
   const handleShare = async () => {
-    if (selectedFriendIds.length === 0) {
+    const hasNew = selectedFriendIds.includes('NEW');
+    const realSelected = selectedFriendIds.filter(id => id !== 'NEW');
+
+    if (!hasNew && realSelected.length === 0) {
       Alert.alert('Select Friends', 'Please select at least one friend to share with');
       return;
     }
 
-    setSharing(true);
+    // Expand 'ALL' to actual friend IDs
+    const friendIdsToShare = realSelected.includes('ALL')
+      ? friends.map(f => f.userId)
+      : realSelected;
 
-    try {
-      // Determine which friends to share with
-      const friendIdsToShare = selectedFriendIds.includes('ALL')
-        ? friends.map(f => f.userId)
-        : selectedFriendIds;
+    if (friendIdsToShare.length > 0) {
+      setSharing(true);
 
-      // Share with selected friends sequentially
-      const sharedNames: string[] = [];
-      let errorCount = 0;
-      let lastError: string | undefined;
+      try {
+        const sharedNames: string[] = [];
+        let errorCount = 0;
+        let lastError: string | undefined;
 
-      for (const friendId of friendIdsToShare) {
-        const result = await shareMirror(mirrorId, userId, friendId);
-        if (result.success) {
-          const friend = friends.find(f => f.userId === friendId);
-          sharedNames.push(friend?.displayName || friendId);
-        } else {
-          errorCount++;
-          lastError = result.error;
-          const friend = friends.find(f => f.userId === friendId);
-          console.warn(`Failed to share with ${friend?.displayName || friendId}:`, result.error);
+        for (const friendId of friendIdsToShare) {
+          const result = await shareMirror(mirrorId, userId, friendId);
+          if (result.success) {
+            const friend = friends.find(f => f.userId === friendId);
+            sharedNames.push(friend?.displayName || friendId);
+          } else {
+            errorCount++;
+            lastError = result.error;
+            const friend = friends.find(f => f.userId === friendId);
+            console.warn(`Failed to share with ${friend?.displayName || friendId}:`, result.error);
+          }
         }
-      }
 
-      if (sharedNames.length > 0) {
-        const nameList =
-          sharedNames.length === 1
-            ? sharedNames[0]
-            : sharedNames.slice(0, -1).join(', ') + ' and ' + sharedNames[sharedNames.length - 1];
-        Alert.alert(
-          'Mirror Shared',
-          `Shared with ${nameList}` + (errorCount > 0 ? ` (${errorCount} failed)` : '')
-        );
-        onShareSuccess?.();
-        onClose();
-      } else {
-        Alert.alert('Unable to Share', lastError ?? 'Failed to share with any friends');
+        if (sharedNames.length > 0) {
+          const nameList =
+            sharedNames.length === 1
+              ? sharedNames[0]
+              : sharedNames.slice(0, -1).join(', ') + ' and ' + sharedNames[sharedNames.length - 1];
+          const message = `Shared with ${nameList}` + (errorCount > 0 ? ` (${errorCount} failed)` : '');
+          onShareSuccess?.();
+          onClose();
+          Alert.alert('Mirror Shared', message, [
+            { text: 'OK', onPress: hasNew ? () => handleShareNew() : undefined },
+          ]);
+        } else {
+          Alert.alert('Unable to Share', lastError ?? 'Failed to share with any friends');
+        }
+      } catch (error) {
+        console.error('Error sharing mirror:', error);
+        Alert.alert('Error', 'Something went wrong. Please try again.');
+      } finally {
+        setSharing(false);
       }
-    } catch (error) {
-      console.error('Error sharing mirror:', error);
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } else {
+      // Only 'NEW' selected — skip to off-platform share
+      await handleShareNew();
+      onClose();
+    }
+  };
+
+  const handleShareNew = async () => {
+    setGeneratingLink(true);
+    try {
+      const userName = user?.display_name || '';
+      const result = await createInviteLink(userId, userName, mirrorId);
+      if (!result.success || !result.shareUrl) {
+        Alert.alert('Error', result.error || 'Failed to generate invite link');
+        return;
+      }
+      await Share.share({ url: result.shareUrl, message: result.shareUrl });
+    } catch (error: any) {
+      // User cancelled the share sheet — not an error
+      if (error?.message !== 'The operation was cancelled.') {
+        console.error('Error sharing:', error);
+      }
     } finally {
-      setSharing(false);
+      setGeneratingLink(false);
     }
   };
 
@@ -247,6 +280,28 @@ export function ShareMirrorSheet({
     );
   };
 
+  const renderNewFriendRow = () => {
+    const isSelected = selectedFriendIds.includes('NEW');
+    return (
+      <TouchableOpacity
+        style={[styles.friendItem, isSelected && styles.friendItemSelected]}
+        onPress={() => toggleFriendSelection('NEW')}
+      >
+        <View style={styles.friendInfo}>
+          <View style={[styles.avatar, styles.newFriendAvatar, isSelected && styles.avatarSelected]}>
+            <MaterialIcons name="add" size={20} color={colors.text.white} />
+          </View>
+          <Text style={[styles.friendName, isSelected && styles.friendNameSelected]}>
+            New friend
+          </Text>
+        </View>
+        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+          {isSelected && <IconSymbol name="checkmark" size={14} color={colors.text.white} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <Modal
       visible={visible}
@@ -292,6 +347,7 @@ export function ShareMirrorSheet({
                 keyExtractor={(item) => item.userId}
                 contentContainerStyle={styles.listContent}
                 style={styles.list}
+                ListFooterComponent={renderNewFriendRow}
               />
 
               {/* Share Button */}
@@ -299,12 +355,12 @@ export function ShareMirrorSheet({
                 <TouchableOpacity
                   style={[
                     styles.shareButton,
-                    (selectedFriendIds.length === 0 || sharing) && styles.shareButtonDisabled,
+                    (selectedFriendIds.length === 0 || sharing || generatingLink) && styles.shareButtonDisabled,
                   ]}
                   onPress={handleShare}
-                  disabled={selectedFriendIds.length === 0 || sharing}
+                  disabled={selectedFriendIds.length === 0 || sharing || generatingLink}
                 >
-                  {sharing ? (
+                  {(sharing || generatingLink) ? (
                     <ActivityIndicator color={colors.text.body} />
                   ) : (
                     <Text style={styles.shareButtonText}>Share Mirror</Text>
@@ -313,6 +369,7 @@ export function ShareMirrorSheet({
               </View>
             </>
           )}
+
         </View>
       </View>
     </Modal>
@@ -411,6 +468,11 @@ const styles = StyleSheet.create({
   },
   allFriendsAvatar: {
     backgroundColor: colors.background.primaryLight,
+  },
+  newFriendAvatar: {
+    width: 48,
+    height: 48,
+    backgroundColor: colors.text.primary,
   },
   list: {
     maxHeight: 400,

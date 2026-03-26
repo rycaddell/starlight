@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { saveFocusAreas } from '../../lib/supabase/day1';
+import { ShareMirrorSheet } from '../mirror/ShareMirrorSheet';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
 interface Day1MirrorViewerProps {
@@ -60,6 +61,7 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
   const [mirrorMetadata, setMirrorMetadata] = useState<any>(null);
   const [focusAreasText, setFocusAreasText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
   const scrollViewRef = React.useRef<ScrollView>(null);
 
   useEffect(() => {
@@ -172,9 +174,14 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
                 >
                   <View style={styles.heroOverlay} />
 
-                  {/* Controls — close on the right */}
+                  {/* Controls — share (owner only) + close on the right */}
                   <View style={[styles.topNav, { top: insets.top + 14 }]}>
                     <View style={styles.topNavRight}>
+                      {isOwner && (
+                        <TouchableOpacity style={styles.navButton} onPress={() => setShowShareSheet(true)}>
+                          <MaterialIcons name="ios-share" size={24} color={colors.text.white} />
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity style={styles.navButton} onPress={onClose}>
                         <Image
                           source={require('../../assets/images/icons/Close.png')}
@@ -309,6 +316,14 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
           </KeyboardAvoidingView>
         )}
       </View>
+
+      <ShareMirrorSheet
+        visible={showShareSheet}
+        onClose={() => setShowShareSheet(false)}
+        userId={userId}
+        mirrorId={mirrorId}
+        onShareSuccess={() => {}}
+      />
     </Modal>
   );
 };

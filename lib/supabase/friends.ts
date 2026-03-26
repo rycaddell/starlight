@@ -20,7 +20,8 @@ function generateUUID(): string {
  */
 export async function createInviteLink(
   inviterUserId: string,
-  inviterName: string
+  inviterName: string,
+  mirrorId?: string
 ): Promise<{ success: boolean; shareUrl?: string; token?: string; inviteId?: string; error?: string }> {
   if (!supabase) return { success: false, error: 'Supabase not initialized' };
 
@@ -43,6 +44,7 @@ export async function createInviteLink(
       .insert({
         inviter_user_id: inviterUserId,
         token: token,
+        mirror_id: mirrorId || null,
       })
       .select()
       .single();
@@ -242,6 +244,25 @@ export async function acceptInvite(
         success: false,
         error: 'Failed to create friend link. Please try again.',
       };
+    }
+
+    // 6a. If this invite carried a mirror, share it automatically
+    if (invite.mirror_id) {
+      const { error: shareError } = await supabase.from('mirror_shares').insert({
+        mirror_id: invite.mirror_id,
+        sender_user_id: invite.inviter_user_id,
+        recipient_user_id: inviteeUserId,
+      });
+      if (shareError) {
+        // Non-blocking — friendship succeeds even if this insert fails
+        console.warn('⚠️ Failed to auto-create mirror_share on invite acceptance:', shareError.message);
+        Sentry.captureException(new Error('Failed to auto-create mirror_share on invite acceptance'), {
+          tags: { component: 'friends', action: 'acceptInvite_autoShare' },
+          contexts: { friends: { inviteId: invite.id, mirrorId: invite.mirror_id, error: shareError.message } },
+        });
+      } else {
+        console.log('✅ Auto-created mirror_share for invited user');
+      }
     }
 
     // 6. Mark invite as accepted
