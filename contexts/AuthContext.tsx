@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import * as Sentry from '@sentry/react-native';
+import { identify, setSuperProperties, setUserProperties, track, flush, reset, Events } from '../lib/analytics';
 import type { Session } from '@supabase/supabase-js';
 import {
   sendPhoneOTP,
@@ -88,6 +89,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsNewUser(false);
       setIsLoading(false);
       Sentry.setUser(null);
+      flush();
+      reset();
       return;
     }
 
@@ -105,6 +108,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(data);
         setIsNewUser(false);
         Sentry.setUser({ id: data.id });
+        identify(data.id);
+        setSuperProperties({
+          group_name: data.group_name ?? null,
+          has_completed_day1: !!data.day_1_completed_at,
+          notifications_enabled: !!data.notifications_enabled,
+        });
+        setUserProperties({
+          $name: data.display_name,
+          phone: data.phone,
+          group_name: data.group_name ?? null,
+          created_at: data.created_at,
+        });
         return;
       }
 
@@ -147,6 +162,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(migratedUser);
           setIsNewUser(false);
           Sentry.setUser({ id: migratedUser.id });
+          identify(migratedUser.id);
+          setSuperProperties({
+            group_name: migratedUser.group_name ?? null,
+            has_completed_day1: !!migratedUser.day_1_completed_at,
+            notifications_enabled: !!migratedUser.notifications_enabled,
+          });
+          setUserProperties({
+            $name: migratedUser.display_name,
+            phone: migratedUser.phone,
+            group_name: migratedUser.group_name ?? null,
+            created_at: migratedUser.created_at,
+          });
+          track(Events.AUTH_LEGACY_USER_MIGRATED);
           return;
         }
       }
@@ -188,6 +216,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(result.user);
       setIsNewUser(false);
       Sentry.setUser({ id: result.user.id });
+      identify(result.user.id);
+      setSuperProperties({
+        group_name: result.user.group_name ?? null,
+        has_completed_day1: !!result.user.day_1_completed_at,
+        notifications_enabled: !!result.user.notifications_enabled,
+      });
+      setUserProperties({
+        $name: result.user.display_name,
+        phone: result.user.phone,
+        group_name: result.user.group_name ?? null,
+        created_at: result.user.created_at,
+      });
+      track(Events.AUTH_PROFILE_CREATED);
     }
 
     return { success: result.success, error: result.error };

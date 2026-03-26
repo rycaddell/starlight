@@ -298,6 +298,12 @@ PODS:
   - LinkrunnerSDK (2.8.0):
     - LinkrunnerKit (= 3.8.0)
     - React
+  - Mixpanel-swift (5.2.0):
+    - Mixpanel-swift/Complete (= 5.2.0)
+  - Mixpanel-swift/Complete (5.2.0)
+  - MixpanelReactNative (3.3.0):
+    - Mixpanel-swift (= 5.2.0)
+    - React-Core
   - RCTDeprecation (0.81.4)
   - RCTRequired (0.81.4)
   - RCTTypeSafety (0.81.4):
@@ -1577,6 +1583,8 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
+  - react-native-get-random-values (1.11.0):
+    - React-Core
   - react-native-safe-area-context (5.6.1):
     - hermes-engine
     - RCTRequired
@@ -2419,6 +2427,7 @@ DEPENDENCIES:
   - FBLazyVector (from `../node_modules/react-native/Libraries/FBLazyVector`)
   - hermes-engine (from `../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
   - LinkrunnerSDK (from `../node_modules/rn-linkrunner`)
+  - MixpanelReactNative (from `../node_modules/mixpanel-react-native`)
   - RCTDeprecation (from `../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation`)
   - RCTRequired (from `../node_modules/react-native/Libraries/Required`)
   - RCTTypeSafety (from `../node_modules/react-native/Libraries/TypeSafety`)
@@ -2453,6 +2462,7 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
+  - react-native-get-random-values (from `../node_modules/react-native-get-random-values`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-skia (from `../node_modules/@shopify/react-native-skia`)"
   - react-native-webview (from `../node_modules/react-native-webview`)
@@ -2503,6 +2513,7 @@ SPEC REPOS:
     - libdav1d
     - libwebp
     - LinkrunnerKit
+    - Mixpanel-swift
     - SDWebImage
     - SDWebImageAVIFCoder
     - SDWebImageSVGCoder
@@ -2577,6 +2588,8 @@ EXTERNAL SOURCES:
     :tag: hermes-2025-07-07-RNv0.81.0-e0fc67142ec0763c6b6153ca2bf96df815539782
   LinkrunnerSDK:
     :path: "../node_modules/rn-linkrunner"
+  MixpanelReactNative:
+    :path: "../node_modules/mixpanel-react-native"
   RCTDeprecation:
     :path: "../node_modules/react-native/ReactApple/Libraries/RCTFoundation/RCTDeprecation"
   RCTRequired:
@@ -2643,6 +2656,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
+  react-native-get-random-values:
+    :path: "../node_modules/react-native-get-random-values"
   react-native-safe-area-context:
     :path: "../node_modules/react-native-safe-area-context"
   react-native-skia:
@@ -2768,6 +2783,8 @@ SPEC CHECKSUMS:
   libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   LinkrunnerKit: a13dbf81ab34f1ca505b96f25f744afddec5c758
   LinkrunnerSDK: 7dde01cd53a9585c22f04bda7c3b618be35133b8
+  Mixpanel-swift: de454db5987bf6f601106520a44663fc556e8cfa
+  MixpanelReactNative: 1f0d8718b2be7174f719ed5db8e8f75d7975dea4
   RCTDeprecation: 7487d6dda857ccd4cb3dd6ecfccdc3170e85dcbc
   RCTRequired: 54128b7df8be566881d48c7234724a78cb9b6157
   RCTTypeSafety: d2b07797a79e45d7b19e1cd2f53c79ab419fe217
@@ -2801,6 +2818,7 @@ SPEC CHECKSUMS:
   React-logger: 7b234de35acb469ce76d6bbb0457f664d6f32f62
   React-Mapbuffer: fbe1da882a187e5898bdf125e1cc6e603d27ecae
   React-microtasksnativemodule: 76905804171d8ccbe69329fc84c57eb7934add7f
+  react-native-get-random-values: d16467cf726c618e9c7a8c3c39c31faa2244bbba
   react-native-safe-area-context: 42a1b4f8774b577d03b53de7326e3d5757fe9513
   react-native-skia: 05327e7acee05e7c27b68a5da0bc80d65f5d790c
   react-native-webview: b29007f4723bca10872028067b07abacfa1cb35a
@@ -2850,6 +2868,6 @@ SPEC CHECKSUMS:
   Sentry: 990a381d8592207a52e7be654b31a27738c3a6a8
   Yoga: 051f086b5ccf465ff2ed38a2cf5a558ae01aaaa1
 
-PODFILE CHECKSUM: 0cfd027bd6e23edb230beadeb35f776f70fd6b4b
+PODFILE CHECKSUM: 7262ebea1964fc9166b02f462dd4de973b37bbca
 
 COCOAPODS: 1.16.2

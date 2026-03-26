@@ -6,6 +6,7 @@ import { Modal, View, StyleSheet, Alert, TouchableOpacity, Text, ActivityIndicat
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
+import { track, Events } from '../../lib/analytics';
 import { Video, ResizeMode } from 'expo-av';
 import { useAuth } from '../../contexts/AuthContext';
 import { getDay1Progress, completeDay1, generateMiniMirror } from '../../lib/supabase/day1';
@@ -65,6 +66,7 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
     if (!user) return;
 
     console.log('📂 [Day1Modal] loadProgress start');
+    track(Events.DAY1_OPENED);
     setLoading(true);
     const result = await getDay1Progress(user.id);
 
@@ -263,19 +265,24 @@ export const Day1Modal: React.FC<Day1ModalProps> = ({ visible, onClose, onComple
   };
 
   const handleStep1Complete = (selectedPlace: string) => {
+    track(Events.DAY1_STEP1_COMPLETED, { spiritual_place: selectedPlace });
     setSpiritualPlace(selectedPlace);
     setCurrentStep(2);
   };
 
   const handleStep2Complete = () => {
+    track(Events.DAY1_STEP2_COMPLETED);
     setCurrentStep(3);
   };
 
   const handleStep3Complete = () => {
+    track(Events.DAY1_STEP3_COMPLETED);
+    track(Events.DAY1_MIRROR_GENERATING);
     handleGenerateMirror();
   };
 
   const handleStep5Complete = () => {
+    track(Events.DAY1_MIRROR_VIEWED);
     setCurrentStep(6);
   };
 

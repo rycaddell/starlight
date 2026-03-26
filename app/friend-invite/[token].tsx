@@ -12,6 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import { track, Events } from '@/lib/analytics';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { acceptInvite, declineInvite, getInviterInfo } from '@/lib/supabase/friends';
@@ -100,6 +101,8 @@ export default function AcceptInviteScreen() {
         level: 'info',
       });
 
+      track(Events.FRIEND_INVITE_ACCEPTED, { inviter_name: result.inviterName || inviterName });
+
       Alert.alert(
         'Success!',
         `You're now friends with ${result.inviterName || inviterName}`,
@@ -133,6 +136,7 @@ export default function AcceptInviteScreen() {
           text: 'Decline',
           style: 'destructive',
           onPress: async () => {
+            track(Events.FRIEND_INVITE_DECLINED);
             if (typeof token === 'string' && user?.id) {
               await declineInvite(token, user.id);
             }

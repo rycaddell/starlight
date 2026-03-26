@@ -22,6 +22,7 @@ import { NotificationPitchCard } from '../../components/journal/NotificationPitc
 import { RhythmBuilderSheet } from '../../components/notifications/RhythmBuilderSheet';
 import { dismissNotifCard } from '../../lib/supabase/notifications';
 import { colors, typography, spacing } from '@/theme/designTokens';
+import { track, setSuperProperties, Events } from '../../lib/analytics';
 import { PathGradient } from '../../components/mirror/PathGradient';
 import { GRADIENT_PATHS } from '../../components/mirror/gradient-paths';
 
@@ -77,6 +78,12 @@ function JournalScreen() {
     });
 
     if (journalId) {
+      track(Events.JOURNAL_CREATED, {
+        entry_type: 'voice',
+        mode: sheetMode,
+        has_prompt: !!sheetPrompt,
+        content_length: transcribedText.length,
+      });
       setBottomSheetVisible(false);
       router.push({
         pathname: '/(tabs)/mirror',
@@ -97,6 +104,12 @@ function JournalScreen() {
     );
 
     if (saved) {
+      track(Events.JOURNAL_CREATED, {
+        entry_type: 'voice',
+        mode: sheetMode,
+        has_prompt: !!sheetPrompt,
+        content_length: transcribedText.length,
+      });
       setBottomSheetVisible(false);
       router.push({
         pathname: '/(tabs)/mirror',
@@ -228,6 +241,7 @@ function JournalScreen() {
     setSheetPrompt(null);
     setSelectedTab('voice');
     setBottomSheetVisible(true);
+    track(Events.JOURNAL_OPENED, { entry_type: 'voice', mode: 'free' });
   };
 
   const handleTextFormPress = () => {
@@ -235,6 +249,7 @@ function JournalScreen() {
     setSheetPrompt(null);
     setSelectedTab('text');
     setBottomSheetVisible(true);
+    track(Events.JOURNAL_OPENED, { entry_type: 'text', mode: 'free' });
   };
 
   const handleGuidedPromptSelect = (prompt: GuidedPrompt) => {
@@ -242,6 +257,7 @@ function JournalScreen() {
     setSheetPrompt(prompt.text);
     setSelectedTab('voice');
     setBottomSheetVisible(true);
+    track(Events.JOURNAL_OPENED, { entry_type: 'voice', mode: 'guided' });
   };
 
   const handleBottomSheetClose = () => {
@@ -264,6 +280,12 @@ function JournalScreen() {
     );
 
     if (saved) {
+      track(Events.JOURNAL_CREATED, {
+        entry_type: 'text',
+        mode: sheetMode,
+        has_prompt: !!sheetPrompt,
+        content_length: text.length,
+      });
       router.push({
         pathname: '/(tabs)/mirror',
         params: { journalText: text, timestamp }
@@ -286,6 +308,8 @@ function JournalScreen() {
   const handleDay1Complete = async () => {
     console.log('🎉 Day 1 flow completed');
     setDay1ModalVisible(false);
+    track(Events.DAY1_COMPLETED);
+    setSuperProperties({ has_completed_day1: true });
 
     if (isAuthenticated && user) {
       await refreshUser();
@@ -402,8 +426,12 @@ function JournalScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Setup</Text>
             <NotificationPitchCard
-              onSetupPress={() => setRhythmBuilderVisible(true)}
+              onSetupPress={() => {
+                track(Events.PUSH_NOTIF_OPT_IN_PROMPTED, { surface: 'journal' });
+                setRhythmBuilderVisible(true);
+              }}
               onDismiss={async () => {
+                track(Events.PUSH_NOTIF_CARD_DISMISSED);
                 await dismissNotifCard(user.id);
                 await refreshUser();
               }}

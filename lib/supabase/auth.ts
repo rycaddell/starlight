@@ -199,7 +199,17 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'signOut' },
     });
-    return { success: false, error: error.message };
+
+    // Network failure: fall back to local-only sign-out so the user is
+    // still signed out on this device even if the server can't be reached.
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+      console.log('✅ Local session cleared after network sign-out failure');
+      return { success: true };
+    } catch (localError: any) {
+      console.error('Error clearing local session:', localError);
+      return { success: false, error: error.message };
+    }
   }
 };
 

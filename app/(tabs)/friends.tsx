@@ -19,6 +19,7 @@ import {
   ImageBackground,
 } from 'react-native';
 import * as Sentry from '@sentry/react-native';
+import { track, Events } from '../../lib/analytics';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
@@ -227,6 +228,7 @@ function FriendsScreen() {
         title: 'Join me on Oxbow',
       });
 
+      track(Events.FRIEND_INVITE_SENT);
       setCreatingInvite(false);
     } catch (error) {
       console.error('Error sharing invite:', error);
@@ -266,6 +268,11 @@ function FriendsScreen() {
 
       // Check if this is a Day 1 mirror
       const isDay1Mirror = result.mirror.mirror_type === 'day_1';
+
+      track(Events.FRIEND_MIRROR_VIEWED, {
+        mirror_type: result.mirror.mirror_type,
+        is_new: share.isNew,
+      });
 
       if (isDay1Mirror) {
         console.log('📋 Opening shared Day 1 mirror');
@@ -314,6 +321,7 @@ function FriendsScreen() {
   };
 
   const handleEnableNotifications = async () => {
+    track(Events.PUSH_NOTIF_OPT_IN_PROMPTED, { surface: 'friends' });
     const token = await requestPermissionAndRegister();
     if (token) {
       Alert.alert('Success', 'Push notifications enabled!');

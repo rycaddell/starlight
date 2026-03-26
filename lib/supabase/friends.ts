@@ -330,6 +330,11 @@ export async function declineInvite(
       .is('declined_at', null);
 
     if (error) {
+      // RLS block (42501) means this user wasn't the intended invitee — treat as
+      // soft success so they're still navigated away from the invite screen.
+      if (error.code === '42501') {
+        return { success: true };
+      }
       console.error('❌ Error declining invite:', error);
       return { success: false, error: error.message };
     }

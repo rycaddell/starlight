@@ -9,6 +9,7 @@ import {
 import { colors, typography, spacing, borderRadius } from '../../theme/designTokens';
 import { SlotEditor, SlotDef, DEFAULT_SLOTS } from './SlotEditor';
 import { saveRhythm } from '../../lib/supabase/notifications';
+import { track, Events } from '../../lib/analytics';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 
 interface RhythmBuilderSheetProps {
@@ -56,6 +57,10 @@ export function RhythmBuilderSheet({
     try {
       await requestPermissionAndRegister();
       await saveRhythm(userId, slots, enabledSlots.length > 0);
+      track(Events.PUSH_RHYTHM_SAVED, { enabled_slots: enabledSlots.length });
+      if (isFirstTimer) {
+        track(Events.PUSH_NOTIF_OPTED_IN);
+      }
       onSave();
     } catch (error) {
       Alert.alert('Error', 'Failed to save reminders. Please try again.');
@@ -68,6 +73,7 @@ export function RhythmBuilderSheet({
     setIsSaving(true);
     try {
       await saveRhythm(userId, slots, false);
+      track(Events.PUSH_NOTIF_OPTED_OUT);
       onSave();
     } catch {
       Alert.alert('Error', 'Failed to update reminders. Please try again.');

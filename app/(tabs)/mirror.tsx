@@ -22,6 +22,7 @@ import { fetchFriends } from '../../lib/supabase/friends';
 import { getDay1Mirror } from '../../lib/supabase/day1';
 import { Day1MirrorViewer } from '../../components/day1/Day1MirrorViewer';
 import * as Sentry from '@sentry/react-native';
+import { track, Events } from '../../lib/analytics';
 
 function MirrorScreen() {
   const router = useRouter();
@@ -192,6 +193,12 @@ function MirrorScreen() {
         level: 'info',
       });
 
+      track(Events.MIRROR_VIEWED, {
+        mirror_id: generatedMirror.id,
+        mirror_type: generatedMirror.mirror_type,
+        is_first_view: true,
+      });
+
       setCurrentMirrorId(generatedMirror.id);
       viewMirror();
     }
@@ -316,6 +323,12 @@ function MirrorScreen() {
           }
         }
 
+        track(Events.MIRROR_VIEWED, {
+          mirror_id: mirrorId,
+          mirror_type: 'day_1',
+          is_first_view: !result.mirror.has_been_viewed,
+        });
+
         // Open Day 1 viewer
         setDay1ViewerVisible(true);
         return;
@@ -337,6 +350,12 @@ function MirrorScreen() {
         setPastJournalsModalVisible(false);
         setShouldRestorePastJournalsModal(true);
       }
+
+      track(Events.MIRROR_VIEWED, {
+        mirror_id: mirrorId,
+        mirror_type: result.mirror.mirror_type,
+        is_first_view: !result.mirror.has_been_viewed,
+      });
 
       setCurrentMirrorId(mirrorId);
       setGeneratedMirror(result.mirror);
@@ -380,6 +399,7 @@ function MirrorScreen() {
         setPastMirrorsModalVisible(false);
         setShouldRestorePastMirrorsModal(true);
       }
+      track(Events.MIRROR_SHARED, { mirror_id: mirrorId });
       setTimeout(() => {
         setSelectedMirrorIdForShare(mirrorId);
         setShareSheetVisible(true);
