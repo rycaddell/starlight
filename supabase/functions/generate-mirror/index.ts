@@ -352,6 +352,7 @@ serve(async (req) => {
       .select('*')
       .eq('custom_user_id', customUserId)
       .is('mirror_id', null)
+      .eq('transcription_status', 'completed')
       .order('created_at', { ascending: true });
 
     if (journalsError) {
@@ -360,7 +361,7 @@ serve(async (req) => {
     }
 
     if (!journals || journals.length < threshold) {
-      console.log(`⏸️ Insufficient journals: ${journals?.length || 0}/${threshold}`);
+      console.log(`⏸️ Insufficient completed journals: ${journals?.length || 0}/${threshold} (pending transcriptions may be excluded)`);
       return new Response(
         JSON.stringify({
           success: false,
