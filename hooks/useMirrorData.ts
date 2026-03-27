@@ -12,6 +12,7 @@ import {
 import { markMirrorAsViewed, getMirrorById } from '../lib/supabase/mirrors';
 import { supabase } from '../lib/supabase/client';
 import { MIRROR_THRESHOLD, getMirrorThreshold } from '../lib/config/constants';
+import { track, Events } from '../lib/analytics';
 
 type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing';
 
@@ -79,7 +80,9 @@ export const useMirrorData = () => {
         setJournals(journalsResult.data ?? []);
       } else {
         console.error('Failed to load journals:', journalsResult.error);
-        Alert.alert('Error', 'Failed to load journal entries. Please try again.');
+        if (journals.length === 0) {
+          Alert.alert('Error', 'Failed to load journal entries. Please try again.');
+        }
       }
 
       if (countResult.success) {
@@ -131,6 +134,11 @@ export const useMirrorData = () => {
         const mirrorResult = await getMirrorById(mirrorId);
         if (mirrorResult.success && mirrorResult.mirror) {
           const dbHasBeenViewed = mirrorResult.mirror.has_been_viewed || false;
+          track(Events.MIRROR_GENERATED, {
+            mirror_id: mirrorId,
+            mirror_type: mirrorResult.mirror.mirror_type,
+            journal_count: journalCount,
+          });
           setGeneratedMirror(mirrorResult.mirror);
           setMirrorState('completed');
           setGenerationStartTime(null);
@@ -416,6 +424,11 @@ export const useMirrorData = () => {
           // HTTP response delivered the mirror directly — mark resolved and cancel subscription
           resolvedRef.current = true;
           stopWaiting();
+          track(Events.MIRROR_GENERATED, {
+            mirror_id: result.mirror.id,
+            mirror_type: result.mirror.mirror_type,
+            journal_count: journalCount,
+          });
           const dbHasBeenViewed = result.mirror.has_been_viewed || false;
           setGeneratedMirror(result.mirror);
           setMirrorState('completed');
