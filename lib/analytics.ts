@@ -20,6 +20,7 @@ export const Events = {
   JOURNAL_CREATED:            'Journal: Created',
   JOURNAL_DELETED:            'Journal: Deleted',
   // Mirror
+  MIRROR_GENERATED:           'Mirror: Generated',
   MIRROR_VIEWED:              'Mirror: Viewed',
   MIRROR_SHARED:              'Mirror: Shared',
   // Friends
@@ -51,6 +52,7 @@ export async function initAnalytics(): Promise<void> {
     const instance = new Mixpanel(token, false, false);
     await instance.init();
     _mixpanel = instance;
+    instance.registerSuperProperties({ environment: __DEV__ ? 'development' : 'production' });
     if (__DEV__) console.log('[Analytics] Mixpanel initialized');
   } catch (e) {
     if (__DEV__) console.warn('[Analytics] init failed:', e);

@@ -18,8 +18,11 @@ import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
 import { useAuth } from '../contexts/AuthContext';
-import { updateLastOpenedAt } from '../lib/supabase/notifications';
+import { updateLastOpenedAt, saveRhythm } from '../lib/supabase/notifications';
 import { track, Events } from '../lib/analytics';
+import * as Notifications from 'expo-notifications';
+import { usePushNotifications } from '../hooks/usePushNotifications';
+import { supabase } from '../lib/supabase/client';
 
 // Initialize Sentry
 Sentry.init({
@@ -87,6 +90,34 @@ function AppFocusTracker() {
     });
     return () => subscription.remove();
   }, [user?.id]);
+
+  return null;
+}
+
+// Reconciles push notification permission state after reinstall.
+// If DB says enabled but iOS wiped the permission, re-prompt (undetermined) or flip DB flag (denied).
+function PushPermissionReconciler() {
+  const { user } = useAuth();
+  const { requestPermissionAndRegister } = usePushNotifications(user?.id ?? null);
+
+  useEffect(() => {
+    if (!user?.id || !user.notifications_enabled) return;
+
+    async function reconcile() {
+      const { status } = await Notifications.getPermissionsAsync();
+
+      if (status === 'undetermined') {
+        // iOS wiped the permission on reinstall — re-prompt and re-register token
+        await requestPermissionAndRegister();
+      } else if (status === 'denied') {
+        // User explicitly denied after reinstall — flip DB flag and show pitch card again
+        await saveRhythm(user!.id, user!.spiritual_rhythm ?? [], false);
+        await supabase?.from('users').update({ notif_card_dismissed: false }).eq('id', user!.id);
+      }
+    }
+
+    reconcile();
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return null;
 }
@@ -167,6 +198,7 @@ function RootLayout() {
             <OnboardingProvider>
               <GlobalSettingsProvider>
                 <AppFocusTracker />
+                <PushPermissionReconciler />
                 <LinkRunnerHandler />
                 <AuthNavigator>
                   <Stack>

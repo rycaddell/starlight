@@ -101,7 +101,13 @@ export default function AcceptInviteScreen() {
         level: 'info',
       });
 
-      track(Events.FRIEND_INVITE_ACCEPTED, { inviter_name: result.inviterName || inviterName });
+      const accountAgeMs = user?.created_at
+        ? Date.now() - new Date(user.created_at).getTime()
+        : Infinity;
+      track(Events.FRIEND_INVITE_ACCEPTED, {
+        inviter_name: result.inviterName || inviterName,
+        is_new_user: accountAgeMs < 5 * 60 * 1000,
+      });
 
       Alert.alert(
         'Success!',
