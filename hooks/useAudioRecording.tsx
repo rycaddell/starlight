@@ -91,6 +91,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [isStoppingRecording, setIsStoppingRecording] = useState(false);
 
   const wakeLockActiveRef = useRef(false);
@@ -128,6 +129,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
       resolvedRef.current = true;
 
       setIsProcessing(false);
+      setIsTranscribing(false);
       // Defer channel removal so we're not removing the channel from within its own callback
       setTimeout(() => stopWaiting(), 0);
 
@@ -487,6 +489,9 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
             // Fire edge function — don't await, server handles everything
             triggerTranscription(journal.id);
 
+            // Switch UI from "Processing" to "Transcribing"
+            setIsTranscribing(true);
+
             // Subscribe to journal row for instant completion notification
             subscribeForCompletion(journal.id, persistedLocalPath, jobId);
             // isProcessing stays true until subscription resolves
@@ -753,6 +758,7 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
     recordingDuration,
     recording,
     isProcessing,
+    isTranscribing,
     handleStartRecording,
     handleStopRecording,
     handlePauseRecording,

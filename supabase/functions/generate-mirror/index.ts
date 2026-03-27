@@ -352,7 +352,7 @@ serve(async (req) => {
       .select('*')
       .eq('custom_user_id', customUserId)
       .is('mirror_id', null)
-      .eq('transcription_status', 'completed')
+      .or('transcription_status.eq.completed,journal_entry_type.eq.text')
       .order('created_at', { ascending: true });
 
     if (journalsError) {

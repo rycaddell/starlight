@@ -1,16 +1,22 @@
 // components/ui/MirrorStatus.tsx
 // Mirror Status component - shows Mirror generation progress on Landing screen
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
+import { MirrorGenerationProgressIndicator } from '../MirrorGenerationProgressIndicator';
 
 export type MirrorState = 'countdown' | 'ready' | 'generating' | 'complete';
+
+const EXPECTED_DURATION_MS = 120_000; // 2 minutes
+const PROGRESS_FLOOR = 0.15;          // always show at least 15% fill
+const PROGRESS_CAP = 0.95;            // never reach 1.0 until actually done
 
 export interface MirrorStatusProps {
   state: MirrorState;
   journalsNeeded?: number;
   journalsReady?: number;
+  generationStartTime?: number | null;
   onGenerate?: () => void;
   onViewMirror?: () => void;
 }
@@ -19,9 +25,29 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
   state,
   journalsNeeded,
   journalsReady,
+  generationStartTime,
   onGenerate,
   onViewMirror,
 }) => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    if (state !== 'generating' || !generationStartTime) {
+      setProgress(0);
+      return;
+    }
+
+    const tick = () => {
+      const elapsed = Date.now() - generationStartTime;
+      const raw = Math.min(elapsed / EXPECTED_DURATION_MS, PROGRESS_CAP - PROGRESS_FLOOR);
+      setProgress(PROGRESS_FLOOR + raw);
+    };
+
+    tick(); // immediate first update
+    const interval = setInterval(tick, 500);
+    return () => clearInterval(interval);
+  }, [state, generationStartTime]);
+
   if (state === 'countdown') {
     return (
       <View style={styles.countdownContainer}>
@@ -61,11 +87,7 @@ export const MirrorStatus: React.FC<MirrorStatusProps> = ({
         <Text style={styles.generatingTitle}>Mirror Ready</Text>
         <View style={styles.generatingButton}>
           <Text style={styles.generatingText}>Generating Mirror</Text>
-          <Image
-            source={require('@/assets/images/icons/In-progress.png')}
-            style={styles.generatingIcon}
-            resizeMode="contain"
-          />
+          <MirrorGenerationProgressIndicator size={28} progress={progress} />
         </View>
         <Text style={styles.generatingSubtitle}>This can take up to 2 minutes</Text>
       </View>

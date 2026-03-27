@@ -39,7 +39,7 @@ function JournalScreen() {
   const [sheetMode, setSheetMode] = useState<'free' | 'guided'>('free');
   const [sheetPrompt, setSheetPrompt] = useState<string | null>(null);
 
-  const { journalCount, loadJournals, mirrorState, generateMirror, viewMirror, generatedMirror, checkGenerationStatusOnFocus } = useMirrorData();
+  const { journalCount, loadJournals, mirrorState, generateMirror, viewMirror, generatedMirror, checkGenerationStatusOnFocus, generationStartTime } = useMirrorData();
   const mirrorThreshold = getMirrorThreshold(user as any);
 
   // Path rotates each mirror cycle (seeded from mirror ID so it changes after
@@ -127,6 +127,7 @@ function JournalScreen() {
     isPaused,
     recordingDuration,
     isProcessing,
+    isTranscribing,
     handleStartRecording,
     handleStopRecording,
     handlePauseRecording,
@@ -356,6 +357,7 @@ function JournalScreen() {
           }
           journalsNeeded={Math.max(0, mirrorThreshold - journalCount)}
           journalsReady={journalCount}
+          generationStartTime={generationStartTime}
           onGenerate={generateMirror}
           onViewMirror={() => {
             if (generatedMirror?.id) {
@@ -453,6 +455,7 @@ function JournalScreen() {
         isPaused={isPaused}
         recordingDuration={recordingDuration}
         isProcessing={isProcessing}
+        isTranscribing={isTranscribing}
         formatDuration={formatDuration}
         onStartRecording={handleStartRecordingWithPermission}
         onStopRecording={handleStopRecording}

@@ -1,13 +1,15 @@
 // components/voice/VoiceRecordingTab.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
+import { MirrorGenerationProgressIndicator } from '@/components/MirrorGenerationProgressIndicator';
 
 interface VoiceRecordingTabProps {
   isRecording: boolean;
   isPaused: boolean;
   recordingDuration: number;
   isProcessing: boolean;
+  isTranscribing?: boolean;
   isBuildingMirror?: boolean;
   hasRecorded?: boolean;
   formatDuration: (seconds: number) => string;
@@ -22,6 +24,7 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
   isPaused,
   recordingDuration,
   isProcessing,
+  isTranscribing = false,
   isBuildingMirror = false,
   hasRecorded = false,
   formatDuration,
@@ -48,11 +51,6 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
           </Text>
         )}
 
-        {isProcessing && !isBuildingMirror && (
-          <Text style={styles.statusText}>Transcribing...</Text>
-        )}
-
-
         {/* Controls */}
         {!isRecording && !isProcessing && !isBuildingMirror ? (
           <TouchableOpacity style={styles.startButton} onPress={onStartRecording}>
@@ -63,15 +61,9 @@ export const VoiceRecordingTab: React.FC<VoiceRecordingTabProps> = ({
         ) : isProcessing || isBuildingMirror ? (
           <View style={[styles.startButton, styles.processingButton]}>
             <Text style={[styles.startButtonText, styles.processingButtonText]}>
-              {isBuildingMirror ? 'Generating Mirror' : 'Processing...'}
+              {isBuildingMirror ? 'Generating Mirror' : isTranscribing ? 'Transcribing...' : 'Processing...'}
             </Text>
-            {isBuildingMirror && (
-              <Image
-                source={require('@/assets/images/icons/In-progress.png')}
-                style={styles.generatingIcon}
-                resizeMode="contain"
-              />
-            )}
+            <MirrorGenerationProgressIndicator size={28} progress={0.4} />
           </View>
         ) : (
           <View style={styles.recordingControls}>
@@ -179,9 +171,5 @@ const styles = StyleSheet.create({
   limitText: {
     ...typography.body.s,
     color: colors.text.bodyLight,
-  },
-  generatingIcon: {
-    width: 18,
-    height: 18,
   },
 });

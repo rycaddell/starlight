@@ -32,6 +32,7 @@ interface JournalBottomSheetProps {
   isPaused: boolean;
   recordingDuration: number;
   isProcessing: boolean;
+  isTranscribing: boolean;
   formatDuration: (seconds: number) => string;
   onStartRecording: () => void;
   onStopRecording: () => void;
@@ -51,6 +52,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   isPaused,
   recordingDuration,
   isProcessing,
+  isTranscribing,
   formatDuration,
   onStartRecording,
   onStopRecording,
@@ -205,6 +207,7 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
               isPaused={isPaused}
               recordingDuration={recordingDuration}
               isProcessing={isProcessing}
+              isTranscribing={isTranscribing}
               formatDuration={formatDuration}
               onStartRecording={onStartRecording}
               onStopRecording={onStopRecording}
