@@ -5,22 +5,20 @@ import { Stack, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
-import { initAnalytics } from '../lib/analytics';
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
-import { AuthProvider } from '../contexts/AuthContext';
+import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { OnboardingProvider } from '../contexts/OnboardingContext'; // This will use the placeholder
 import { UnreadSharesProvider } from '../contexts/UnreadSharesContext';
 import { FriendBadgeProvider } from '../contexts/FriendBadgeContext';
 import { AuthNavigator } from '../components/navigation/AuthNavigator';
 import { GlobalSettingsProvider } from '../components/GlobalSettingsContext';
 import { ErrorBoundary } from '../components/ui/ErrorBoundary';
-import { useAuth } from '../contexts/AuthContext';
 import { updateLastOpenedAt, saveRhythm } from '../lib/supabase/notifications';
-import { track, Events } from '../lib/analytics';
-import * as Notifications from 'expo-notifications';
+import { initAnalytics, track, Events } from '../lib/analytics';
 import { usePushNotifications } from '../hooks/usePushNotifications';
 import { supabase } from '../lib/supabase/client';
 
