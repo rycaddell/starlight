@@ -6,11 +6,11 @@ Complete documentation for the Day 1 onboarding flow - a lightweight spiritual f
 
 ## Overview
 
-The Day 1 feature is a **6-step onboarding experience** designed to give new users their first spiritual reflection (mini-mirror) within minutes, without requiring 10+ journal entries.
+The Day 1 feature is a **6-step onboarding experience** designed to give new users their first spiritual reflection (mini-mirror) within minutes, without requiring 7+ journal entries.
 
 ### Key Characteristics:
 - **Fast:** Completed in 5-10 minutes
-- **Voice-first:** Two voice journal prompts instead of 10 written journals
+- **Voice-first:** Two voice journal prompts instead of 7 written journals
 - **Personalized:** Starts with spiritual place selection
 - **AI-powered:** Generates a focused biblical mirror
 - **Progressive:** Leads naturally into regular journaling flow + notification opt-in

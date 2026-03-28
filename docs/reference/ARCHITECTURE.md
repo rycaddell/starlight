@@ -107,7 +107,7 @@ starlight/
 │
 ├── supabase/                     # Supabase Edge Functions
 │   └── functions/
-│       ├── generate-mirror/     # Full Mirror generation (10+ journals)
+│       ├── generate-mirror/     # Full Mirror generation (7+ journals)
 │       │   └── index.ts
 │       ├── generate-day-1-mirror/  # Day 1 mini-mirror (2 voice journals)
 │       │   └── index.ts
@@ -283,17 +283,17 @@ components/
 - Full-screen modals with swipeable screens
 - Creates focused spiritual reflection moment
 - Easy to revisit past mirrors
-- 3-screen format: Themes, Biblical Mirror, Observations
+- Single-screen format in `MirrorViewer.tsx`: all sections (Themes, Biblical Mirror, Observations) on one scrollable screen
 
 **Implementation:** `components/mirror/MirrorViewer.tsx`
 
-### 6. 10-Journal Threshold (Configurable)
+### 6. 7-Journal Threshold (Configurable)
 
 **Why:** Core progression mechanic
 - Ensures sufficient content for meaningful AI reflection
 - Creates anticipation and engagement
 - Natural chunking of journaling journey
-- Default threshold is 10 journals (configurable server-side)
+- Default threshold is 7 journals (configurable server-side)
 
 **Implementation:** Progress tracking in `useMirrorData.ts`
 
@@ -313,7 +313,7 @@ components/
 **Why:** Social accountability and spiritual growth together
 - Users can connect with friends via invite links
 - Share specific mirrors for mutual encouragement
-- All mirrors use 3-screen format (Themes, Biblical, Observations)
+- All mirrors displayed in single-screen MirrorViewer (sections: Themes, Biblical, Observations)
 - Deep linking for seamless friend invites
 
 **Implementation:**
@@ -460,7 +460,7 @@ For each interrupted job:
 
 ### Mirror Generation Flow
 ```
-10+ Journals Collected (configurable threshold)
+7+ Journals Collected (configurable threshold)
     ↓
 User taps "Generate Mirror"
     ↓
@@ -474,11 +474,11 @@ Server processes journals with OpenAI
     ↓
 Server: Fetches journals, calls OpenAI GPT-5-mini
     ↓
-Server: Generates 3-screen Mirror with retry logic (up to 2 attempts)
+Server: Generates Mirror content with retry logic (up to 2 attempts)
     ↓
 Polling detects completion
     ↓
-User views 3-screen Mirror experience
+User views Mirror in single-screen MirrorViewer
     ↓
 Mirror marked as viewed (has_been_viewed: true)
 ```

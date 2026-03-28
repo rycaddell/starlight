@@ -18,25 +18,28 @@ const TIME_WINDOW_HOURS: Record<string, number> = {
 }
 
 // Notification copy banks per slot context — body only (no title; iOS shows app name)
+// Use {name} as a placeholder for the user's display name.
 const COPY_BANKS: Record<string, string[]> = {
   church: [
-    "Something land in the service today? Capture it before the week takes over.",
-    "What stayed with you from this morning?",
-    "What did you hear today that you don't want to lose?",
+    "{name}, what landed in the service today? Capture it before it gets lost in the week.",
+    "What from church today is still with you?",
+    "What did God have for you at church today?",
   ],
   small_group: [
     "What came up in group tonight that's still with you?",
-    "Sometimes the best stuff comes after the conversation ends. What's sitting with you?",
-    "What was said tonight that you want to hold onto?",
+    "What did someone say tonight you don't want to lose?",
+    "{name}, what are you still processing from small group? Capture it.",
   ],
   one_on_one: [
-    "Anything stirring from your time this morning?",
-    "What showed up in prayer today?",
-    "What's God been saying?",
+    "{name}, what's one thing from your time with God this morning worth holding?",
+    "What showed up in your time with God this morning?",
+    "Anything from quiet time this morning before the day gets away from you?",
   ],
-  default: [
-    "Something been on your heart lately? Capture it.",
-    "What's God been saying?",
+  default_morning: [
+    "{name}, anything from this morning worth capturing?",
+  ],
+  default_evening: [
+    "End of the day. What are you reflecting on?",
   ],
 }
 
@@ -47,6 +50,10 @@ const CUSTOM_SLOT_TEMPLATES = [
 
 function buildCustomCopy(label: string): string[] {
   return CUSTOM_SLOT_TEMPLATES.map(t => t(label))
+}
+
+function personalize(template: string, name: string): string {
+  return template.replace('{name}', name)
 }
 
 function getLocalDateTime(timezone: string): { hour: number; dayOfWeek: string; dateString: string } {
@@ -108,12 +115,15 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-    console.log('🔔 Running send-encounter-nudge...')
+    const url = new URL(req.url)
+    const debug = url.searchParams.get('debug') === 'true'
+
+    console.log(`🔔 Running send-encounter-nudge... ${debug ? '[DEBUG MODE]' : ''}`)
 
     // Fetch users with notifications enabled and push tokens
     const { data: users, error: usersError } = await supabase
       .from('users')
-      .select('id, push_token, timezone, spiritual_rhythm, last_opened_at')
+      .select('id, display_name, push_token, timezone, spiritual_rhythm, last_opened_at')
       .eq('notifications_enabled', true)
       .not('push_token', 'is', null)
       .not('spiritual_rhythm', 'is', null)
@@ -153,39 +163,43 @@ serve(async (req) => {
         continue
       }
 
-      // Suppression rule 1: dormant (last opened > 14 days ago)
-      if (isDormant(user.last_opened_at)) {
-        skippedCount++
-        continue
-      }
+      if (!debug) {
+        // Suppression rule 1: dormant (last opened > 14 days ago)
+        if (isDormant(user.last_opened_at)) {
+          skippedCount++
+          continue
+        }
 
-      // Suppression rule 2: already opened today (same calendar date in user's timezone)
-      if (isSameCalendarDay(user.last_opened_at, timezone)) {
-        skippedCount++
-        continue
-      }
+        // Suppression rule 2: already opened today (same calendar date in user's timezone)
+        if (isSameCalendarDay(user.last_opened_at, timezone)) {
+          skippedCount++
+          continue
+        }
 
-      // Suppression rule 3: completed Day 1 today
-      const day1CompletedAt = day1CompletedAtMap[user.id] ?? null
-      if (isSameCalendarDay(day1CompletedAt, timezone)) {
-        skippedCount++
-        continue
+        // Suppression rule 3: completed Day 1 today
+        const day1CompletedAt = day1CompletedAtMap[user.id] ?? null
+        if (isSameCalendarDay(day1CompletedAt, timezone)) {
+          skippedCount++
+          continue
+        }
       }
 
       const slots: any[] = Array.isArray(user.spiritual_rhythm) ? user.spiritual_rhythm : []
 
-      // Find the first slot that matches: enabled, timeWindow ending this hour, day matches
-      const matchedSlot = slots.find((slot: any) => {
-        if (!slot.enabled || !slot.timeWindow) return false
+      // Find the first matching slot. In debug mode, pick the first enabled slot regardless of time.
+      const matchedSlot = debug
+        ? slots.find((slot: any) => slot.enabled)
+        : slots.find((slot: any) => {
+            if (!slot.enabled || !slot.timeWindow) return false
 
-        const windowEndHour = TIME_WINDOW_HOURS[slot.timeWindow]
-        if (windowEndHour !== localTime.hour) return false
+            const windowEndHour = TIME_WINDOW_HOURS[slot.timeWindow]
+            if (windowEndHour !== localTime.hour) return false
 
-        // 1:1 with God fires daily (no day restriction)
-        if (!slot.hasDaySelection) return true
+            // 1:1 with God fires daily (no day restriction)
+            if (!slot.hasDaySelection) return true
 
-        return slot.day === localTime.dayOfWeek
-      })
+            return slot.day === localTime.dayOfWeek
+          })
 
       // Suppression rule 4: no matching slot for this time
       if (!matchedSlot) {
@@ -193,15 +207,17 @@ serve(async (req) => {
         continue
       }
 
-      // Select copy bank: known slot IDs first, then custom label, then default
+      // Select copy bank: known slot IDs first, then custom label, then time-aware default
+      const defaultBank = localTime.hour < 16 ? COPY_BANKS.default_morning : COPY_BANKS.default_evening
       const copyBank =
         matchedSlot.id === 'church' ? COPY_BANKS.church
         : matchedSlot.id === 'small_group' ? COPY_BANKS.small_group
         : matchedSlot.id === 'one_on_one' ? COPY_BANKS.one_on_one
         : matchedSlot.label ? buildCustomCopy(matchedSlot.label)
-        : COPY_BANKS.default
+        : defaultBank
 
-      const body = pickRandom(copyBank)
+      const name = user.display_name ?? 'Friend'
+      const body = personalize(pickRandom(copyBank), name)
 
       const message = {
         to: user.push_token,

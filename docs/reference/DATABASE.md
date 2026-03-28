@@ -142,7 +142,7 @@ This keeps text journals (no `transcription_status`) and completed voice journal
 
 ### `mirrors`
 
-Stores AI-generated spiritual reflections. Covers both full mirrors (10+ journals) and Day 1 mini-mirrors (2 voice journals).
+Stores AI-generated spiritual reflections. Covers both full mirrors (7+ journals) and Day 1 mini-mirrors (2 voice journals).
 
 ```typescript
 {
@@ -152,8 +152,8 @@ Stores AI-generated spiritual reflections. Covers both full mirrors (10+ journal
   screen_1_themes: JSON (not null)
   screen_2_biblical: JSON (not null)
   screen_3_observations: JSON (not null)
-  screen_4_suggestions: JSON (nullable)    // Legacy; not shown in current 3-screen UI
-  journal_count: integer (default: 10)
+  screen_4_suggestions: JSON (nullable)    // Legacy; not shown in current MirrorViewer UI
+  journal_count: integer (default: 7)
   focus_areas: text[] (nullable)           // User's selected focus areas (Day 1 flow)
   status: string (nullable)                // Generation status if tracked here
   reflection_focus: text (nullable)        // User's free-text reflection response
@@ -166,10 +166,10 @@ Stores AI-generated spiritual reflections. Covers both full mirrors (10+ journal
 ```
 
 **`mirror_type`:**
-- `'full'` — Standard mirror generated from 10+ journals
+- `'full'` — Standard mirror generated from 7+ journals
 - `'day_1'` — Mini-mirror generated from Day 1 onboarding (2 voice journals + spiritual place)
 
-**Mirror threshold:** 10 journals for full mirrors. Day 1 mini-mirrors use 2 journals.
+**Mirror threshold:** 7 journals for full mirrors. Day 1 mini-mirrors use 2 journals.
 
 **`screen_2_biblical` JSON shape (Day 1 mini-mirror):**
 ```json
@@ -556,7 +556,7 @@ CREATE POLICY "Users can access own audio"
 
 ### Mirror Lifecycle
 ```
-1. Generated when 10 journals available (full) or after Day 1 steps 2+3 (day_1)
+1. Generated when 7 journals available (full) or after Day 1 steps 2+3 (day_1)
 2. Persists indefinitely
 3. Can be viewed multiple times
 4. Associated journals remain linked
@@ -568,7 +568,7 @@ CREATE POLICY "Users can access own audio"
 
 ### Business Rules
 - A journal can belong to **at most one** Mirror (`mirror_id` nullable, set once)
-- A full Mirror is generated from **10** journals
+- A full Mirror is generated from **7** journals
 - Mirrors cannot be edited once generated (immutable after creation)
 - Users cannot delete individual journals (account deletion removes all)
 - Friend limit is **3 active friends** per user (enforced in service layer)
