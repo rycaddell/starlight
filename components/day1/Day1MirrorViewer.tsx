@@ -7,7 +7,6 @@ import {
   TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Keyboard, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { saveFocusAreas } from '../../lib/supabase/day1';
 import { ShareMirrorSheet } from '../mirror/ShareMirrorSheet';
@@ -175,11 +174,16 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
                   <View style={styles.heroOverlay} />
 
                   {/* Controls — share (owner only) + close on the right */}
-                  <View style={[styles.topNav, { top: insets.top + 14 }]}>
+                  <View style={[styles.topNav, { top: insets.top + 64 }]}>
                     <View style={styles.topNavRight}>
                       {isOwner && (
                         <TouchableOpacity style={styles.navButton} onPress={() => setShowShareSheet(true)}>
-                          <MaterialIcons name="ios-share" size={24} color={colors.text.white} />
+                          <View style={styles.shareButtonBg}>
+                            <Image
+                              source={require('../../assets/images/icons/Share.png')}
+                              style={styles.shareIcon}
+                            />
+                          </View>
                         </TouchableOpacity>
                       )}
                       <TouchableOpacity style={styles.navButton} onPress={onClose}>
@@ -208,6 +212,9 @@ export const Day1MirrorViewer: React.FC<Day1MirrorViewerProps> = ({
                   Each Mirror you make will help you pull out themes and insights into your life with God.
                 </Text>
               </View>
+
+              {/* Divider between intro and Mirror section */}
+              <View style={styles.sectionDivider} />
 
               {/* Mirror Section */}
               <View style={styles.mirrorSection}>
@@ -394,9 +401,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeIcon: {
-    width: 28,
-    height: 28,
+    width: 20,
+    height: 20,
     tintColor: colors.text.white,
+  },
+  shareButtonBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareIcon: {
+    width: 17,
+    height: 21,
+    tintColor: colors.text.white,
+    marginBottom: 2,
   },
   titleOverlay: {
     position: 'absolute',
@@ -405,7 +426,8 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   titleText: {
-    ...typography.heading.xl,
+    fontFamily: fontFamily.primary,
+    fontSize: 24,
     fontWeight: '900',
     color: colors.text.white,
     marginBottom: spacing.s,
@@ -422,6 +444,12 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.xxxl,
     gap: spacing.l,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
   greetingText: {
     ...typography.heading.l,

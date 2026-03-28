@@ -28,7 +28,7 @@ export const ONBOARDING_BACKGROUNDS = {
 } as const;
 
 // Product screenshot for Mirror feature (step 9 overlay)
-export const PRODUCT_SCREENSHOT = require('@/assets/onboarding/product-screenshot.png');
+export const PRODUCT_SCREENSHOT = require('@/assets/onboarding/product-screenshot.webp');
 
 // Sample journal entries for storytelling
 export const SAMPLE_JOURNAL_ENTRIES = {

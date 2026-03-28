@@ -238,7 +238,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       await supabaseSignOut();
-      // onAuthStateChange will fire with null session → resolveAppUser clears user state
+      // Force session clear in case onAuthStateChange doesn't fire (e.g. when
+      // the session was already missing server-side and signOut threw before
+      // Supabase could emit the SIGNED_OUT event).
+      setSession(null);
     } catch (error) {
       console.error('❌ AuthContext: Sign-out error:', error);
       Sentry.captureException(error, {

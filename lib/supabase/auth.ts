@@ -195,6 +195,14 @@ export const signOut = async (): Promise<{ success: boolean; error?: string }> =
     if (error) throw error;
     return { success: true };
   } catch (error: any) {
+    // AuthSessionMissingError means the session is already gone — treat as success.
+    // This happens when Supabase completes the server-side global sign-out (204)
+    // but throws during local cleanup because SecureStore was already cleared.
+    if (error?.name === 'AuthSessionMissingError') {
+      console.log('✅ Session already cleared (AuthSessionMissingError treated as success)');
+      return { success: true };
+    }
+
     console.error('Error signing out:', error);
     Sentry.captureException(error, {
       tags: { component: 'auth', action: 'signOut' },
