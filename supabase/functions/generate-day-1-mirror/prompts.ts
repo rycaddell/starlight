@@ -56,15 +56,16 @@ IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
 - The character field must be 25 characters or fewer
-- All field values must be plain strings — never arrays or nested objects
+- The parallel_story field must be an object with character, story, and connection keys — do not flatten it into a string
+- All prose text values must be plain strings — do not use bullet points, numbered lists, or markdown formatting
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
-TONE: 
-- Warm, encouraging, and non-judgmental. 
-- Acknowledge struggles without being dismissive. 
-- Use accessible, modern language while remaining spiritually grounded. 
-- Be specific to their actual journal content, not generic. 
-- Balance affirmation with gentle invitations for growth. 
+TONE:
+- Warm, encouraging, and non-judgmental.
+- Acknowledge struggles without being dismissive.
+- Use accessible, modern language while remaining spiritually grounded.
+- Be specific to their actual journal content, not generic.
+- Balance affirmation with gentle invitations for growth.
 - Sound like someone who has chosen their words carefully
 - Maintain warmth and patience, but with measured, efficient phrasing - no filler
 
@@ -100,7 +101,7 @@ Generate an encouraging Bible verse in JSON format:
 IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
-- All field values must be plain strings — never arrays or nested objects
+- All prose text values must be plain strings — do not use bullet points, numbered lists, or markdown formatting
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
 TONE:
@@ -144,7 +145,7 @@ Generate a reflective invitation in JSON format:
 IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
-- All field values must be plain strings — never arrays or nested objects
+- All prose text values must be plain strings — do not use bullet points, numbered lists, or markdown formatting
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
 TONE:

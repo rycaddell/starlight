@@ -424,11 +424,11 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
                   </View>
                 )}
 
-                {screen3Data?.blind_spots && (
+                {screen3Data?.growth_areas && (
                   <View style={styles.observationCard}>
                     <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
                     <Text style={styles.observationText}>
-                      {sanitizeText(screen3Data.blind_spots.observation)}
+                      {sanitizeText(screen3Data.growth_areas.observation)}
                     </Text>
                   </View>
                 )}

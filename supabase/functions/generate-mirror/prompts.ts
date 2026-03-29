@@ -75,7 +75,10 @@ REQUIREMENTS:
 - Use actual journal dates in frequency references
 - Observations only - no recommendations or growth edges
 - Omit observation sections if no clear evidence
-- All field values must be plain strings — never arrays or nested objects
+- The themes field must be an array of objects — do not flatten it into a string
+- The parallel_story field must be an object with character, story, and connection keys
+- Each observation sub-field (self_perception, god_perception, etc.) must be an object with a single observation key
+- All prose text values must be plain strings — do not use bullet points, numbered lists, or markdown formatting
 - The character field must be 25 characters or fewer
 
 TONE: 
