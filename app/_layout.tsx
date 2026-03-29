@@ -11,6 +11,7 @@ import * as Notifications from 'expo-notifications';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
+import { RealtimeProvider } from '../contexts/RealtimeContext';
 import { OnboardingProvider } from '../contexts/OnboardingContext'; // This will use the placeholder
 import { UnreadSharesProvider } from '../contexts/UnreadSharesContext';
 import { FriendBadgeProvider } from '../contexts/FriendBadgeContext';
@@ -191,32 +192,34 @@ function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <UnreadSharesProvider>
-          <FriendBadgeProvider>
-            <OnboardingProvider>
-              <GlobalSettingsProvider>
-                <AppFocusTracker />
-                <PushPermissionReconciler />
-                <LinkRunnerHandler />
-                <AuthNavigator>
-                  <Stack>
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                    <Stack.Screen
-                      name="friend-invite/[token]"
-                      options={{
-                        headerShown: true,
-                        title: 'Friend Invite',
-                        presentation: 'modal',
-                      }}
-                    />
-                    <Stack.Screen name="+not-found" />
-                  </Stack>
-                </AuthNavigator>
-                <StatusBar style="auto" />
-              </GlobalSettingsProvider>
-            </OnboardingProvider>
-          </FriendBadgeProvider>
-        </UnreadSharesProvider>
+        <RealtimeProvider>
+          <UnreadSharesProvider>
+            <FriendBadgeProvider>
+              <OnboardingProvider>
+                <GlobalSettingsProvider>
+                  <AppFocusTracker />
+                  <PushPermissionReconciler />
+                  <LinkRunnerHandler />
+                  <AuthNavigator>
+                    <Stack>
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      <Stack.Screen
+                        name="friend-invite/[token]"
+                        options={{
+                          headerShown: true,
+                          title: 'Friend Invite',
+                          presentation: 'modal',
+                        }}
+                      />
+                      <Stack.Screen name="+not-found" />
+                    </Stack>
+                  </AuthNavigator>
+                  <StatusBar style="auto" />
+                </GlobalSettingsProvider>
+              </OnboardingProvider>
+            </FriendBadgeProvider>
+          </UnreadSharesProvider>
+        </RealtimeProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

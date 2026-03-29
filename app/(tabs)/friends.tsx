@@ -22,6 +22,7 @@ import * as Sentry from '@sentry/react-native';
 import { track, Events } from '../../lib/analytics';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRealtime } from '@/contexts/RealtimeContext';
 import { useUnreadShares } from '@/contexts/UnreadSharesContext';
 import { useFriendBadge } from '@/contexts/FriendBadgeContext';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
@@ -38,7 +39,6 @@ import { MirrorViewer } from '@/components/mirror/MirrorViewer';
 import { Day1MirrorViewer } from '@/components/day1/Day1MirrorViewer';
 import { NotificationPitchCard } from '@/components/friends/NotificationPitchCard';
 import { AddProfilePicCard } from '@/components/friends/AddProfilePicCard';
-import { supabase } from '@/lib/supabase/client';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { useNewFriendTracking } from '@/hooks/useNewFriendTracking';
@@ -50,6 +50,7 @@ const FRIEND_EMPTY_STATE_BG = require('@/assets/friends/friend-empty-state.jpg')
 function FriendsScreen() {
   const router = useRouter();
   const { user, refreshUser } = useAuth();
+  const { registerMirrorShareHandler } = useRealtime();
   const { refreshUnreadCount } = useUnreadShares();
   const { markFriendsAsViewed, refreshNewFriendsCount } = useFriendBadge();
   const { permissionStatus, requestPermissionAndRegister } = usePushNotifications(user?.id || null);
@@ -124,51 +125,28 @@ function FriendsScreen() {
     }, [markFriendsAsViewed, dismissAllNewFriends, loadData])
   );
 
-  // Realtime subscription for incoming mirror shares
+  // Register mirror_shares handler via shared RealtimeContext channel
   useEffect(() => {
-    if (!user?.id || !supabase) return;
-
-    let isMounted = true;
+    if (!user?.id) return;
 
     if (__DEV__) {
-      console.log('📡 [FriendsScreen] Setting up mirror_shares subscription');
+      console.log('📡 [FriendsScreen] Registering mirror_shares Realtime handler');
     }
 
-    const sharesSubscription = supabase
-      .channel(`friends_screen_shares:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'mirror_shares',
-          filter: `recipient_user_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [FriendsScreen] Mirror share change:', payload.eventType);
-          }
-
-          // Reload shares list from database
-          loadData();
-        }
-      )
-      .subscribe((status) => {
-        if (__DEV__ && status === 'SUBSCRIBED') {
-          console.log('✅ [FriendsScreen] Connected to mirror_shares Realtime');
-        }
-      });
+    const unregister = registerMirrorShareHandler((payload) => {
+      if (__DEV__) {
+        console.log('✨ [FriendsScreen] Mirror share change:', payload.eventType);
+      }
+      loadData();
+    });
 
     return () => {
-      isMounted = false;
       if (__DEV__) {
-        console.log('🔌 [FriendsScreen] Cleaning up mirror_shares subscription');
+        console.log('🔌 [FriendsScreen] Unregistering mirror_shares Realtime handler');
       }
-      sharesSubscription.unsubscribe();
+      unregister();
     };
-  }, [user?.id, loadData]);
+  }, [user?.id, registerMirrorShareHandler, loadData]);
 
 
   // Track new friends - mark friends as "new" if they were linked within the last 5 seconds

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Alert, AppState, AppStateStatus } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { useAuth } from '../contexts/AuthContext';
+import { useRealtime } from '../contexts/RealtimeContext';
 import {
   getUserJournals,
   getUserJournalCount,
@@ -10,7 +11,6 @@ import {
   checkCanGenerateMirror,
 } from '../lib/supabase';
 import { markMirrorAsViewed, getMirrorById } from '../lib/supabase/mirrors';
-import { supabase } from '../lib/supabase/client';
 import { MIRROR_THRESHOLD, getMirrorThreshold } from '../lib/config/constants';
 import { track, Events } from '../lib/analytics';
 
@@ -18,6 +18,7 @@ type MirrorState = 'progress' | 'ready' | 'generating' | 'completed' | 'viewing'
 
 export const useMirrorData = () => {
   const { user, isAuthenticated } = useAuth();
+  const { registerMirrorGenerationHandler } = useRealtime();
   const [journals, setJournals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [journalCount, setJournalCount] = useState(0);
@@ -27,8 +28,9 @@ export const useMirrorData = () => {
 
   const [hasViewedCurrentMirror, setHasViewedCurrentMirror] = useState(false);
 
-  // Realtime subscription control
-  const realtimeChannelRef = useRef<any>(null);
+  // Tracks whether a mirror generation Realtime handler is currently registered.
+  // Holds the unregister function while active, null otherwise.
+  const unregisterMirrorHandlerRef = useRef<(() => void) | null>(null);
   const generationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvedRef = useRef(false);
   const appState = useRef(AppState.currentState);
@@ -110,16 +112,16 @@ export const useMirrorData = () => {
       clearTimeout(generationTimeoutRef.current);
       generationTimeoutRef.current = null;
     }
-    if (realtimeChannelRef.current && supabase) {
-      supabase.removeChannel(realtimeChannelRef.current);
-      realtimeChannelRef.current = null;
+    if (unregisterMirrorHandlerRef.current) {
+      unregisterMirrorHandlerRef.current();
+      unregisterMirrorHandlerRef.current = null;
     }
   };
 
   // notBefore: unix ms timestamp — ignore completed requests older than this.
   // Prevents a previous generation's completed request from triggering an early false resolution.
   const subscribeForMirrorCompletion = (notBefore = 0) => {
-    if (!user || !supabase || realtimeChannelRef.current) return;
+    if (!user || unregisterMirrorHandlerRef.current) return;
 
     resolvedRef.current = false;
 
@@ -127,7 +129,7 @@ export const useMirrorData = () => {
       if (resolvedRef.current) return;
       resolvedRef.current = true;
 
-      // Defer channel removal so we're not removing the channel from within its own callback
+      // Defer handler removal so we're not unregistering from within its own callback
       setTimeout(() => stopWaiting(), 0);
 
       if (status === 'completed' && mirrorId) {
@@ -180,55 +182,37 @@ export const useMirrorData = () => {
       }
     };
 
-    const channel = supabase
-      .channel(`mirror-generation-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'mirror_generation_requests',
-          filter: `custom_user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const { status, mirror_id, error_message } = payload.new as {
-            status: string;
-            mirror_id: string | null;
-            error_message: string | null;
-          };
-          if (status === 'completed' || status === 'failed') {
-            onResolved(status, mirror_id, error_message);
-          }
-        }
-      )
-      .subscribe(async (subStatus) => {
-        if (subStatus !== 'SUBSCRIBED' || !supabase) return;
-        // Immediate check: generation may have finished before subscription connected.
-        // Only resolve if this is the CURRENT generation (requested after notBefore),
-        // not a previously-completed request from an earlier session.
-        const statusResult = await checkMirrorGenerationStatus(user.id);
-        if (statusResult.success) {
-          const { status, mirror, requestedAt } = statusResult;
-          const requestTime = requestedAt ? new Date(requestedAt).getTime() : 0;
-          const isCurrentGeneration = requestTime >= notBefore;
-          if (status === 'completed' && mirror && isCurrentGeneration) {
-            onResolved('completed', mirror.id, null);
-          } else if (status === 'failed' && isCurrentGeneration) {
-            onResolved('failed', null, statusResult.error ?? null);
-          }
-        }
-      });
+    // Register handler on the shared RealtimeContext channel
+    unregisterMirrorHandlerRef.current = registerMirrorGenerationHandler((payload) => {
+      const { status, mirror_id, error_message } = payload.new as {
+        status: string;
+        mirror_id: string | null;
+        error_message: string | null;
+      };
+      if (status === 'completed' || status === 'failed') {
+        onResolved(status, mirror_id, error_message);
+      }
+    });
 
-    realtimeChannelRef.current = channel;
+    // Immediate check: the shared channel is already subscribed, so run the catch-up check now.
+    // Guards against the generation completing before this handler was registered.
+    (async () => {
+      const statusResult = await checkMirrorGenerationStatus(user.id);
+      if (statusResult.success) {
+        const { status, mirror, requestedAt } = statusResult;
+        const requestTime = requestedAt ? new Date(requestedAt).getTime() : 0;
+        const isCurrentGeneration = requestTime >= notBefore;
+        if (status === 'completed' && mirror && isCurrentGeneration) {
+          onResolved('completed', mirror.id, null);
+        } else if (status === 'failed' && isCurrentGeneration) {
+          onResolved('failed', null, statusResult.error ?? null);
+        }
+      }
+    })();
 
     // 4-minute safety net: if Realtime doesn't deliver an update, poll once then give up
     generationTimeoutRef.current = setTimeout(async () => {
       if (resolvedRef.current) return;
-      if (!supabase) {
-        setMirrorState('ready');
-        setGenerationStartTime(null);
-        return;
-      }
       const statusResult = await checkMirrorGenerationStatus(user.id);
       if (statusResult.success && statusResult.status === 'completed' && statusResult.mirror) {
         onResolved('completed', statusResult.mirror.id, null);
@@ -304,11 +288,11 @@ export const useMirrorData = () => {
               setGenerationStartTime(requestTime);
             }
 
-            if (!realtimeChannelRef.current) {
+            if (!unregisterMirrorHandlerRef.current) {
               subscribeForMirrorCompletion(notBefore);
             }
           } else {
-            if (!realtimeChannelRef.current) {
+            if (!unregisterMirrorHandlerRef.current) {
               subscribeForMirrorCompletion(notBefore);
             }
           }
@@ -321,7 +305,7 @@ export const useMirrorData = () => {
         } else {
           // status === 'none'
           if (currentState === 'generating') {
-            if (!realtimeChannelRef.current) {
+            if (!unregisterMirrorHandlerRef.current) {
               subscribeForMirrorCompletion();
             }
           }
@@ -350,7 +334,7 @@ export const useMirrorData = () => {
           checkGenerationStatusOnFocus();
 
           const currentState = mirrorStateRef.current;
-          if (!realtimeChannelRef.current && currentState === 'generating') {
+          if (!unregisterMirrorHandlerRef.current && currentState === 'generating') {
             subscribeForMirrorCompletion();
           }
         }
@@ -443,7 +427,7 @@ export const useMirrorData = () => {
 
         if (msg.includes('Network request failed') || msg.includes('Network request')) {
           // Keep the subscription alive — edge function may have succeeded server-side
-          if (!realtimeChannelRef.current) {
+          if (!unregisterMirrorHandlerRef.current) {
             subscribeForMirrorCompletion();
           }
           return;
@@ -498,7 +482,7 @@ export const useMirrorData = () => {
 
       if (msg.includes('Network request failed') || msg.includes('Network request')) {
         // Keep the subscription alive — edge function may have succeeded server-side
-        if (!realtimeChannelRef.current) {
+        if (!unregisterMirrorHandlerRef.current) {
           subscribeForMirrorCompletion();
         }
         return;

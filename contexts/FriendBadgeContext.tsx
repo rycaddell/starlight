@@ -6,6 +6,7 @@ import { AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { useAuth } from './AuthContext';
+import { useRealtime } from './RealtimeContext';
 import { supabase } from '@/lib/supabase/client';
 
 const LAST_VIEWED_KEY = 'friend_screen_last_viewed';
@@ -24,6 +25,7 @@ const FriendBadgeContext = createContext<FriendBadgeContextType>({
 
 export function FriendBadgeProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { registerFriendLinkHandler } = useRealtime();
   const [newFriendsCount, setNewFriendsCount] = useState(0);
 
   const refreshNewFriendsCount = useCallback(async () => {
@@ -93,116 +95,28 @@ export function FriendBadgeProvider({ children }: { children: React.ReactNode })
     refreshNewFriendsCount();
   }, [refreshNewFriendsCount]);
 
-  // Realtime subscription for friend_links changes
-  // Need two subscriptions because Realtime doesn't support OR filters
+  // Register friend_links handler via shared RealtimeContext channel
   useEffect(() => {
-    if (!user?.id || !supabase) return;
-
-    let isMounted = true;
+    if (!user?.id) return;
 
     if (__DEV__) {
-      console.log('📡 [FriendBadge] Setting up Realtime subscriptions');
+      console.log('📡 [FriendBadge] Registering Realtime handler');
     }
 
-    // Subscription 1: When user is user_a
-    const subscriptionA = supabase
-      .channel(`friend_links_a:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friend_links',
-          filter: `user_a_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [FriendBadge] New friend link detected (user_a)');
-          }
-
-          // Refresh count from database for accuracy
-          refreshNewFriendsCount();
-        }
-      )
-      .subscribe((status, err) => {
-        if (__DEV__) {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ [FriendBadge] Connected to Realtime (user_a subscription)');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [FriendBadge] Realtime error (user_a):', err);
-
-            // Capture Realtime error
-            Sentry.captureException(new Error('Realtime subscription error (user_a)'), {
-              tags: { component: 'FriendBadgeContext', action: 'realtime' },
-              contexts: {
-                realtime: {
-                  userId: user.id,
-                  subscription: 'user_a',
-                  status,
-                  error: err?.message || String(err),
-                },
-              },
-            });
-          }
-        }
-      });
-
-    // Subscription 2: When user is user_b
-    const subscriptionB = supabase
-      .channel(`friend_links_b:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'friend_links',
-          filter: `user_b_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [FriendBadge] New friend link detected (user_b)');
-          }
-
-          // Refresh count from database for accuracy
-          refreshNewFriendsCount();
-        }
-      )
-      .subscribe((status, err) => {
-        if (__DEV__) {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ [FriendBadge] Connected to Realtime (user_b subscription)');
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [FriendBadge] Realtime error (user_b):', err);
-
-            // Capture Realtime error
-            Sentry.captureException(new Error('Realtime subscription error (user_b)'), {
-              tags: { component: 'FriendBadgeContext', action: 'realtime' },
-              contexts: {
-                realtime: {
-                  userId: user.id,
-                  subscription: 'user_b',
-                  status,
-                  error: err?.message || String(err),
-                },
-              },
-            });
-          }
-        }
-      });
+    const unregister = registerFriendLinkHandler(() => {
+      if (__DEV__) {
+        console.log('✨ [FriendBadge] New friend link detected');
+      }
+      refreshNewFriendsCount();
+    });
 
     return () => {
-      isMounted = false;
       if (__DEV__) {
-        console.log('🔌 [FriendBadge] Cleaning up Realtime subscriptions');
+        console.log('🔌 [FriendBadge] Unregistering Realtime handler');
       }
-      subscriptionA.unsubscribe();
-      subscriptionB.unsubscribe();
+      unregister();
     };
-  }, [user?.id, refreshNewFriendsCount]);
+  }, [user?.id, registerFriendLinkHandler, refreshNewFriendsCount]);
 
   // App state listener - refresh when app comes to foreground
   useEffect(() => {

@@ -1,12 +1,12 @@
 // contexts/UnreadSharesContext.tsx
 // Global context for tracking unread mirror shares count
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { AppState } from 'react-native';
 import * as Sentry from '@sentry/react-native';
 import { useAuth } from './AuthContext';
 import { getUnviewedSharesCount } from '@/lib/supabase/mirrorShares';
-import { supabase } from '@/lib/supabase/client';
+import { useRealtime } from './RealtimeContext';
 
 interface UnreadSharesContextType {
   unreadCount: number;
@@ -20,6 +20,7 @@ const UnreadSharesContext = createContext<UnreadSharesContextType>({
 
 export function UnreadSharesProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
+  const { registerMirrorShareHandler, isSubscribed } = useRealtime();
   const [unreadCount, setUnreadCount] = useState(0);
 
   const refreshUnreadCount = useCallback(async () => {
@@ -53,82 +54,38 @@ export function UnreadSharesProvider({ children }: { children: React.ReactNode }
     refreshUnreadCount();
   }, [refreshUnreadCount]);
 
-  // Realtime subscription for mirror_shares changes
+  // Refresh once when the shared Realtime channel connects (catches events missed during connect)
   useEffect(() => {
-    if (!user?.id || !supabase) return;
+    if (isSubscribed && user?.id) {
+      if (__DEV__) {
+        console.log('✅ [UnreadShares] Channel connected — refreshing count');
+      }
+      refreshUnreadCount();
+    }
+  }, [isSubscribed]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    let isMounted = true;
+  // Register mirror_shares handler via shared RealtimeContext channel
+  useEffect(() => {
+    if (!user?.id) return;
 
     if (__DEV__) {
-      console.log('📡 [UnreadShares] Setting up Realtime subscription');
+      console.log('📡 [UnreadShares] Registering Realtime handler');
     }
 
-    const subscription = supabase
-      .channel(`mirror_shares:${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
-          schema: 'public',
-          table: 'mirror_shares',
-          filter: `recipient_user_id=eq.${user.id}`
-        },
-        (payload) => {
-          if (!isMounted) return;
-
-          if (__DEV__) {
-            console.log('✨ [UnreadShares] Change detected:', payload.eventType);
-          }
-
-          // Option B: Always fetch from database for accuracy
-          refreshUnreadCount();
-        }
-      )
-      .subscribe((status, err) => {
-        if (__DEV__) {
-          if (status === 'SUBSCRIBED') {
-            console.log('✅ [UnreadShares] Connected to Realtime');
-            // Refresh to catch any events that happened during connection
-            if (isMounted) refreshUnreadCount();
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error('❌ [UnreadShares] Realtime error:', err);
-
-            // Capture Realtime error
-            Sentry.captureException(new Error('Realtime subscription error'), {
-              tags: { component: 'UnreadSharesContext', action: 'realtime' },
-              contexts: {
-                realtime: {
-                  userId: user.id,
-                  status,
-                  error: err?.message || String(err),
-                },
-              },
-            });
-          } else if (status === 'TIMED_OUT') {
-            console.warn('⏱️ [UnreadShares] Realtime timeout');
-
-            // Capture timeout
-            Sentry.captureException(new Error('Realtime subscription timeout'), {
-              tags: { component: 'UnreadSharesContext', action: 'realtime' },
-              contexts: {
-                realtime: {
-                  userId: user.id,
-                  status,
-                },
-              },
-            });
-          }
-        }
-      });
+    const unregister = registerMirrorShareHandler((payload) => {
+      if (__DEV__) {
+        console.log('✨ [UnreadShares] Change detected:', payload.eventType);
+      }
+      refreshUnreadCount();
+    });
 
     return () => {
-      isMounted = false;
       if (__DEV__) {
-        console.log('🔌 [UnreadShares] Cleaning up Realtime subscription');
+        console.log('🔌 [UnreadShares] Unregistering Realtime handler');
       }
-      subscription.unsubscribe();
+      unregister();
     };
-  }, [user?.id, refreshUnreadCount]);
+  }, [user?.id, registerMirrorShareHandler, refreshUnreadCount]);
 
   // App state listener - refresh when app comes to foreground
   useEffect(() => {
