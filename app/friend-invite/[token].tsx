@@ -27,6 +27,7 @@ export default function AcceptInviteScreen() {
   const [loading, setLoading] = useState(false);
   const [accepting, setAccepting] = useState(false);
   const [inviterProfilePicUrl, setInviterProfilePicUrl] = useState<string | null>(null);
+  const [inviteValid, setInviteValid] = useState<boolean | null>(null); // null = still checking
 
   // Decode name from URL
   const inviterName = typeof name === 'string' ? decodeURIComponent(name) : 'A friend';
@@ -47,15 +48,23 @@ export default function AcceptInviteScreen() {
     }
   }, [user, router]);
 
-  // Fetch inviter profile picture
+  // Validate invite and fetch inviter profile picture
   useEffect(() => {
     const loadInviterInfo = async () => {
-      if (typeof token !== 'string') return;
+      if (typeof token !== 'string') {
+        router.replace('/');
+        return;
+      }
 
       const result = await getInviterInfo(token);
-      if (result.success && result.inviterProfilePicUrl) {
-        setInviterProfilePicUrl(result.inviterProfilePicUrl);
+      if (!result.success) {
+        // Invite already accepted, declined, expired, or invalid — navigate away silently
+        router.replace('/');
+        return;
       }
+
+      setInviterProfilePicUrl(result.inviterProfilePicUrl ?? null);
+      setInviteValid(true);
     };
 
     loadInviterInfo();
@@ -153,7 +162,7 @@ export default function AcceptInviteScreen() {
     );
   };
 
-  if (!user) {
+  if (!user || inviteValid === null) {
     return (
       <SafeAreaView style={styles.container}>
         <ActivityIndicator size="large" color={colors.text.primary} />

@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import * as Sentry from '@sentry/react-native';
 import { useEffect, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, AppStateStatus } from 'react-native';
 import * as Notifications from 'expo-notifications';
 
@@ -151,6 +152,11 @@ function LinkRunnerHandler() {
         const inviterName = url.searchParams.get('name') ?? '';
 
         if (!token) return;
+
+        const seenKey = `@oxbow:seen_invite_${token}`;
+        const alreadySeen = await AsyncStorage.getItem(seenKey);
+        if (alreadySeen) return;
+        await AsyncStorage.setItem(seenKey, 'true');
 
         if (user?.id) {
           router.push(`/friend-invite/${token}?inviter=${inviterId}&name=${encodeURIComponent(inviterName)}`);
