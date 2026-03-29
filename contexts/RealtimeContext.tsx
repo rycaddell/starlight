@@ -49,6 +49,8 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       console.log('📡 [Realtime] Opening unified channel for user:', userId);
     }
 
+    let hasSentError = false;
+
     const channel = supabase
       .channel(`user:${userId}`)
       // friend_links — two separate filters because Realtime doesn't support OR
@@ -76,6 +78,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       )
       .subscribe((status, err) => {
         if (status === 'SUBSCRIBED') {
+          hasSentError = false; // reset on successful reconnect
           setIsSubscribed(true);
           if (__DEV__) {
             console.log('✅ [Realtime] Unified channel subscribed');
@@ -85,16 +88,20 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
           if (__DEV__) {
             console.error('❌ [Realtime] Channel error:', err);
           }
-          Sentry.captureException(new Error('Realtime unified channel error'), {
-            tags: { component: 'RealtimeContext', action: 'subscribe' },
-            contexts: {
-              realtime: {
-                userId,
-                status,
-                error: err?.message || String(err),
+          // Only report once per channel lifecycle — avoids Sentry spam during offline periods
+          if (!hasSentError) {
+            hasSentError = true;
+            Sentry.captureException(new Error('Realtime unified channel error'), {
+              tags: { component: 'RealtimeContext', action: 'subscribe' },
+              contexts: {
+                realtime: {
+                  userId,
+                  status,
+                  error: err?.message || String(err),
+                },
               },
-            },
-          });
+            });
+          }
         } else if (status === 'TIMED_OUT') {
           setIsSubscribed(false);
           if (__DEV__) {
