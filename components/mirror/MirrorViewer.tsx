@@ -40,8 +40,8 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
 
 
   // Sanitize AI-generated text to fix iOS rendering issues with special Unicode characters
-  const sanitizeText = (text: string) => {
-    if (!text) return text;
+  const sanitizeText = (text: unknown): string => {
+    if (typeof text !== 'string' || !text) return '';
     return text
       .replace(/['']/g, "'")      // Curly single quotes
       .replace(/[""]/g, '"')      // Curly double quotes
@@ -328,7 +328,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
               <View key={index} style={styles.themeCard}>
                 <Text style={styles.themeName}>{sanitizeText(theme.name)}</Text>
                 <Text style={styles.themeDescription}>{sanitizeText(theme.description)}</Text>
-                {theme.frequency && (() => {
+                {theme.frequency && typeof theme.frequency === 'string' && (() => {
                   const frequencyText = theme.frequency;
                   // Strip out any variation of "Present in journals" from the AI response
                   const cleanedText = frequencyText

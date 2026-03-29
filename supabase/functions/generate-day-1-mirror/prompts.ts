@@ -56,6 +56,7 @@ IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
 - The character field must be 25 characters or fewer
+- All field values must be plain strings — never arrays or nested objects
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
 TONE: 
@@ -92,21 +93,22 @@ Generate an encouraging Bible verse in JSON format:
   "encouraging_verse": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "application": "How this verse speaks to their specific situation. Reference ${spiritualPlace} if relevant."
+    "application": "A single paragraph string explaining how this verse speaks to their specific situation. Reference ${spiritualPlace} if relevant. Must be a string, not an array."
   }
 }
 
 IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
+- All field values must be plain strings — never arrays or nested objects
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
 TONE:
-- Warm, encouraging, and non-judgmental. 
-- Acknowledge struggles without being dismissive. 
-- Use accessible, modern language while remaining spiritually grounded. 
-- Be specific to their actual journal content, not generic. 
-- Balance affirmation with gentle invitations for growth. 
+- Warm, encouraging, and non-judgmental.
+- Acknowledge struggles without being dismissive.
+- Use accessible, modern language while remaining spiritually grounded.
+- Be specific to their actual journal content, not generic.
+- Balance affirmation with gentle invitations for growth.
 - Sound like someone who has chosen their words carefully
 - Maintain warmth and patience, but with measured, efficient phrasing - no filler
 
@@ -135,21 +137,22 @@ Generate a reflective invitation in JSON format:
   "invitation_to_growth": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "invitation": "Gentle invitation for deeper reflection. Not prescriptive, but exploratory."
+    "invitation": "A single paragraph string with a gentle invitation for deeper reflection. Not prescriptive, but exploratory. Must be a string, not an array."
   }
 }
 
 IMPORTANT REQUIREMENTS:
 - Be specific to their actual answers, not generic
 - Keep summaries to 10-12 words maximum each
+- All field values must be plain strings — never arrays or nested objects
 - Use standard JSON encoding — apostrophes and single quotes do not need escaping
 
 TONE:
-- Warm, encouraging, and non-judgmental. 
-- Acknowledge struggles without being dismissive. 
-- Use accessible, modern language while remaining spiritually grounded. 
-- Be specific to their actual journal content, not generic. 
-- Balance affirmation with gentle invitations for growth. 
+- Warm, encouraging, and non-judgmental.
+- Acknowledge struggles without being dismissive.
+- Use accessible, modern language while remaining spiritually grounded.
+- Be specific to their actual journal content, not generic.
+- Balance affirmation with gentle invitations for growth.
 - Sound like someone who has chosen their words carefully
 - Maintain warmth and patience, but with measured, efficient phrasing - no filler
 

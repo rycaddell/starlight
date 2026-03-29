@@ -75,7 +75,7 @@ REQUIREMENTS:
 - Use actual journal dates in frequency references
 - Observations only - no recommendations or growth edges
 - Omit observation sections if no clear evidence
-- Properly formatted JSON strings
+- All field values must be plain strings — never arrays or nested objects
 - The character field must be 25 characters or fewer
 
 TONE: 
@@ -105,7 +105,7 @@ Generate an encouraging Bible verse and application in JSON format:
   "encouraging_verse": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "application": "How this verse speaks to their specific situation"
+    "application": "How this verse speaks to their specific situation. Must be a plain string, not an array."
   }
 }
 
@@ -142,7 +142,7 @@ Generate a reflective invitation in JSON format:
   "invitation_to_growth": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "invitation": "A brief reflection and 1-2 open questions that point the user toward God."
+    "invitation": "A brief reflection and 1-2 open questions that point the user toward God. Must be a plain string, not an array."
   }
 }
 

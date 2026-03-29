@@ -34,8 +34,8 @@ const SPIRITUAL_PLACE_IMAGES: { [key: string]: any } = {
   'Celebrating': require('../../assets/images/spiritual-places/celebrating.jpg'),
 };
 
-const sanitizeText = (text: string) => {
-  if (!text) return text;
+const sanitizeText = (text: unknown): string => {
+  if (typeof text !== 'string' || !text) return '';
   return text
     .replace(/['']/g, "'")
     .replace(/[""]/g, '"')
