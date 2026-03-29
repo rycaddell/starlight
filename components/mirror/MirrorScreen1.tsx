@@ -8,7 +8,7 @@ interface MirrorScreen1Props {
 
 export const MirrorScreen1: React.FC<MirrorScreen1Props> = ({ data }) => {
   // Limit to 4 themes
-  const limitedThemes = data.themes ? data.themes.slice(0, 4) : [];
+  const limitedThemes = Array.isArray(data.themes) ? data.themes.slice(0, 4) : [];
 
   return (
     <View style={styles.screenContent}>

@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4'
 import { generateCorePrompt, generateEncouragingVersePrompt, generateInvitationToGrowthPrompt } from './prompts.ts'
 
-const MIRROR_THRESHOLD = 10; // Minimum journals needed for Mirror generation
+const MIRROR_THRESHOLD = 7; // Minimum journals needed for Mirror generation
 const GENERATION_TIMEOUT_MS = 240000; // 4 minutes
 
 // CORS headers for client requests

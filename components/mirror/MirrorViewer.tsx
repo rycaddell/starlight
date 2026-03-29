@@ -194,7 +194,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const screen1Data = mirrorContent.screen_1_themes || mirrorContent.screen1_themes;
   const screen2Data = mirrorContent.screen_2_biblical || mirrorContent.screen2_biblical;
   const screen3Data = mirrorContent.screen_3_observations || mirrorContent.screen3_observations;
-  const limitedThemes = screen1Data?.themes ? screen1Data.themes.slice(0, 4) : [];
+  const limitedThemes = Array.isArray(screen1Data?.themes) ? screen1Data.themes.slice(0, 4) : [];
 
   const renderTabItems = () =>
     (['Mirror', 'Themes', 'Observations', 'Reflection'] as TabName[]).map((tab) => (
