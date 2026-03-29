@@ -6,10 +6,10 @@ import {
   View, Text, Image, ImageBackground, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getMirrorById } from '../../lib/supabase/mirrors';
 import { saveFocusAreas, updateFocusTheme } from '../../lib/supabase/day1';
+import { ShareMirrorSheet } from '../mirror/ShareMirrorSheet';
 import { supabase } from '../../lib/supabase/client';
 import { colors, typography, spacing, borderRadius, fontFamily } from '../../theme/designTokens';
 
@@ -63,6 +63,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
   const [mirrorCreatedAt, setMirrorCreatedAt] = useState<string | null>(null);
   const [focusAreasText, setFocusAreasText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showShareSheet, setShowShareSheet] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
   const inputRef = useRef<TextInput>(null);
@@ -187,13 +188,16 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
             <View style={styles.heroOverlay} />
 
             {/* Controls — share + close grouped on the right */}
-            <View style={[styles.topNav, { top: insets.top + 14 }]}>
+            <View style={[styles.topNav, { top: insets.top + 64 }]}>
               <View style={styles.topNavRight}>
-                {onShare && (
-                  <TouchableOpacity style={styles.navButton} onPress={onShare}>
-                    <MaterialIcons name="ios-share" size={26} color={colors.text.white} />
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity style={styles.navButton} onPress={() => setShowShareSheet(true)}>
+                  <View style={styles.shareButtonBg}>
+                    <Image
+                      source={require('../../assets/images/icons/Share.png')}
+                      style={styles.shareIcon}
+                    />
+                  </View>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.navButton} onPress={onClose}>
                   <Image
                     source={require('../../assets/images/icons/Close.png')}
@@ -205,7 +209,7 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
 
             {/* Title and Date */}
             <View style={[styles.titleOverlay, { top: insets.top + 112 }]}>
-              <Text style={styles.titleText}>{sanitizeText(getTitle())}</Text>
+              <Text style={styles.titleText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{sanitizeText(getTitle())}</Text>
               <Text style={styles.dateText}>{formatDate()}</Text>
             </View>
           </ImageBackground>
@@ -222,6 +226,9 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
             Each Mirror you make will help you pull out themes and insights into your life with God.
           </Text>
         </View>
+
+        {/* Divider between intro and Mirror section */}
+        <View style={styles.sectionDivider} />
 
         {/* Mirror Section */}
         <View style={styles.mirrorSection}>
@@ -327,6 +334,14 @@ export const Step5MiniMirror: React.FC<Step5MiniMirrorProps> = ({
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <ShareMirrorSheet
+        visible={showShareSheet}
+        onClose={() => setShowShareSheet(false)}
+        userId={userId}
+        mirrorId={mirrorId}
+        onShareSuccess={() => {}}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -393,13 +408,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeIcon: {
-    width: 28,
-    height: 28,
+    width: 20,
+    height: 20,
     tintColor: colors.text.white,
+  },
+  shareButtonBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareIcon: {
+    width: 17,
+    height: 21,
+    tintColor: colors.text.white,
+    marginBottom: 2,
   },
   titleOverlay: {
     position: 'absolute',
     left: spacing.xl,
+    right: spacing.xl,
     zIndex: 2,
   },
   titleText: {
@@ -413,6 +443,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '400',
     color: '#F6F6F6',
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.xxxl,
   },
   // Welcome
   welcomeSection: {

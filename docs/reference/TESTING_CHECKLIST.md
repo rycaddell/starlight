@@ -1,7 +1,7 @@
 # Oxbow - Manual Testing Checklist
-## Pre-Release Testing Plan for Friends & Mirror Sharing
+## Pre-Release Testing Plan — v1.0.3
 
-**Version:** Friends & Sharing MVP
+**Version:** 1.0.3 (Mirror Share v2 + Push Notifications + Bulletproof Pipeline)
 **Test Date:** _____________
 **Tester:** _____________
 **Platform:** ☐ iOS  ☐ Android
@@ -9,13 +9,28 @@
 
 ---
 
+## User Type Matrix
+
+Test these distinct user profiles — each has a different starting state and different risk areas:
+
+| Type | Description | Key Risks |
+|------|-------------|-----------|
+| **Brand New** | First install, no account | Onboarding flow, phone OTP, Day 1 |
+| **New (Post-Day 1)** | Day 1 complete, < 7 journals | Mirror threshold, notification pitch card |
+| **Active** | 7+ journals, has mirrors | Mirror generation, mirror viewing, crash guards |
+| **Social** | Has friends, shared mirrors | Realtime badge, ShareMirrorSheet, invite link fix |
+| **Returning** | Closed & reopened app | Auto sign-in, session restore, last_opened_at |
+| **Invite Recipient** | Tapping a friend invite link | Universal link routing, existing vs new user |
+
+---
+
 ## ✅ Test Environment Setup
 
 **Before You Start:**
-- [ ] App installed via TestFlight/Internal Testing (not Expo Go)
+- [ ] App installed via TestFlight (not Expo Go)
 - [ ] Fresh install OR clear app data for clean state testing
 - [ ] Two test devices available for Friends features
-- [ ] Access codes ready for both test accounts
+- [ ] Phone numbers ready for both test accounts (phone OTP auth)
 - [ ] Stable internet connection
 - [ ] Note device model and OS version
 
@@ -23,22 +38,25 @@
 
 ## 1. Authentication & Onboarding
 
-### First-Time User Experience
-- [ ] Enter valid access code → Successfully signs in
-- [ ] Enter invalid access code → Shows error message
-- [ ] Onboarding screens appear in correct order:
-  - [ ] Welcome screen
-  - [ ] Microphone permission request
-  - [ ] Notification permission request
-  - [ ] How it works explanation
-- [ ] Can skip through onboarding
+### First-Time User Experience (Brand New user type)
+- [ ] Open app → Phone number entry screen appears
+- [ ] Enter valid phone → Receives SMS OTP
+- [ ] Enter correct OTP → Successfully signs in
+- [ ] Enter incorrect OTP → Shows error message
+- [ ] Narrative onboarding screens appear (river metaphor story)
+- [ ] Onboarding screenshot shows Mirror screen mockup (not old product screenshot)
 - [ ] Onboarding only shows once (doesn't repeat on restart)
+- [ ] Day 1 modal opens after onboarding completes
 
-### Sign Out & Re-Authentication
-- [ ] Sign out button works
-- [ ] Access code cleared from storage
-- [ ] Can sign back in with same access code
-- [ ] Auto sign-in works after closing and reopening app
+### Sign Out & Re-Authentication (Returning user type)
+- [ ] Sign out button works in Settings
+- [ ] Returns to phone number entry screen
+- [ ] Can sign back in with same phone number
+- [ ] Auto sign-in works after closing and reopening app (session in SecureStore)
+- [ ] `last_opened_at` updates in DB when app is foregrounded
+
+### No ATT Prompt
+- [ ] First launch does NOT show App Tracking Transparency dialog
 
 **Notes:**
 ```
@@ -55,7 +73,6 @@ _________________________________________________
 - [ ] Guided prompt appears (if user hasn't answered today)
 - [ ] Can switch between Guided and Free-form tabs
 - [ ] Text input field accepts text
-- [ ] Character count shows (if implemented)
 - [ ] Submit button is disabled when empty
 - [ ] Submit button is enabled when text entered
 
@@ -71,6 +88,9 @@ _________________________________________________
 - [ ] Special characters (emojis, punctuation) → Saves correctly
 - [ ] Rapid tapping Submit → Only creates one journal
 - [ ] Submit while offline → Shows error or queues for later
+
+### No Spurious Alert Bug (Returning user type)
+- [ ] Background app while on Mirror screen, then foreground → No "Error loading journals" alert appears when journals are already visible
 
 **Notes:**
 ```
@@ -92,12 +112,16 @@ _________________________________________________
 - [ ] Tap microphone icon → Recording starts
 - [ ] Recording indicator appears (visual feedback)
 - [ ] Duration timer counts up
-- [ ] Pause button works (if implemented)
-- [ ] Resume button works (if implemented)
 - [ ] Stop button ends recording
 
+### Liquid-Fill Wave Indicator (NEW)
+- [ ] After stopping recording → Wave progress indicator appears inside the button
+- [ ] Indicator shows "Processing..." then transitions to "Transcribing..." label
+- [ ] Wave fill animates smoothly (not jerky)
+- [ ] Wave respects Reduce Motion accessibility setting (no animation if enabled)
+
 ### Transcription Flow
-- [ ] Stop recording → Shows "Transcribing..." state
+- [ ] Stop recording → Shows transcribing state with wave indicator
 - [ ] Transcription completes in reasonable time (< 30 seconds)
 - [ ] Transcribed text appears correctly
 - [ ] Can edit transcribed text before submitting
@@ -106,17 +130,12 @@ _________________________________________________
 ### Voice Edge Cases
 - [ ] 10 second recording → Transcribes successfully
 - [ ] 2 minute recording → Transcribes successfully
-- [ ] 8 minute recording (max) → Transcribes successfully
-- [ ] Whisper in low voice → Transcribes (may have errors)
-- [ ] Background noise → Still transcribes
 - [ ] Incoming call during recording → Handles gracefully
 - [ ] App backgrounded during recording → Recording stops/pauses
-- [ ] Device locked during recording → Handles appropriately
 
 ### Error Handling
 - [ ] No internet during transcription → Shows error message
 - [ ] Transcription fails → Can retry or cancel
-- [ ] Very quiet audio → Either transcribes or shows helpful error
 
 **Notes:**
 ```
@@ -128,110 +147,76 @@ _________________________________________________
 
 ## 4. Mirror Generation
 
-### Progress Tracking (Before 10 Journals)
-- [ ] Mirror screen shows "0/10" initially
+### Progress Tracking (Before 7 Journals)
+- [ ] Mirror screen shows "0/7" initially
 - [ ] Progress bar/circle updates after each journal
 - [ ] Motivational message shown (e.g., "Keep going!")
 - [ ] "Generate Mirror" button is disabled
 - [ ] Past mirrors section is empty
 
-### Reaching Threshold (10 Journals)
-- [ ] After 10th journal submission:
-  - [ ] Progress shows "10/10"
+### Reaching Threshold (7 Journals)
+- [ ] After 7th journal submission:
+  - [ ] Progress shows "7/7"
   - [ ] "Generate Mirror" button appears and is enabled
   - [ ] Button styling looks correct
   - [ ] Encouraging message shown
 
 ### Mirror Generation Flow
-- [ ] Tap "Generate Mirror" → Loading state appears
-- [ ] Polling animation/indicator visible
-- [ ] Status updates visible (if implemented)
-- [ ] Generation completes in reasonable time (3-15 seconds typical)
-- [ ] Success state appears
+- [ ] Tap "Generate Mirror" → Liquid-fill wave progress indicator appears inside button
+- [ ] Wave fill starts at ~15% immediately (floor), grows toward 95% over ~2 min
+- [ ] Wave animation is smooth (60fps target)
+- [ ] Generation completes in reasonable time (3–15 seconds typical)
+- [ ] Success state appears when complete
 
-### Mirror Viewing Experience
-- [ ] Mirror modal opens full-screen
+### Mirror Viewer — Redesign (NEW)
+- [ ] Mirror viewer opens full-screen with hero image and overlay
+- [ ] Sticky tab bar at top scrolls correctly
+- [ ] Safe area insets respected (no overlap with notch/Dynamic Island)
 - [ ] Screen 1 (Themes) displays correctly
   - [ ] Theme bullets are readable
-  - [ ] Formatting looks good
-- [ ] Can swipe to Screen 2 (Biblical)
-  - [ ] Biblical references appear
-  - [ ] Text is readable
-- [ ] Can swipe to Screen 3 (Observations)
-  - [ ] Observations display correctly
-  - [ ] All sections visible
-- [ ] Can swipe back to previous screens
-- [ ] Close button dismisses modal
-- [ ] Reflection questions appear at bottom (if implemented)
-- [ ] Can complete reflection (if implemented)
+  - [ ] No crash if GPT returned themes as an array (Array.isArray guard)
+- [ ] Screen 2 (Biblical) displays correctly
+  - [ ] Parallel story text visible
+  - [ ] Encouraging verse and challenging verse rendered as plain text (not arrays)
+  - [ ] `application` and `invitation` fields are plain strings (no crash)
+- [ ] Screen 3 (Observations) displays correctly
+- [ ] Can navigate between screens (tab bar or swipe)
+- [ ] Close button dismisses viewer
 
 ### Last Mirror Card (Mirror Screen)
 - [ ] After viewing, "Last Mirror" card appears at top of Mirror screen
 - [ ] Card shows mirror date (Month Day, Year format)
 - [ ] Card shows biblical character name (if available)
-- [ ] Card shows full reflection focus (no truncation)
 - [ ] "Share" button appears on left side
 - [ ] "View Mirror" button appears on right side (goldenrod color)
 - [ ] Tap "View Mirror" → Reopens that mirror
-- [ ] Tap "Share" → Opens friend picker (if friends exist) or navigates to Friends tab
+- [ ] Tap "Share" → Opens ShareMirrorSheet (see Section 7)
 - [ ] "View past Mirrors" link appears if multiple mirrors exist
-- [ ] Tap "View past Mirrors" → Opens full-sheet modal
 
 ### Past Mirrors Modal
-- [ ] Modal opens with pageSheet presentation style
-- [ ] Header shows "Past Mirrors" title
-- [ ] Close button (X) in header works
-- [ ] All past mirrors appear in list
-- [ ] Mirrors sorted by date (newest first)
-- [ ] Each mirror card shows same info as Last Mirror card
-- [ ] Tap any mirror card → Opens that mirror in viewer
-- [ ] After closing mirror viewer, modal restores/reopens
-- [ ] Modal closes properly when tapping X
+- [ ] Modal opens correctly
+- [ ] All past mirrors in list, sorted newest first
+- [ ] Tap any mirror card → Opens MirrorViewer
+- [ ] Modal closes properly
 
 ### Last Journal Card (Mirror Screen)
 - [ ] "Last journal" heading appears above card
-- [ ] Card shows journal date (Month Day, Year format)
-- [ ] Card shows journal content
+- [ ] Card shows journal date and content
 - [ ] Content truncates to 3 lines for long entries
 - [ ] "Read more" link appears ONLY when content exceeds 3 lines
-- [ ] "Read more" link does NOT appear for short entries (≤3 lines)
-- [ ] Tap card or "Read more" → Expands to show full content
-- [ ] "Show less" link appears when expanded
-- [ ] Tap "Show less" → Collapses back to 3 lines
-- [ ] Delete button (grey X) appears in upper right corner
-- [ ] Tap delete X → Shows confirmation dialog
-- [ ] Confirm deletion → Journal removed from list
-- [ ] Cancel deletion → Journal remains
-- [ ] "View past Journals" link appears if multiple journals exist
-- [ ] Tap "View past Journals" → Opens full-sheet modal
+- [ ] Tap "Read more" → Expands to full content
+- [ ] Delete button (grey X) → Shows confirmation dialog → Deletes
 
-### Past Journals Modal
-- [ ] Modal opens with pageSheet presentation style
-- [ ] Header shows "Past Journals" title
-- [ ] Close button (X) in header works
-- [ ] All journals appear (including those associated with mirrors)
-- [ ] Journals sorted by date (newest first)
-- [ ] Each journal card shows date, content, delete button
-- [ ] Content truncates to 3 lines for long entries
-- [ ] "Read more" appears only when content exceeds 3 lines
-- [ ] Tap card or "Read more" → Expands inline
-- [ ] Delete button works on each card
-- [ ] Deleting journal removes it from modal immediately
-- [ ] Modal closes properly when tapping X
-
-### Journal Visibility After Mirror Generation
-- [ ] Create 10+ journals → Generate mirror
-- [ ] After mirror generation, journals still visible in Last Journal section
-- [ ] All journals (including those in mirror) visible in Past Journals modal
-- [ ] Journals never disappear after being included in a mirror
-
-### Mirror Generation Edge Cases
-- [ ] Generate second mirror (20 journals) → Works correctly
+### Mirror Generation — Bulletproof Pipeline (Active user type)
 - [ ] App backgrounded during generation → Completes when returned
-- [ ] App force-quit during generation → Recovers on restart
+- [ ] App force-quit during generation → Recovers to correct state on restart (stale processing loop cleared)
+- [ ] Rapidly tap "Generate Mirror" → Only creates one request (no duplicate mirrors)
 - [ ] No internet during generation → Shows error, allows retry
-- [ ] Generation timeout → Shows error, allows retry
-- [ ] Rapidly tap "Generate Mirror" → Only creates one request
+- [ ] **Day 1 duplicate prevention**: completing Day 1 again does NOT generate a second Day 1 mirror
+
+### Mirror Generation — Second+ Mirror
+- [ ] After 14th journal (7 + 7), second mirror can be generated
+- [ ] Second mirror generates and displays correctly
 
 **Notes:**
 ```
@@ -241,116 +226,113 @@ _________________________________________________
 
 ---
 
-## 5. Day 1 — Step 6 & Push Notification Setup
+## 5. Day 1 Onboarding Flow
 
 ### SQL reset for Step 6 testing
 ```sql
--- Jump straight to Step 6 (skip Steps 1–5)
 UPDATE users SET day_1_completed_at = NULL, notifications_enabled = false,
   notif_card_dismissed = false, spiritual_rhythm = NULL WHERE id = '[user_id]';
 UPDATE day_1_progress SET completed_at = NULL WHERE user_id = '[user_id]';
--- Then complete Day 1 Steps 1–5 normally, or manually set mini_mirror_id and jump to step 5.
 ```
 
+### Day 1 Steps 1–5
+- [ ] Spiritual place entry (Step 1) saves correctly
+- [ ] Two voice journals (Steps 2–3) transcribe and save
+- [ ] Mini-mirror generation shows wave progress indicator during generation
+- [ ] Step 5 (mini-mirror viewer): Day1MirrorViewer renders without crash
+  - [ ] Biblical section renders as plain text (not arrays)
+  - [ ] All sections visible and readable
+- [ ] Optional reflection field works; Save and Skip both advance to Step 6
+
+### Day 1 Mini-Mirror Sharing (NEW — mirror share v2)
+- [ ] After Step 5, Day 1 mirror card shows a Share button
+- [ ] Tapping Share opens ShareMirrorSheet with Day 1 mirror ID
+- [ ] Can share Day 1 mirror with a linked friend
+- [ ] Off-platform share works from Day 1 mirror (see Section 7 for invite flow)
+
 ### Step 6 — Rhythm Builder Screen
-- [ ] Step 6 appears after tapping Save or "Skip reflection" on Step 5
-- [ ] Bell icon visible above heading
-- [ ] Heading reads "Capture what God shares."
-- [ ] 1:1 with God slot is enabled by default with no day selection
-- [ ] Church and Small group slots are disabled by default
-- [ ] "Turn on reminders" is disabled until ≥1 enabled slot has a timeWindow
-- [ ] Enabling a slot and selecting a timeWindow activates the CTA
-- [ ] Tapping a selected day chip deselects it AND clears timeWindow
-- [ ] Tapping a selected timeWindow chip deselects it
-- [ ] "Turn on reminders" → iOS push permission dialog appears
-- [ ] After granting: users.notifications_enabled=true in DB
-- [ ] After granting: users.spiritual_rhythm populated in DB
-- [ ] After granting: modal closes, Journal tab shows no pitch card
-- [ ] X dismiss: modal closes, day_1_completed_at IS set, notifications_enabled=false
-- [ ] X dismiss: NotificationPitchCard IS visible on Journal tab
+- [ ] Step 6 appears after Step 5 completes
+- [ ] Bell icon and correct heading visible
+- [ ] 1:1 with God slot enabled by default; Church and Small group disabled
+- [ ] "Turn on reminders" disabled until ≥1 slot has a timeWindow
+- [ ] Enabling slot + selecting timeWindow activates CTA
+- [ ] Tap "Turn on reminders" → iOS push permission dialog
+- [ ] After granting: `notifications_enabled=true`, `spiritual_rhythm` populated in DB
+- [ ] X dismiss: modal closes, `day_1_completed_at` IS set, pitch card visible on Journal tab
 
 ### NotificationPitchCard (Journal Tab)
-- [ ] Card visible after Day 1 complete + notifications_enabled=false + notif_card_dismissed=false
-- [ ] Card NOT visible when notifications_enabled=true
-- [ ] Card NOT visible when notif_card_dismissed=true
-- [ ] Card shows bell icon, correct heading + body copy
+- [ ] Card visible: Day 1 complete + `notifications_enabled=false` + `notif_card_dismissed=false`
+- [ ] Card NOT visible when `notifications_enabled=true`
+- [ ] Card NOT visible when `notif_card_dismissed=true`
 - [ ] "Set up reminders" → opens RhythmBuilderSheet
-- [ ] RhythmBuilderSheet CTA reads "Turn on reminders" (first-timer mode)
-- [ ] After enabling via sheet: card disappears, notifications_enabled=true
-- [ ] "Not now" → card disappears immediately, notif_card_dismissed=true in DB
-- [ ] Card does not reappear after dismissal (refresh app, re-open tab)
+- [ ] "Not now" → card disappears, `notif_card_dismissed=true` in DB
+- [ ] Card does not reappear after dismissal
 
 ### Settings — Notification Reminders
-- [ ] Settings modal has "Notification reminders" row
-- [ ] Tapping opens RhythmBuilderSheet as pageSheet
-- [ ] Sheet shows "Set Up Reminders" header with X button
-- [ ] Copy reads "Don't lose what God shares with you." + body line
-- [ ] If returning user: slots pre-populated from spiritual_rhythm
-- [ ] If returning user: CTA reads "Save" and is disabled until changes made
-- [ ] Dirty check: changing any slot enables Save; reverting re-disables it
-- [ ] "Turn off all reminders" visible when notifications_enabled=true
-- [ ] Turn off: notifications_enabled=false, rhythm data preserved in DB
+- [ ] "Notification reminders" row in Settings
+- [ ] Opens RhythmBuilderSheet (pageSheet style)
+- [ ] Returning user: slots pre-populated from `spiritual_rhythm`
+- [ ] Dirty check: CTA enabled only when changes made
+- [ ] "Turn off all reminders" visible when enabled
 - [ ] Save: DB updated, sheet closes
 
-### Edge Function — send-encounter-nudge (manual test)
-- [ ] Manually invoke function via Supabase dashboard
-- [ ] User with matching slot + timeWindow receives push notification
-- [ ] User with last_opened_at < 24h ago is skipped (anti-spam)
-- [ ] User with notifications_enabled=false is skipped
-- [ ] User with no push_token is skipped
-
-### last_opened_at tracking
-- [ ] Background app then foreground → users.last_opened_at updates in DB
-- [ ] Value is a recent timestamptz (within seconds of foregrounding)
+### Push Notification Copy — Personalized (NEW)
+- [ ] Manually invoke `send-encounter-nudge` via Supabase dashboard
+- [ ] Notification body uses user's first name (personalized copy)
+- [ ] Notification varies by day of week (if applicable)
+- [ ] User with `notifications_enabled=false` is skipped
+- [ ] User with no `push_token` is skipped
+- [ ] User with `last_opened_at` < 24h ago is skipped (anti-spam)
 
 ---
 
 ## 6. Friend Invites & Connections
 
-### No Friends State (First User)
+### No Friends State
 - [ ] Friends tab shows "Pursue Jesus with Friends" pitch
-- [ ] Icon displays correctly (two figures)
 - [ ] "Create Invite Link" button visible
-- [ ] Button is styled correctly
 - [ ] Expiry note shows "72 hours"
 
-### Creating Invite Link (User A - Device 1)
+### Creating Invite Link (User A)
 - [ ] Tap "Create Invite Link" → Shows loading state
 - [ ] Native share sheet opens
-- [ ] Share message includes deep link (oxbow://friend-invite/[token])
-- [ ] Can share via Messages, Email, etc.
-- [ ] Copy link to clipboard works
-- [ ] Link format: `oxbow://friend-invite/[long-token-string]`
-- [ ] Can cancel share sheet → Returns to Friends tab
+- [ ] Link format: `https://get.oxbowjournal.com/friend-invite/[token]` (universal link)
+- [ ] NOT a `?c=` LinkRunner short link
 
-### Accepting Invite (User B - Device 2)
-- [ ] Receive invite link (via Messages/Email)
-- [ ] Tap deep link → App opens (if installed)
-- [ ] If app not installed → Prompts to install (or opens browser)
-- [ ] App navigates to friend-invite route
-- [ ] Shows "Accepting invite..." loading state
-- [ ] Success message appears
-- [ ] Shows sender's name (User A's display name)
-- [ ] "Go to Friends" button works
-- [ ] Navigates to Friends tab
+### Accepting Invite — Existing User (FIXED — critical test)
+- [ ] User B already has the app installed
+- [ ] Tap the `https://get.oxbowjournal.com/friend-invite/[token]` link
+- [ ] iOS routes directly to app (universal link via `get.oxbowjournal.com` associated domain)
+- [ ] App navigates to friend-invite route — does NOT open browser first
+- [ ] Shows "Accepting invite..." loading state → success
+
+### Accepting Invite — New User
+- [ ] User C does NOT have app installed
+- [ ] Tap link → Opens browser/App Store prompt via LinkRunner
+- [ ] After install and sign-in → deferred deep link resolves correctly
+- [ ] Navigates to friend-invite route and accepts
 
 ### Post-Connection Verification (Both Devices)
 **Device 1 (User A):**
 - [ ] Refresh/reopen Friends tab
 - [ ] Friend slot now shows User B's name
-- [ ] Slot count updates (e.g., "1/5 friends")
+- [ ] Slot count updates (e.g., "1/3 friends")
 
 **Device 2 (User B):**
-- [ ] Friends tab now shows full UI (not pitch)
-- [ ] Friend slot shows User A's name
+- [ ] Friends tab shows User A's name
 - [ ] Can create new invite for another friend
+
+### Realtime Badge Updates (Consolidated channel — regression test)
+- [ ] User A shares a mirror with User B
+- [ ] Friends tab badge on User B's device increments WITHOUT app restart (Realtime)
+- [ ] Unread count badge clears when User B views the shared mirror
+- [ ] No excessive WebSocket reconnections (was 4 channels; now 1)
 
 ### Friend Invite Edge Cases
 - [ ] Accept expired invite (> 72 hours) → Shows error
 - [ ] Accept already-used invite → Shows error
-- [ ] Accept invite from someone already a friend → Shows error
 - [ ] User tries to friend themselves → Prevented
-- [ ] Reach 5 friends → Invite button disabled/hidden
+- [ ] Reach 3 friends (max) → Invite button disabled/hidden
 - [ ] Open deep link when not signed in → Handled gracefully
 
 **Notes:**
@@ -361,59 +343,62 @@ _________________________________________________
 
 ---
 
-## 7. Mirror Sharing
+## 7. Mirror Sharing (v2)
 
-### Setup (Need Friends + Mirrors)
+### Setup
 **Prerequisites:**
 - [ ] User A and User B are friends
-- [ ] User A has at least one completed mirror
+- [ ] User A has at least one completed mirror (full or Day 1)
 
-### Sharing Flow (User A - Device 1)
-- [ ] Navigate to Mirror screen
-- [ ] Scroll to "Past Mirrors" section
-- [ ] Tap "Share" button on a mirror card
-- [ ] Friend picker modal/sheet opens
-- [ ] Shows list of friends (User B visible)
-- [ ] Can select User B (checkbox/radio)
-- [ ] "Share" button appears/enabled
-- [ ] Tap "Share" → Shows success message
+### Share Sheet — Friend List States
+- [ ] 0 friends → "No linked friends yet" empty state with "Invite a Friend" button
+- [ ] 1 friend → Friend auto-selected on open (no manual selection needed)
+- [ ] 2–3 friends → "All Linked Friends" option appears at top
+- [ ] Any count → "New friend" row at bottom of list (off-platform invite)
+
+### Sharing with a Linked Friend (User A)
+- [ ] Tap "Share" on a mirror card → ShareMirrorSheet opens
+- [ ] Select a friend → checkbox fills
+- [ ] "Share Mirror" button becomes enabled
+- [ ] Tap "Share Mirror" → Shows success alert with friend's name
 - [ ] Modal closes
-- [ ] Returns to Mirror screen
+- [ ] User B receives Realtime badge update on Friends tab
 
-### Receiving Share (User B - Device 2)
-- [ ] Friends tab badge appears with "1" (unread count)
-- [ ] Badge is visible on tab icon
-- [ ] Open Friends tab
-- [ ] "Shared with you" section appears
-- [ ] Shared mirror card visible
-- [ ] Shows User A's name (sender)
-- [ ] Shows mirror date
-- [ ] "NEW" badge visible (orange/gold color)
+### Sharing with All Friends
+- [ ] Select "All Linked Friends" option
+- [ ] Individual selections clear
+- [ ] Tap "Share Mirror" → All friends receive the mirror
+- [ ] Success message lists all recipients
 
-### Viewing Shared Mirror (User B)
-- [ ] Tap shared mirror card → Opens mirror viewer
-- [ ] Shows 3 screens (Themes, Biblical, Observations)
-- [ ] Screen 1 (Themes) displays correctly
-- [ ] Screen 2 (Biblical) displays correctly
-- [ ] Screen 3 (Observations) displays correctly
-- [ ] Can swipe between screens
-- [ ] Close button works
-- [ ] Returns to Friends tab
+### Off-Platform Invite Flow (NEW — mirror share v2)
+- [ ] Select "New friend" row in the share sheet
+- [ ] Tap "Share Mirror" → Native iOS share sheet opens with invite link
+- [ ] Link is a universal link (`https://get.oxbowjournal.com/friend-invite/[token]`)
+- [ ] `mirror_id` is attached to the invite (DB: `friend_invites.mirror_id` populated)
+- [ ] Can combine: select a linked friend + "New friend" → shares with friend AND opens invite sheet
+- [ ] Cancel share sheet → No error shown
 
-### Post-Viewing Verification (User B)
-- [ ] Friends tab badge count decreases to "0"
+### Day 1 Mirror Sharing (NEW)
+- [ ] User A can share their Day 1 mini-mirror (not just full mirrors)
+- [ ] Day 1 mirror appears in ShareMirrorSheet correctly
+- [ ] Recipient (User B) can view the Day 1 mirror in their Friends tab
+
+### Receiving Share (User B)
+- [ ] Friends tab badge shows unread count (via Realtime, no restart needed)
+- [ ] "Shared with you" section shows mirror card
+- [ ] Card shows User A's name and mirror date
+- [ ] "NEW" badge visible (orange/gold)
+- [ ] Tap card → Opens MirrorViewer (all 3 screens work)
+
+### Post-Viewing (User B)
+- [ ] Badge count decreases
 - [ ] Mirror card badge changes from "NEW" to "VIEW"
-- [ ] Badge color changes (orange → purple)
-- [ ] Can re-view mirror (tap card again)
-- [ ] Badge stays "VIEW" on re-view
+- [ ] Can re-view mirror; stays "VIEW"
 
 ### Mirror Sharing Edge Cases
 - [ ] Share same mirror with multiple friends → All receive
-- [ ] Share multiple mirrors with same friend → All appear
-- [ ] User A views their own shared mirror → Sees full mirror
-- [ ] Receive share while offline → Appears when online
 - [ ] Delete app and reinstall → Shared mirrors persist
-- [ ] Share mirror, then unfriend → Mirror still accessible
+- [ ] Share while offline → Shows error, no partial state
 
 **Notes:**
 ```
@@ -427,18 +412,16 @@ _________________________________________________
 
 ### Tab Bar
 - [ ] Three tabs visible: Journal, Mirror, Friends
-- [ ] Active tab is highlighted
+- [ ] Active tab is highlighted (correct active tab color: #BD7209)
 - [ ] Tap each tab → Navigates correctly
-- [ ] Tab icons are correct
-- [ ] Tab labels are readable
+- [ ] Tab icons correct
 - [ ] Badge appears on Friends tab when shares unread
 - [ ] Badge clears when shares viewed
 
 ### Screen Transitions
 - [ ] Smooth transitions between tabs
 - [ ] No flickering or janky animations
-- [ ] Back button works where expected
-- [ ] Safe area respected (notch, home indicator)
+- [ ] Safe area respected (notch, Dynamic Island, home indicator)
 
 ### Keyboard Behavior
 - [ ] Keyboard opens for text input
@@ -457,21 +440,16 @@ _________________________________________________
 ## 9. Offline & Network Behavior
 
 ### Airplane Mode Tests
-- [ ] Enable airplane mode before opening app
 - [ ] App opens successfully (cached data)
 - [ ] Can view past mirrors offline
-- [ ] Can view past journals offline (if implemented)
-- [ ] Creating journal offline → Shows error or queues
+- [ ] Creating journal offline → Shows error
 - [ ] Generating mirror offline → Shows error
-- [ ] Viewing shared mirrors offline → Works if cached
-- [ ] Enable network → Syncs queued actions
+- [ ] Enable network → App resumes normally
 
 ### Poor Network Conditions
-- [ ] Slow 3G simulation (use dev tools if possible)
 - [ ] Transcription takes longer → Eventually completes
-- [ ] Mirror generation takes longer → Eventually completes
-- [ ] Shows appropriate loading states
-- [ ] Timeouts handled gracefully
+- [ ] Mirror generation takes longer → Wave indicator persists → Eventually completes
+- [ ] Shows appropriate loading states throughout
 
 **Notes:**
 ```
@@ -484,21 +462,19 @@ _________________________________________________
 ## 10. Background & Multitasking
 
 ### App Backgrounding
-- [ ] Background app during journal entry → Text preserved
-- [ ] Background during voice recording → Recording stops/pauses
+- [ ] Background app during journal entry → Text preserved on return
+- [ ] Background during voice recording → Recording stops
 - [ ] Background during transcription → Completes when returned
-- [ ] Background during mirror generation → Completes when returned
+- [ ] Background during mirror generation → Wave indicator still present, completes
 - [ ] Background during friend invite → Returns to correct state
 
 ### Force Quit & Restart
-- [ ] Force quit during journal entry → Data not saved (expected)
-- [ ] Force quit during mirror generation → Recovers on restart
+- [ ] Force quit during mirror generation → Recovers to correct state on restart (not stuck in "generating")
 - [ ] Force quit after journal submit → Journal saved
-- [ ] Restart app → Resumes normal operation
+- [ ] Restart app → Resumes normal operation, auto-signed-in
 
 ### Incoming Interruptions
 - [ ] Incoming call during voice recording → Handled gracefully
-- [ ] Low battery warning → App continues working
 - [ ] System notification → Doesn't break app state
 
 **Notes:**
@@ -512,22 +488,15 @@ _________________________________________________
 ## 11. Platform-Specific Tests
 
 ### iOS Only
-- [ ] SF Symbols icons display correctly
-- [ ] Haptic feedback works (if implemented)
+- [ ] SF Symbols icons display correctly (outside Modals — known limitation)
+- [ ] MaterialIcons used correctly inside Modals (no SymbolView crash)
+- [ ] Haptic feedback works
 - [ ] Safe area respected (notch, Dynamic Island)
 - [ ] Share sheet is native iOS style
-- [ ] Deep links work from Messages, Mail, Notes
+- [ ] Universal links route to app from Messages, Mail, Notes
 - [ ] Settings → Microphone permission works
-- [ ] Push notifications work (if implemented)
-
-### Android Only
-- [ ] Material icons display correctly
-- [ ] Safe area respected (navigation bar)
-- [ ] Share sheet is native Android style
-- [ ] Deep links work from Messages, Gmail
-- [ ] Settings → Microphone permission works
-- [ ] Back button navigation works correctly
-- [ ] Push notifications work (if implemented)
+- [ ] Push notifications delivered and tappable
+- [ ] No ATT (App Tracking Transparency) prompt on first launch
 
 **Notes:**
 ```
@@ -540,28 +509,24 @@ _________________________________________________
 ## 12. Performance & Polish
 
 ### Performance
-- [ ] App launches quickly (< 3 seconds)
+- [ ] App launches quickly (< 3 seconds cold start)
 - [ ] Smooth scrolling in all screens
-- [ ] No dropped frames during animations
-- [ ] Memory usage reasonable (check dev tools)
+- [ ] Wave animation doesn't drop frames during mirror generation
 - [ ] No excessive battery drain
-- [ ] Image/icon loading is smooth
+- [ ] Image/icon loading is smooth (WebP assets load correctly — product-screenshot.webp)
 
 ### Visual Polish
 - [ ] All text is readable (contrast, size)
 - [ ] Buttons have clear tap targets
-- [ ] Loading indicators are visible
+- [ ] Loading indicators visible in all async states
 - [ ] Error messages are helpful
-- [ ] Success messages are encouraging
-- [ ] Spacing/padding looks intentional
-- [ ] Colors match design system
-- [ ] Dark mode works (if implemented)
+- [ ] Spacing/padding looks intentional throughout
+- [ ] Colors match design system tokens
 
 ### Accessibility
-- [ ] Text is readable without zooming
-- [ ] Buttons are tappable (44x44 minimum)
-- [ ] Color contrast is sufficient
-- [ ] VoiceOver/TalkBack works (basic test)
+- [ ] Text readable without zooming
+- [ ] Buttons are tappable (44×44 minimum)
+- [ ] Wave animation respects Reduce Motion setting
 
 **Notes:**
 ```
@@ -582,17 +547,17 @@ _________________________________________________
 
 ### Boundary Testing
 - [ ] First journal (0 → 1) works
-- [ ] 10th journal triggers mirror generation
-- [ ] 20th journal triggers second mirror
+- [ ] 7th journal triggers mirror unlock (threshold = 7, not 10)
+- [ ] 14th journal triggers second mirror (7 + 7)
 - [ ] First friend (0 → 1) works
-- [ ] 5th friend (max) works
-- [ ] Attempt 6th friend → Disabled/error
+- [ ] 3rd friend (max) works
+- [ ] Attempt 4th friend → Disabled/error
 
 ### Data Display
 - [ ] Dates display correctly (timezone aware)
 - [ ] Long names don't break UI
-- [ ] Long mirror content doesn't overflow
-- [ ] Empty states are helpful
+- [ ] Long mirror content doesn't overflow in viewer
+- [ ] Empty states are helpful and not broken
 
 **Notes:**
 ```
@@ -602,20 +567,26 @@ _________________________________________________
 
 ---
 
-## 14. Regression Testing (Ensure Old Features Still Work)
+## 14. Regression Testing
 
 ### Core Features Not Broken
 - [ ] Text journaling still works as before
 - [ ] Voice journaling still works as before
-- [ ] Mirror generation still works as before
-- [ ] Onboarding still works for new users
+- [ ] Mirror generation still works (7-journal threshold enforced client AND server)
+- [ ] Day 1 flow completes for a brand-new user
 - [ ] Sign out/sign in still works
+- [ ] Push notification settings persist across app restarts
+
+### Realtime Regression (single channel refactor)
+- [ ] Friends badge updates in real-time (no restart needed)
+- [ ] Unread mirror shares badge updates in real-time
+- [ ] Mirror data refreshes via Realtime after share accepted
 
 ### No Visual Regressions
 - [ ] Journal screen looks correct
-- [ ] Mirror screen looks correct
-- [ ] No layout shifts or broken styling
-- [ ] Fonts/colors unchanged (unless intentional)
+- [ ] Mirror screen looks correct (new MirrorViewer redesign is intentional)
+- [ ] Friends screen looks correct
+- [ ] No layout shifts or broken styling after refactor
 
 **Notes:**
 ```
@@ -627,46 +598,50 @@ _________________________________________________
 
 ## 15. Critical User Journeys (End-to-End)
 
-### Journey 1: New User → Day 1 → Notification Opt-In
-- [ ] Install app → Sign in → Day 1 modal opens
-- [ ] Complete Steps 1–4 (spiritual place, 2 voice journals, mini-mirror generation)
-- [ ] Step 5: view mini-mirror, optionally write reflection, tap Save or Skip
-- [ ] Step 6: configure at least one slot with a timeWindow
-- [ ] Tap "Turn on reminders" → iOS permission dialog → grant
-- [ ] Modal closes, Journal tab shows no pitch card
-- [ ] DB: notifications_enabled=true, spiritual_rhythm populated, day_1_completed_at set
-- [ ] Journey feels smooth and motivated by the mirror experience
+### Journey 1: Brand New User — Full Onboarding to First Mirror
+- [ ] Install → Phone OTP sign-in → Narrative onboarding
+- [ ] Day 1: spiritual place → 2 voice journals → mini-mirror (wave indicator during generation)
+- [ ] Day 1 Step 5: view mini-mirror (no crash on all content types)
+- [ ] Day 1 Step 6: configure reminder slot → grant push permission → Journal tab clean
+- [ ] Submit 7 journals total (Day 1 journals count) → Generate first full mirror
+- [ ] View mirror (redesigned viewer, all 3 screens readable)
+- [ ] Journey feels smooth and spiritually motivated
 
-### Journey 1b: New User → Day 1 → Skip Notifications → Pitch Card → Opt-In
-- [ ] Complete Day 1, tap X on Step 6 (or X while on Step 5)
-- [ ] Journal tab shows "Setup" section with NotificationPitchCard
-- [ ] Tap "Set up reminders" → RhythmBuilderSheet opens in first-timer mode
-- [ ] Configure slots, tap "Turn on reminders" → pitch card disappears
-- [ ] DB: notifications_enabled=true
+### Journey 1b: New User — Skip Notifications → Pitch Card → Opt-In
+- [ ] Complete Day 1, tap X on Step 6
+- [ ] Journal tab shows NotificationPitchCard
+- [ ] Tap "Set up reminders" → RhythmBuilderSheet first-timer mode
+- [ ] Configure slots, enable → pitch card disappears
+- [ ] DB: `notifications_enabled=true`
 
-### Journey 2: New User → First Regular Mirror
-- [ ] Install app → Complete Day 1 (already done or skip)
-- [ ] Create 10 journals (mix of text and voice)
-- [ ] Generate first mirror
-- [ ] View mirror completely
-- [ ] Journey feels smooth and intuitive
-
-### Journey 3: Connect Friends → Share Mirror
-- [ ] User A creates invite link
-- [ ] User B accepts invite
-- [ ] Both see each other in Friends tab
-- [ ] User A generates mirror
-- [ ] User A shares mirror with User B
-- [ ] User B receives notification/badge
-- [ ] User B views shared mirror
-- [ ] Journey feels seamless
-
-### Journey 4: Daily Use
-- [ ] Open app → Already signed in
-- [ ] Submit journal quickly (text or voice)
-- [ ] Check Mirror screen progress
-- [ ] Check Friends tab for shares
+### Journey 2: Returning Active User — Daily Use
+- [ ] Open app → Already signed in (auto sign-in)
+- [ ] Submit journal quickly (text or voice with wave indicator)
+- [ ] Check Mirror screen progress (correct count, correct threshold 7)
+- [ ] Check Friends tab for shares (badge via Realtime)
 - [ ] Experience feels fast and reliable
+
+### Journey 3: Social — Connect Friends + Share Mirror
+- [ ] User A creates invite link (universal link format)
+- [ ] User B (existing user) taps link → opens directly in app → accepts
+- [ ] Both see each other in Friends tab
+- [ ] User A shares mirror via ShareMirrorSheet → selects User B
+- [ ] User B receives Realtime badge → views mirror (redesigned viewer)
+- [ ] Journey seamless, no browser redirect for existing user
+
+### Journey 4: Social — Share Mirror + Invite New Friend
+- [ ] User A has mirror + < 3 friends
+- [ ] Open ShareMirrorSheet → select existing friend + "New friend"
+- [ ] Tap "Share Mirror" → mirror shared with friend, THEN invite sheet opens
+- [ ] Invite sent off-platform with `mirror_id` attached
+- [ ] User C installs app from invite → friend connection formed
+- [ ] Journey works end-to-end
+
+### Journey 5: Invite Recipient (Existing User, No Friends Yet)
+- [ ] User A (no friends) receives `https://get.oxbowjournal.com/friend-invite/[token]` via Messages
+- [ ] Taps link → iOS opens Oxbow directly (NOT browser, NOT App Store)
+- [ ] Sees "Accepting invite..." → success
+- [ ] Friends tab now shows User B
 
 **Notes:**
 ```
@@ -692,19 +667,20 @@ _________________________________________________
 ### Pre-Release Checklist
 - [ ] All critical bugs fixed
 - [ ] No console errors/warnings in production build
-- [ ] App version number updated in app.config.js
-- [ ] Build number incremented
-- [ ] TestFlight/Internal Testing build passes all tests
-- [ ] Privacy policy updated (if needed for sharing)
+- [ ] App version is 1.0.3 in app.config.js
+- [ ] Build number incremented via EAS (`appVersionSource: "remote"`)
+- [ ] TestFlight build passes all tests above
+- [ ] Privacy policy updated (if needed)
 - [ ] App Store screenshots updated (if needed)
 - [ ] Release notes written
 
 ### App Store Compliance
 - [ ] No crashes on launch
 - [ ] No broken features
-- [ ] Permissions properly described
+- [ ] Permissions properly described (microphone, push notifications)
 - [ ] No placeholder content
-- [ ] Deep links work correctly
+- [ ] Universal links work correctly from Messages, Mail, Notes
+- [ ] No ATT prompt (IDFA disabled in linkrunner config)
 
 ---
 
@@ -732,16 +708,18 @@ _________________________________________________
 
 ## Testing Tips
 
-1. **Test on Multiple Devices**: Different screen sizes, iOS versions, Android versions
-2. **Use Two Real Devices**: Essential for Friends features
-3. **Test Fresh Install**: Simulates new user experience
-4. **Test Over Multiple Days**: Ensures date handling works correctly
-5. **Take Screenshots**: Document any issues found
-6. **Check Console Logs**: Look for errors even if UI seems fine
-7. **Test with Poor Network**: Airport WiFi, 3G, etc.
-8. **Don't Rush**: Take breaks between test sections
+1. **Cover all 6 user types** from the matrix at the top — each exercises different code paths
+2. **Two real devices** are essential for Friends and Realtime badge tests
+3. **Test fresh install** for Brand New user journey (phone OTP, onboarding, Day 1)
+4. **Test existing-user invite link** specifically — this was recently fixed and is easy to regress
+5. **Confirm 7-journal threshold** (not 10) — both button unlock and edge function
+6. **Check wave indicator** on both voice processing AND mirror generation
+7. **Test force-quit during mirror generation** — verifies bulletproof pipeline recovery
+8. **Test off-platform share flow** — share mirror + invite new friend in one action
+9. **Poor network**: Airport WiFi, 3G — transcription and mirror generation timeouts
+10. **Check console logs**: Sentry errors even if UI looks fine
 
 ---
 
-**Last Updated:** 2026-03-24
-**Version:** Push Notification System + Day 1 Step 6
+**Last Updated:** 2026-03-29
+**Version:** v1.0.3 — Mirror Share v2 + Bulletproof Pipeline + Wave Indicator + Invite Link Fix
