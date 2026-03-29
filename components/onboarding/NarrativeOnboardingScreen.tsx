@@ -473,7 +473,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   productScreenshot: {
-    width: 280,
+    width: 327,
     height: 606,
     marginTop: 40,
     alignSelf: 'center',

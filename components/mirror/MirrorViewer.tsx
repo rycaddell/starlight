@@ -1,6 +1,7 @@
 // components/mirror/MirrorViewer.tsx
 import React, { useState, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Image, ImageBackground, TextInput, KeyboardAvoidingView, Platform, Alert, Keyboard } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShareMirrorSheet } from './ShareMirrorSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors, typography, spacing, borderRadius } from '@/theme/designTokens';
@@ -16,6 +17,9 @@ interface MirrorViewerProps {
 
 type TabName = 'Mirror' | 'Themes' | 'Observations' | 'Reflection';
 
+const HERO_HEIGHT = 450;
+const STICKY_TAB_THRESHOLD = HERO_HEIGHT - 60;
+
 export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   mirrorContent,
   mirrorId,
@@ -24,12 +28,17 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   isSharedMirror = false,
 }) => {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabName>('Mirror');
   const [showShareSheet, setShowShareSheet] = useState(false);
   const [showReflectionInput, setShowReflectionInput] = useState(false);
   const [reflectionText, setReflectionText] = useState('');
   const [savingReflection, setSavingReflection] = useState(false);
   const [existingReflection, setExistingReflection] = useState<string | null>(null);
+  const [reflectionSaved, setReflectionSaved] = useState(false);
+  const [showStickyTabs, setShowStickyTabs] = useState(false);
+  const showStickyTabsRef = useRef(false);
+  const stickyBarHeightRef = useRef(0);
 
   // Load existing reflection if present
   React.useEffect(() => {
@@ -67,7 +76,7 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       setExistingReflection(reflectionText.trim());
       setSavingReflection(false);
       setShowReflectionInput(false);
-      Alert.alert('Saved', 'Your reflection has been saved.');
+      setReflectionSaved(true);
     } else {
       setSavingReflection(false);
       Alert.alert('Error', result.error || 'Failed to save your reflection. Please try again.');
@@ -142,20 +151,27 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
       targetRef.current.measureLayout(
         scrollViewRef.current as any,
         (x, y) => {
-          // Offset by 30pt to keep section tags below safe area
-          scrollViewRef.current?.scrollTo({ y: y - 30, animated: true });
+          // When sticky tabs are visible, offset by bar height so section tag isn't hidden behind it
+          const offset = showStickyTabsRef.current ? stickyBarHeightRef.current + 8 : 30;
+          scrollViewRef.current?.scrollTo({ y: y - offset, animated: true });
         },
         () => {}
       );
     }
   };
 
-  // Handle scroll event to update active tab based on scroll position
+  // Handle scroll event to update active tab and sticky tab bar visibility
   const handleScroll = (event: any) => {
     const scrollY = event.nativeEvent.contentOffset.y;
 
+    // Sticky tab bar — only update state when value changes to avoid thrash
+    const shouldShowSticky = scrollY > STICKY_TAB_THRESHOLD;
+    if (shouldShowSticky !== showStickyTabsRef.current) {
+      showStickyTabsRef.current = shouldShowSticky;
+      setShowStickyTabs(shouldShowSticky);
+    }
+
     // Determine which section is currently in view
-    // We use a threshold of 100px from the top to determine the active section
     const threshold = 100;
 
     if (scrollY >= sectionPositions.Reflection - threshold && !isSharedMirror) {
@@ -180,6 +196,23 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
   const screen3Data = mirrorContent.screen_3_observations || mirrorContent.screen3_observations;
   const limitedThemes = screen1Data?.themes ? screen1Data.themes.slice(0, 4) : [];
 
+  const renderTabItems = () =>
+    (['Mirror', 'Themes', 'Observations', 'Reflection'] as TabName[]).map((tab) => (
+      <TouchableOpacity
+        key={tab}
+        style={styles.tabButton}
+        onPress={() => handleTabPress(tab)}
+      >
+        <Text style={[
+          styles.tabLabel,
+          activeTab === tab && styles.tabLabelActive
+        ]}>
+          {tab}
+        </Text>
+        {activeTab === tab && <View style={styles.tabIndicator} />}
+      </TouchableOpacity>
+    ));
+
   return (
     <>
       <KeyboardAvoidingView
@@ -187,293 +220,313 @@ export const MirrorViewer: React.FC<MirrorViewerProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.container}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-        >
-      {/* Hero Image Section with Overlays */}
-      <View style={styles.heroSection}>
-        <ImageBackground
-          source={require('@/assets/images/spiritual-places/default.jpg')}
-          style={styles.heroImage}
-          resizeMode="cover"
-        >
-          {/* Dark overlay for better text readability */}
-          <View style={styles.heroOverlay} />
-
-          {/* Top Navigation Buttons */}
-          <View style={styles.topNav}>
-            <TouchableOpacity style={styles.backButton} onPress={onClose}>
-              <Image
-                source={require('@/assets/images/icons/Back.png')}
-                style={styles.backIcon}
-              />
-            </TouchableOpacity>
-            {!isSharedMirror && (
-              <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
-                <Image
-                  source={require('@/assets/images/icons/Share.png')}
-                  style={styles.shareIcon}
-                />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Title and Date Overlay */}
-          <View style={styles.titleOverlay}>
-            <Text style={styles.titleOverlayText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{getTitle()}</Text>
-            <Text style={styles.subtitleOverlayText}>{formatDate()}</Text>
-          </View>
-
-          {/* Tab Bar at Bottom of Image */}
-          <View style={styles.tabBarOverlay}>
-            {(['Mirror', 'Themes', 'Observations', 'Reflection'] as TabName[]).map((tab) => (
-              <TouchableOpacity
-                key={tab}
-                style={styles.tabButton}
-                onPress={() => handleTabPress(tab)}
-              >
-                <Text style={[
-                  styles.tabLabel,
-                  activeTab === tab && styles.tabLabelActive
-                ]}>
-                  {tab}
-                </Text>
-                {activeTab === tab && <View style={styles.tabIndicator} />}
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ImageBackground>
-      </View>
-
-      {/* All Sections */}
-        {/* MIRROR SECTION */}
-        <View
-          ref={mirrorSectionRef}
-          style={[styles.section, styles.mirrorSection]}
-          onLayout={handleSectionLayout('Mirror')}
-        >
-          <View style={styles.sectionTagContainer}>
-            <Text style={styles.sectionTag}>Mirror</Text>
-          </View>
-
-          {/* Biblical Mirror Story */}
-          {screen2Data?.parallel_story && (
-            <View style={styles.subsection}>
-              <Text style={styles.mirrorTitle}>{sanitizeText(screen2Data.parallel_story.character)}</Text>
-              <Text style={styles.mirrorDescription}>
-                {sanitizeText(screen2Data.parallel_story.story)}
-                {'\n\n'}
-                {sanitizeText(screen2Data.parallel_story.connection)}
-              </Text>
-            </View>
-          )}
-
-          {/* Encouraging Word */}
-          {screen2Data?.encouraging_verse && (
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Encouraging Word</Text>
-              <Text style={styles.verseReference}>
-                {screen2Data.encouraging_verse.reference}
-              </Text>
-              <View style={styles.verseContainer}>
-                <View style={styles.verseBar} />
-                <Text style={styles.verseText}>
-                  {sanitizeText(screen2Data.encouraging_verse.text)}
-                </Text>
-              </View>
-              <Text style={styles.applicationText}>
-                {sanitizeText(screen2Data.encouraging_verse.application || screen2Data.encouraging_verse.why_it_fits)}
-              </Text>
-            </View>
-          )}
-
-          {/* Invitation to Growth */}
-          {(screen2Data?.invitation_to_growth || screen2Data?.challenging_verse) && (
-            <View style={styles.subsection}>
-              <Text style={styles.subsectionTitle}>Invitation to Growth</Text>
-              <Text style={styles.verseReference}>
-                {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).reference}
-              </Text>
-              <View style={styles.verseContainer}>
-                <View style={styles.verseBar} />
-                <Text style={styles.verseText}>
-                  {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).text)}
-                </Text>
-              </View>
-              <Text style={styles.applicationText}>
-                {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).invitation)}
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* THEMES SECTION */}
-        <View
-          ref={themesSectionRef}
-          style={[styles.section, styles.themesSection]}
-          onLayout={handleSectionLayout('Themes')}
-        >
-          <View style={[styles.sectionTagContainer, styles.themesTagContainer]}>
-            <Text style={[styles.sectionTag, styles.themesTag]}>Themes</Text>
-          </View>
-
-          <View style={styles.themesContainer}>
-            {limitedThemes.map((theme: any, index: number) => (
-              <View key={index} style={styles.themeCard}>
-                <Text style={styles.themeName}>{sanitizeText(theme.name)}</Text>
-                <Text style={styles.themeDescription}>{sanitizeText(theme.description)}</Text>
-                {theme.frequency && typeof theme.frequency === 'string' && (() => {
-                  const frequencyText = theme.frequency;
-                  // Strip out any variation of "Present in journals" from the AI response
-                  const cleanedText = frequencyText
-                    .replace(/^Present in journals:?\s*/i, '')
-                    .replace(/^from\s+/i, '');
-
-                  return (
-                    <Text style={styles.themeFrequency}>
-                      <Text style={styles.themeFrequencyLabel}>Present in Journals </Text>
-                      {sanitizeText(cleanedText)}
-                    </Text>
-                  );
-                })()}
-              </View>
-            ))}
-          </View>
-
-          {screen1Data?.insight && screen1Data.insight.trim().length > 0 && (
-            <View style={styles.insightContainer}>
-              <Text style={styles.insightText}>{sanitizeText(screen1Data.insight)}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* OBSERVATIONS SECTION */}
-        <View
-          ref={observationsSectionRef}
-          style={styles.section}
-          onLayout={handleSectionLayout('Observations')}
-        >
-          <View style={styles.sectionTagContainer}>
-            <Text style={styles.sectionTag}>Observations</Text>
-          </View>
-
-          <View style={styles.observationsContainer}>
-            {screen3Data?.self_perception && (
-              <View style={styles.observationCard}>
-                <Text style={styles.observationTitle}>How You See Yourself</Text>
-                <Text style={styles.observationText}>
-                  {sanitizeText(screen3Data.self_perception.observation)}
-                </Text>
-              </View>
-            )}
-
-            {screen3Data?.god_perception && (
-              <View style={styles.observationCard}>
-                <Text style={styles.observationTitle}>Your Relationship with God</Text>
-                <Text style={styles.observationText}>
-                  {sanitizeText(screen3Data.god_perception.observation)}
-                </Text>
-              </View>
-            )}
-
-            {screen3Data?.others_perception && (
-              <View style={styles.observationCard}>
-                <Text style={styles.observationTitle}>How You View Others</Text>
-                <Text style={styles.observationText}>
-                  {sanitizeText(screen3Data.others_perception.observation)}
-                </Text>
-              </View>
-            )}
-
-            {screen3Data?.blind_spots && (
-              <View style={styles.observationCard}>
-                <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
-                <Text style={styles.observationText}>
-                  {sanitizeText(screen3Data.blind_spots.observation)}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* REFLECTION SECTION */}
-        {!isSharedMirror && (
-          <View
-            ref={reflectionSectionRef}
-            style={[styles.section, styles.reflectionSection]}
-            onLayout={handleSectionLayout('Reflection')}
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.container}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
           >
-            <View style={[styles.sectionTagContainer, styles.reflectionTagContainer]}>
-              <Text style={[styles.sectionTag, styles.reflectionTag]}>Reflection</Text>
+            {/* Hero Image Section with Overlays */}
+            <View style={styles.heroSection}>
+              <ImageBackground
+                source={require('@/assets/images/spiritual-places/default.jpg')}
+                style={styles.heroImage}
+                resizeMode="cover"
+              >
+                {/* Dark overlay for better text readability */}
+                <View style={styles.heroOverlay} />
+
+                {/* Top Navigation Buttons */}
+                <View style={[styles.topNav, { top: 64 + insets.top }]}>
+                  <TouchableOpacity style={styles.backButton} onPress={onClose}>
+                    <Image
+                      source={require('@/assets/images/icons/Back.png')}
+                      style={styles.backIcon}
+                    />
+                  </TouchableOpacity>
+                  {!isSharedMirror && (
+                    <TouchableOpacity style={styles.shareButton} onPress={() => setShowShareSheet(true)}>
+                      <View style={styles.shareButtonBg}>
+                        <Image
+                          source={require('@/assets/images/icons/Share.png')}
+                          style={styles.shareIcon}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Title and Date Overlay */}
+                <View style={[styles.titleOverlay, { top: 112 + insets.top }]}>
+                  <Text style={styles.titleOverlayText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{getTitle()}</Text>
+                  <Text style={styles.subtitleOverlayText}>{formatDate()}</Text>
+                </View>
+
+                {/* Tab Bar at Bottom of Image — horizontal scroll so all 4 tabs fit */}
+                <View style={styles.tabBarOverlay}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.tabBarScrollContent}
+                  >
+                    {renderTabItems()}
+                  </ScrollView>
+                </View>
+              </ImageBackground>
             </View>
 
-            <View style={styles.reflectionContent}>
-              {existingReflection ? (
-                // Show saved reflection
-                <>
-                  <Text style={styles.reflectionQuestion}>
-                    Where is God inviting you to focus?
+            {/* All Sections */}
+            {/* MIRROR SECTION */}
+            <View
+              ref={mirrorSectionRef}
+              style={[styles.section, styles.mirrorSection]}
+              onLayout={handleSectionLayout('Mirror')}
+            >
+              <View style={styles.sectionTagContainer}>
+                <Text style={styles.sectionTag}>Mirror</Text>
+              </View>
+
+              {/* Biblical Mirror Story — intro block */}
+              {screen2Data?.parallel_story && (
+                <View style={styles.subsection}>
+                  <Text style={styles.mirrorTitle}>{sanitizeText(screen2Data.parallel_story.character)}</Text>
+                  <Text style={styles.mirrorDescription}>
+                    {sanitizeText(screen2Data.parallel_story.story)}
+                    {'\n\n'}
+                    {sanitizeText(screen2Data.parallel_story.connection)}
                   </Text>
-                  <View style={styles.savedReflectionContainer}>
-                    <Text style={styles.savedReflectionText}>{existingReflection}</Text>
-                  </View>
-                </>
-              ) : !showReflectionInput ? (
-                // Show prompt to add reflection
-                <>
-                  <Image
-                    source={require('@/assets/images/icons/Reflection.png')}
-                    style={styles.reflectionIcon}
-                  />
-                  <Text style={styles.reflectionDescription}>
-                    Take a moment to reflect on what God is showing you through this Mirror.
+                </View>
+              )}
+
+              {/* Divider between intro block and verse sections */}
+              {(screen2Data?.encouraging_verse || screen2Data?.invitation_to_growth || screen2Data?.challenging_verse) && (
+                <View style={styles.sectionDivider} />
+              )}
+
+              {/* Encouraging Word */}
+              {screen2Data?.encouraging_verse && (
+                <View style={styles.subsection}>
+                  <Text style={styles.subsectionTitle}>Encouraging Word</Text>
+                  <Text style={styles.verseReference}>
+                    {screen2Data.encouraging_verse.reference}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.reflectionButton}
-                    onPress={() => setShowReflectionInput(true)}
-                  >
-                    <Text style={styles.reflectionButtonText}>Add Reflection</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                // Show input form
-                <>
-                  <Text style={styles.reflectionQuestion}>
-                    Where is God inviting you to focus?
-                  </Text>
-                  <TextInput
-                    style={styles.reflectionInput}
-                    value={reflectionText}
-                    onChangeText={setReflectionText}
-                    multiline
-                    textAlignVertical="top"
-                    autoFocus
-                    onFocus={handleInputFocus}
-                  />
-                  <TouchableOpacity
-                    style={[
-                      styles.reflectionButton,
-                      (!reflectionText.trim() || savingReflection) && styles.reflectionButtonDisabled
-                    ]}
-                    onPress={handleSaveReflection}
-                    disabled={!reflectionText.trim() || savingReflection}
-                  >
-                    <Text style={styles.reflectionButtonText}>
-                      {savingReflection ? 'Saving...' : 'Save Reflection'}
+                  <View style={styles.verseContainer}>
+                    <View style={styles.verseBar} />
+                    <Text style={styles.verseText}>
+                      {sanitizeText(screen2Data.encouraging_verse.text)}
                     </Text>
-                  </TouchableOpacity>
-                </>
+                  </View>
+                  <Text style={styles.applicationText}>
+                    {sanitizeText(screen2Data.encouraging_verse.application || screen2Data.encouraging_verse.why_it_fits)}
+                  </Text>
+                </View>
+              )}
+
+              {/* Invitation to Growth */}
+              {(screen2Data?.invitation_to_growth || screen2Data?.challenging_verse) && (
+                <View style={styles.subsection}>
+                  <Text style={styles.subsectionTitle}>Invitation to Growth</Text>
+                  <Text style={styles.verseReference}>
+                    {(screen2Data.invitation_to_growth || screen2Data.challenging_verse).reference}
+                  </Text>
+                  <View style={styles.verseContainer}>
+                    <View style={styles.verseBar} />
+                    <Text style={styles.verseText}>
+                      {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).text)}
+                    </Text>
+                  </View>
+                  <Text style={styles.applicationText}>
+                    {sanitizeText((screen2Data.invitation_to_growth || screen2Data.challenging_verse).invitation)}
+                  </Text>
+                </View>
               )}
             </View>
-          </View>
-        )}
-    </ScrollView>
+
+            {/* THEMES SECTION */}
+            <View
+              ref={themesSectionRef}
+              style={[styles.section, styles.themesSection]}
+              onLayout={handleSectionLayout('Themes')}
+            >
+              <View style={[styles.sectionTagContainer, styles.themesTagContainer]}>
+                <Text style={[styles.sectionTag, styles.themesTag]}>Themes</Text>
+              </View>
+
+              <View style={styles.themesContainer}>
+                {limitedThemes.map((theme: any, index: number) => (
+                  <View key={index} style={styles.themeCard}>
+                    <Text style={styles.themeName}>{sanitizeText(theme.name)}</Text>
+                    <Text style={styles.themeDescription}>{sanitizeText(theme.description)}</Text>
+                    {theme.frequency && typeof theme.frequency === 'string' && (() => {
+                      const frequencyText = theme.frequency;
+                      // Strip out any variation of "Present in journals" from the AI response
+                      const cleanedText = frequencyText
+                        .replace(/^Present in journals:?\s*/i, '')
+                        .replace(/^from\s+/i, '');
+
+                      return (
+                        <Text style={styles.themeFrequency}>
+                          <Text style={styles.themeFrequencyLabel}>Present in Journals </Text>
+                          {sanitizeText(cleanedText)}
+                        </Text>
+                      );
+                    })()}
+                  </View>
+                ))}
+              </View>
+
+              {screen1Data?.insight && screen1Data.insight.trim().length > 0 && (
+                <View style={styles.insightContainer}>
+                  <Text style={styles.insightText}>{sanitizeText(screen1Data.insight)}</Text>
+                </View>
+              )}
+            </View>
+
+            {/* OBSERVATIONS SECTION */}
+            <View
+              ref={observationsSectionRef}
+              style={[styles.section, styles.observationsSection]}
+              onLayout={handleSectionLayout('Observations')}
+            >
+              <View style={styles.sectionTagContainer}>
+                <Text style={styles.sectionTag}>Observations</Text>
+              </View>
+
+              <View style={styles.observationsContainer}>
+                {screen3Data?.self_perception && (
+                  <View style={styles.observationCard}>
+                    <Text style={styles.observationTitle}>How You See Yourself</Text>
+                    <Text style={styles.observationText}>
+                      {sanitizeText(screen3Data.self_perception.observation)}
+                    </Text>
+                  </View>
+                )}
+
+                {screen3Data?.god_perception && (
+                  <View style={styles.observationCard}>
+                    <Text style={styles.observationTitle}>Your Relationship with God</Text>
+                    <Text style={styles.observationText}>
+                      {sanitizeText(screen3Data.god_perception.observation)}
+                    </Text>
+                  </View>
+                )}
+
+                {screen3Data?.others_perception && (
+                  <View style={styles.observationCard}>
+                    <Text style={styles.observationTitle}>How You View Others</Text>
+                    <Text style={styles.observationText}>
+                      {sanitizeText(screen3Data.others_perception.observation)}
+                    </Text>
+                  </View>
+                )}
+
+                {screen3Data?.blind_spots && (
+                  <View style={styles.observationCard}>
+                    <Text style={styles.observationTitle}>Patterns You May Not Notice</Text>
+                    <Text style={styles.observationText}>
+                      {sanitizeText(screen3Data.blind_spots.observation)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* REFLECTION SECTION */}
+            {!isSharedMirror && (
+              <View
+                ref={reflectionSectionRef}
+                style={[styles.section, styles.reflectionSection]}
+                onLayout={handleSectionLayout('Reflection')}
+              >
+                <View style={[styles.sectionTagContainer, styles.reflectionTagContainer]}>
+                  <Text style={[styles.sectionTag, styles.reflectionTag]}>Reflection</Text>
+                </View>
+
+                <View style={styles.reflectionContent}>
+                  {existingReflection ? (
+                    // Show saved reflection
+                    <>
+                      <Text style={styles.reflectionQuestion}>
+                        Where is God inviting you to focus?
+                      </Text>
+                      <View style={styles.savedReflectionContainer}>
+                        <Text style={styles.savedReflectionText}>{existingReflection}</Text>
+                      </View>
+                      {reflectionSaved && (
+                        <Text style={styles.reflectionSavedConfirmation}>Saved</Text>
+                      )}
+                    </>
+                  ) : !showReflectionInput ? (
+                    // Show prompt to add reflection
+                    <>
+                      <Image
+                        source={require('@/assets/images/icons/Reflection.png')}
+                        style={styles.reflectionIcon}
+                      />
+                      <Text style={styles.reflectionDescription}>
+                        Take a moment to reflect on what God is showing you through this Mirror.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.reflectionButton}
+                        onPress={() => setShowReflectionInput(true)}
+                      >
+                        <Text style={styles.reflectionButtonText}>Add Reflection</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    // Show input form
+                    <>
+                      <Text style={styles.reflectionQuestion}>
+                        Where is God inviting you to focus?
+                      </Text>
+                      <TextInput
+                        style={styles.reflectionInput}
+                        value={reflectionText}
+                        onChangeText={setReflectionText}
+                        multiline
+                        textAlignVertical="top"
+                        autoFocus
+                        onFocus={handleInputFocus}
+                      />
+                      <TouchableOpacity
+                        style={[
+                          styles.reflectionButton,
+                          (!reflectionText.trim() || savingReflection) && styles.reflectionButtonDisabled
+                        ]}
+                        onPress={handleSaveReflection}
+                        disabled={!reflectionText.trim() || savingReflection}
+                      >
+                        <Text style={styles.reflectionButtonText}>
+                          {savingReflection ? 'Saving...' : 'Save Reflection'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+
+          {/* Sticky tab bar — appears when scrolled past hero */}
+          {showStickyTabs && (
+            <View
+              style={[styles.stickyTabBar, { paddingTop: insets.top }]}
+              onLayout={(e) => { stickyBarHeightRef.current = e.nativeEvent.layout.height; }}
+            >
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tabBarScrollContent}
+              >
+                {renderTabItems()}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       </KeyboardAvoidingView>
 
       {/* Share Mirror Sheet */}
@@ -496,8 +549,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background.white,
   },
   heroSection: {
-    width: 488,
-    height: 476,
+    width: '100%',
+    height: HERO_HEIGHT,
     overflow: 'hidden',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -512,7 +565,6 @@ const styles = StyleSheet.create({
   },
   topNav: {
     position: 'absolute',
-    top: 114,
     left: 0,
     right: 0,
     zIndex: 2,
@@ -532,9 +584,17 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     position: 'absolute',
-    left: 346,
+    right: spacing.xl,
     width: 40,
     height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareButtonBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -542,16 +602,17 @@ const styles = StyleSheet.create({
     width: 17,
     height: 21,
     tintColor: colors.text.white,
+    marginBottom: 2,
   },
   titleOverlay: {
     position: 'absolute',
-    top: 172,
     left: spacing.xl,
     right: spacing.xl,
     zIndex: 2,
   },
   titleOverlayText: {
-    ...typography.heading.xl,
+    fontFamily: 'Satoshi Variable',
+    fontSize: 24,
     fontWeight: '900',
     color: colors.text.white,
     marginBottom: spacing.s,
@@ -566,9 +627,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    paddingHorizontal: spacing.xl,
     zIndex: 2,
+  },
+  tabBarScrollContent: {
+    paddingHorizontal: spacing.xl,
+    flexDirection: 'row',
+  },
+  stickyTabBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#1C2035',
+    zIndex: 10,
   },
   tabButton: {
     marginRight: spacing.xxxl,
@@ -597,22 +668,29 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xxxl,
+    paddingTop: 42,
     gap: spacing.xxxl,
   },
   mirrorSection: {
-    paddingBottom: spacing.xxxl,
+    paddingBottom: 42,
   },
   themesSection: {
     backgroundColor: colors.background.defaultLight,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: 42,
+  },
+  observationsSection: {
+    paddingBottom: 42,
   },
   reflectionSection: {
     backgroundColor: '#ECEFF3',
-    marginTop: 40,
-    paddingTop: 40,
-    paddingBottom: 60,  // Half of previous - end page here
+    paddingTop: 42,
+    paddingBottom: 120,
     gap: spacing.xl, // Override section gap - less space between tag and icon
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: colors.border.divider,
+    alignSelf: 'stretch',
   },
   sectionTagContainer: {
     backgroundColor: colors.background.tag,
@@ -824,5 +902,10 @@ const styles = StyleSheet.create({
     ...typography.body.default,
     color: colors.text.body,
     lineHeight: 24,
+  },
+  reflectionSavedConfirmation: {
+    ...typography.body.s,
+    color: colors.text.bodyLight,
+    marginTop: spacing.m,
   },
 });
