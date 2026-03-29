@@ -339,32 +339,29 @@ function FriendsScreen() {
       let unreadCount = 0;
       let mostRecentShare = null;
 
-      if (isFriendNew(friendId)) {
-        // State 1: New friend
+      // Mirror states take priority over "new friend" greeting so that an
+      // auto-shared mirror from the invite is never hidden behind 'new'.
+      const unreadShares = friendShares.filter((s: any) => s.isNew);
+      unreadCount = unreadShares.length;
+
+      if (unreadCount > 0) {
+        // State 3: Has unread mirrors (beats 'new' — invite mirror arrives here)
+        state = 'unread';
+        mostRecentShare = unreadShares.sort(
+          (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
+        )[0];
+      } else if (friendShares.length > 0) {
+        // State 4: All mirrors read
+        state = 'read';
+        mostRecentShare = friendShares.sort(
+          (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
+        )[0];
+      } else if (isFriendNew(friendId)) {
+        // State 1: New friend with no mirrors yet
         state = 'new';
-      } else if (friendShares.length === 0) {
+      } else {
         // State 2: No mirrors
         state = 'no_mirrors';
-      } else {
-        // Check for unread mirrors
-        const unreadShares = friendShares.filter((s: any) => s.isNew);
-        unreadCount = unreadShares.length;
-
-        if (unreadCount > 0) {
-          // State 3: Has unread mirrors
-          state = 'unread';
-          // Find most recent unread share
-          mostRecentShare = unreadShares.sort(
-            (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
-          )[0];
-        } else {
-          // State 4: All mirrors read
-          state = 'read';
-          // Find most recent share for sorting
-          mostRecentShare = friendShares.sort(
-            (a: any, b: any) => new Date(b.mirror.created_at).getTime() - new Date(a.mirror.created_at).getTime()
-          )[0];
-        }
       }
 
       return {
