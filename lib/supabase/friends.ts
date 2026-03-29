@@ -65,11 +65,15 @@ export async function createInviteLink(
       return { success: false, error: error.message };
     }
 
-    // Internal deep link — embedded in the LinkRunner campaign link
-    const deepLink = `oxbow://friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`;
+    // Full HTTPS universal link — works for both installed users (via associatedDomains)
+    // and new users (LinkRunner serves the page and redirects to App Store).
+    const httpsDeepLink = `https://get.oxbowjournal.com/friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`;
 
-    // Create a shareable LinkRunner short URL wrapping the deep link
-    let shareUrl = deepLink; // fallback to oxbow:// if API call fails
+    // oxbow:// deep link — used by LinkRunner for deferred installs (getAttributionData)
+    const oxbowDeepLink = `oxbow://friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`;
+
+    // Register with LinkRunner for deferred deep linking (new users who install after tapping)
+    let shareUrl = httpsDeepLink; // default — universally routable for installed users
     try {
       const response = await fetch('https://api.linkrunner.io/api/v1/create-campaign', {
         method: 'POST',
@@ -79,21 +83,20 @@ export async function createInviteLink(
         },
         body: JSON.stringify({
           name: `friend-invite-${token}`,
-          deeplink: `https://get.oxbowjournal.com/friend-invite/${token}?inviter=${inviterUserId}&name=${encodeURIComponent(inviterName)}`,
+          deeplink: oxbowDeepLink,
           ios_web_redirect: 'https://apps.apple.com/us/app/oxbow-journal/id6749494345',
-          is_shortlink: true,
+          is_shortlink: false,
           domain: 'get.oxbowjournal.com',
         }),
       });
       const json = await response.json();
       if (json?.data?.link) {
-        shareUrl = json.data.link;
-        console.log('✅ LinkRunner short URL created:', shareUrl);
+        console.log('✅ LinkRunner campaign registered:', json.data.link);
       } else {
         console.warn('[LinkRunner] Unexpected response shape:', json);
       }
     } catch (linkrunnerError) {
-      console.error('[LinkRunner] ❌ Failed to create short URL:', linkrunnerError);
+      console.error('[LinkRunner] ❌ Failed to register campaign:', linkrunnerError);
       Sentry.captureException(linkrunnerError, {
         tags: { component: 'friends', action: 'createInvite_linkrunner' },
         contexts: { friends: { inviterUserId, token } },
