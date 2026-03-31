@@ -150,7 +150,14 @@ export async function uploadProfilePicture(
       };
     }
 
-    const fileName = `${userId}/profile.${ext}`;
+    // Use auth.uid() for storage path — RLS policies match on auth.uid(), not public.users.id
+    const { data: { session } } = await supabase.auth.getSession();
+    const authUserId = session?.user?.id;
+    if (!authUserId) {
+      return { success: false, error: 'Not authenticated' };
+    }
+
+    const fileName = `${authUserId}/profile.${ext}`;
 
     // Convert URI to ArrayBuffer for upload (React Native compatible)
     const response = await fetch(imageUri);
