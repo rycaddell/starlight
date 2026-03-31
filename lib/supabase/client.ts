@@ -22,8 +22,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
+  getItem: async (key: string) => {
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch {
+      // SecureStore can throw "User interaction is not allowed" during the
+      // brief window when the app resumes but the secure enclave is still
+      // initializing after device unlock. Return null so Supabase treats the
+      // session as missing rather than crashing.
+      return null;
+    }
+  },
+  setItem: (key: string, value: string) =>
+    SecureStore.setItemAsync(key, value, {
+      keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK,
+    }),
   removeItem: (key: string) => SecureStore.deleteItemAsync(key),
 };
 
