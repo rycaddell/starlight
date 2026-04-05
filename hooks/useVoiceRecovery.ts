@@ -100,11 +100,20 @@ export const useVoiceRecovery = (userId: string | null) => {
 
       if (attempts > MAX_RECOVERY_ATTEMPTS) {
         console.warn(`⚠️ [RECOVERY] Job ${job.jobId} exceeded ${MAX_RECOVERY_ATTEMPTS} attempts, dequeuing`);
-        Sentry.addBreadcrumb({
-          category: 'recovery',
-          message: 'Job exceeded max recovery attempts, dequeuing',
-          data: { jobId: job.jobId, journalId: job.journalId, attempts },
+        Sentry.captureMessage('Voice recording lost: exceeded max recovery attempts', {
           level: 'warning',
+          tags: { component: 'useVoiceRecovery', action: 'max_attempts_exceeded' },
+          contexts: {
+            job: {
+              jobId: job.jobId,
+              journalId: job.journalId,
+              entryType: job.entryType,
+              attempts,
+              createdAt: job.createdAt,
+              hasLocalFile: !!job.localPath,
+              hasStoragePath: !!job.storagePath,
+            },
+          },
         });
         FileSystem.deleteAsync(job.localPath, { idempotent: true }).catch(() => {});
         await dequeuePendingJob(job.jobId);
