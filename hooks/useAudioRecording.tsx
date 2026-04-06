@@ -355,8 +355,28 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         // Deactivate wake lock FIRST - don't make user wait through transcription
         await deactivateWakeLock();
 
-        await recording.stopAndUnloadAsync();
-        const uri = recording.getURI();
+        // Get URI before attempting stop — getURI() is synchronous and safe on a live
+        // recording. If stopAndUnloadAsync throws (iOS AVAudioRecorder bad state, phone
+        // call interruption, etc.), we can still attempt to save whatever was captured.
+        const uriBeforeStop = recording.getURI();
+
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (stopError) {
+          Sentry.captureException(stopError, {
+            tags: { component: 'useAudioRecording', action: 'stop_unload_failed' },
+            contexts: { recording: { duration: recordingDuration, uriExists: !!uriBeforeStop } },
+          });
+          if (!uriBeforeStop) {
+            // No URI — nothing to save, let the user try again
+            setIsProcessing(false);
+            Alert.alert('Recording Error', 'There was a problem stopping your recording. Please try again.');
+            return;
+          }
+          // URI exists — fall through and attempt to save whatever audio was captured
+        }
+
+        const uri = uriBeforeStop;
 
         if (uri && onTranscriptionComplete) {
           setIsProcessing(true);
