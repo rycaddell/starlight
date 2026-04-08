@@ -13,7 +13,6 @@ import {
   ActivityIndicator,
   Share,
 } from 'react-native';
-import { useRouter } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { fetchFriends, createInviteLink } from '@/lib/supabase/friends';
 import { shareMirror } from '@/lib/supabase/mirrorShares';
@@ -37,7 +36,6 @@ export function ShareMirrorSheet({
   mirrorId,
   onShareSuccess,
 }: ShareMirrorSheetProps) {
-  const router = useRouter();
   const { user } = useAuth();
   const [friends, setFriends] = useState<any[]>([]);
   const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
@@ -216,6 +214,28 @@ export function ShareMirrorSheet({
     );
   };
 
+  const handleInviteFriend = async () => {
+    if (!user?.id || !user?.display_name) return;
+    setGeneratingLink(true);
+    try {
+      const result = await createInviteLink(user.id, user.display_name, mirrorId);
+      if (!result.success) {
+        Alert.alert('Error', result.error || 'Failed to create invite link');
+        return;
+      }
+      await Share.share({
+        message: `Join me on Oxbow! ${result.shareUrl}`,
+        title: 'Join me on Oxbow',
+      });
+      onClose();
+    } catch (error) {
+      console.error('Error sharing invite:', error);
+      Alert.alert('Error', 'Failed to share invite link');
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
   const renderNoFriendsState = () => (
     <View style={styles.emptyState}>
       <IconSymbol name="person.2" size={56} color={colors.text.primary} />
@@ -225,13 +245,17 @@ export function ShareMirrorSheet({
       </Text>
       <TouchableOpacity
         style={styles.inviteButton}
-        onPress={() => {
-          onClose();
-          router.push('/(tabs)/friends');
-        }}
+        onPress={handleInviteFriend}
+        disabled={generatingLink}
       >
-        <IconSymbol name="link" size={18} color={colors.text.white} />
-        <Text style={styles.inviteButtonText}>Invite a Friend</Text>
+        {generatingLink ? (
+          <ActivityIndicator color={colors.text.white} size="small" />
+        ) : (
+          <>
+            <IconSymbol name="link" size={18} color={colors.text.white} />
+            <Text style={styles.inviteButtonText}>Invite a Friend</Text>
+          </>
+        )}
       </TouchableOpacity>
     </View>
   );
