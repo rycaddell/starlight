@@ -455,6 +455,12 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
                 return;
               } else {
                 storagePath = null; // upload failed, fall through to old flow
+                Sentry.addBreadcrumb({
+                  category: 'recording',
+                  message: 'Upload failed — falling through to legacy transcribeAudio',
+                  data: { uploadError: uploadResult.error },
+                  level: 'warning',
+                });
               }
             }
           } catch (uploadError) {
@@ -555,6 +561,11 @@ export const useAudioRecording = (onTranscriptionComplete?: (text: string, times
         Alert.alert('Error', 'Failed to stop recording properly.');
         await deactivateWakeLock();
       } finally {
+        Sentry.addBreadcrumb({
+          category: 'recording',
+          message: 'handleStopRecording finally block reached',
+          level: 'info',
+        });
         isRecordingStoppingRef.current = false;
         setRecording(null);
         setIsRecording(false);

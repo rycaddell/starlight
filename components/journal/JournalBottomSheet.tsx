@@ -1,5 +1,6 @@
 // components/journal/JournalBottomSheet.tsx
 import React, { useState, useEffect } from 'react';
+import * as Sentry from '@sentry/react-native';
 import {
   Modal,
   View,
@@ -87,6 +88,12 @@ export const JournalBottomSheet: React.FC<JournalBottomSheetProps> = ({
   };
 
   const handleClose = () => {
+    Sentry.addBreadcrumb({
+      category: 'recording',
+      message: 'JournalBottomSheet close attempted',
+      data: { isRecording, isProcessing },
+      level: 'info',
+    });
     if (isRecording) {
       Alert.alert(
         'Discard Recording?',

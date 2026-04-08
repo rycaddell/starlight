@@ -239,7 +239,7 @@ async function generateMirrorWithAI(
 async function generateWithRetry(
   journalEntries: JournalEntry[],
   openaiApiKey: string,
-  maxRetries: number = 1
+  maxRetries: number = 3
 ): Promise<any> {
   let lastError: Error;
   
@@ -260,9 +260,10 @@ async function generateWithRetry(
         throw lastError;
       }
       
-      // Otherwise, log and continue to retry
-      console.log('⏳ Waiting 2 seconds before retry...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Exponential backoff with jitter: ~1s, ~2s, ~4s
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 30000);
+      console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
   
@@ -325,8 +326,29 @@ serve(async (req) => {
 
     console.log(`👤 Generating Mirror for user: ${customUserId}`);
 
-    // Rate limiting disabled - can be re-enabled later if needed by calling
-    // check_mirror_generation_rate_limit RPC function
+    // Prevent concurrent generation: block if a non-stale request is already in-flight.
+    // 3-minute staleness window — catches rage-tapping while still unblocking users
+    // whose request got stuck (edge function crash, timeout, etc.).
+    const { data: existingRequest } = await supabase
+      .from('mirror_generation_requests')
+      .select('id, status, requested_at')
+      .eq('custom_user_id', customUserId)
+      .in('status', ['pending', 'processing'])
+      .maybeSingle();
+
+    if (existingRequest) {
+      const ageMs = Date.now() - new Date(existingRequest.requested_at).getTime();
+      const isStale = ageMs > 3 * 60 * 1000; // 3 minutes
+
+      if (!isStale) {
+        console.log(`⚠️ Active generation already in progress for user ${customUserId} (${Math.round(ageMs / 1000)}s old)`);
+        return new Response(
+          JSON.stringify({ success: false, error: 'Generation already in progress', status: existingRequest.status }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log(`⚠️ Stale ${existingRequest.status} request (${Math.round(ageMs / 1000)}s old) — allowing new generation`);
+    }
 
     // Step 1: Get user's group to determine threshold
     console.log('👥 Fetching user group...');

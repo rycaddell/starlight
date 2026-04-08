@@ -94,7 +94,7 @@ Generate an encouraging Bible verse in JSON format:
   "encouraging_verse": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "application": "A single paragraph string explaining how this verse speaks to their specific situation. Reference ${spiritualPlace} if relevant. Must be a string, not an array."
+    "application": "4-6 sentences explaining how this verse speaks to their specific situation. Reference ${spiritualPlace} if relevant. Must be a string, not an array."
   }
 }
 
@@ -138,7 +138,7 @@ Generate a reflective invitation in JSON format:
   "invitation_to_growth": {
     "reference": "Bible verse reference",
     "text": "Full verse text",
-    "invitation": "A single paragraph string with a gentle invitation for deeper reflection. Not prescriptive, but exploratory. Must be a string, not an array."
+    "invitation": "4-6 sentences with a gentle invitation for deeper reflection. Not prescriptive, but exploratory. Must be a string, not an array."
   }
 }
 

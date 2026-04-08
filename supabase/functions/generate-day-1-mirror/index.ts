@@ -383,14 +383,30 @@ serve(async (req) => {
 
     console.log('✅ Both journals loaded and transcribed');
 
-    // Step 3: Generate mini-mirror with AI
+    // Step 3: Generate mini-mirror with AI (exponential backoff on transient failures)
     console.log('🤖 Starting AI generation...');
-    const aiResult = await generateMiniMirrorWithAI(
-      progress.spiritual_place,
-      journal2,
-      journal3,
-      openaiApiKey
-    );
+    let aiResult: any;
+    const maxRetries = 3;
+    let lastAiError: Error | undefined;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) console.log(`🔄 Retry attempt ${attempt}/${maxRetries}`);
+        aiResult = await generateMiniMirrorWithAI(
+          progress.spiritual_place,
+          journal2,
+          journal3,
+          openaiApiKey
+        );
+        break; // success
+      } catch (err) {
+        lastAiError = err;
+        console.error(`❌ AI attempt ${attempt + 1} failed:`, err.message);
+        if (attempt === maxRetries) throw lastAiError;
+        const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 30000);
+        console.log(`⏳ Waiting ${Math.round(delay)}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
 
     if (!aiResult.success) {
       throw new Error('AI generation failed');
